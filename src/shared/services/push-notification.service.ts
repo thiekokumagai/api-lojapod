@@ -27,7 +27,7 @@ export class PushNotificationService {
   }
 
   async sendNotifications(tokens: string[], title: string, body: string, data?: any, webSubscriptions: any[] = []) {
-    this.sendExpoPush(tokens, title, body, data).catch(console.error);
+    // this.sendExpoPush(tokens, title, body, data).catch(console.error);
     this.sendWebPush(webSubscriptions, title, body, data).catch(console.error);
   }
 
