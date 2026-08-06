@@ -1,0 +1,31 @@
+-- CreateTable
+CREATE TABLE "store_settings" (
+    "id" TEXT NOT NULL,
+    "storeName" TEXT NOT NULL DEFAULT 'Minha Loja',
+    "logoUrl" TEXT,
+    "faviconUrl" TEXT,
+    "topHeaderText" TEXT,
+    "bannerUrls" TEXT[],
+    "phone" TEXT NOT NULL DEFAULT '',
+    "instagram" TEXT,
+    "cep" TEXT NOT NULL DEFAULT '',
+    "street" TEXT NOT NULL DEFAULT '',
+    "number" TEXT NOT NULL DEFAULT '',
+    "neighborhood" TEXT NOT NULL DEFAULT '',
+    "city" TEXT NOT NULL DEFAULT '',
+    "state" TEXT NOT NULL DEFAULT '',
+    "complement" TEXT,
+    "hideAddress" BOOLEAN NOT NULL DEFAULT false,
+    "pixEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "pixKeyType" TEXT,
+    "pixKey" TEXT,
+    "pixHolder" TEXT,
+    "payOnDeliveryCash" BOOLEAN NOT NULL DEFAULT false,
+    "payOnDeliveryCardDebit" BOOLEAN NOT NULL DEFAULT false,
+    "payOnDeliveryCardCredit" BOOLEAN NOT NULL DEFAULT false,
+    "paymentRules" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "store_settings_pkey" PRIMARY KEY ("id")
+);

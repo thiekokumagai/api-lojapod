@@ -1,0 +1,32 @@
+{
+  "mode": "yolo",
+  "granularity": "standard",
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "auto_advance": true,
+    "nyquist_validation": true,
+    "security_enforcement": true,
+    "discuss_mode": "discuss",
+    "research_before_questions": false,
+    "_auto_chain_active": false
+  },
+  "ship": {
+    "pr_body_sections": [
+      {
+        "heading": "User Stories & Acceptance Criteria",
+        "enabled": true,
+        "source": "REQUIREMENTS.md ## User Stories",
+        "fallback": "- Acceptance criteria are covered by the linked requirements and verification evidence."
+      }
+    ]
+  },
+  "planning": {
+    "commit_docs": true,
+    "sub_repos": []
+  },
+  "git": {
+    "create_tag": true
+  }
+}

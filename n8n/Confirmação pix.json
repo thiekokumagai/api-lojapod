@@ -1,0 +1,457 @@
+{
+  "name": "Confirmação pix",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://evolution-go-production-a2ae.up.railway.app/send/button",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "92cdf2bb-6104-4b0c-b87e-ac6124e66612"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"delay\": 500,\n  \"number\": \"{{ $('formatado').first().json.telefone }}\",\n  \"title\": \"✅ Pedido confirmado\",\n  \"description\": \"Seu pedido está em separação e logo será enviado 🚚💨\\n\\n💰 Valor Total: R$ {{ $('formatado').first().json.valorTotal }}\\n\\n📩 Envie o comprovante para liberar o envio.\",\n  \"footer\": \"Wesley Thieko de Aguiar Kumagai Ltda\\nItaú Unibanco S.A\",\n  \"buttons\": [\n    {\n      \"type\": \"copy\",\n      \"displayText\": \"💰 Copiar PIX\",\n      \"copyCode\": \"67992130201\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        336
+      ],
+      "id": "3b03cb0a-bfb9-46fb-ba3c-9704eeb80ba1",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://evolution-go-production-a2ae.up.railway.app/send/button",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "65e63bc0-559c-4164-8ff7-9693e2c3d4a7"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"number\": \"556791122210\",\n  \"title\": \"🔥 Faça seu pedido agora mesmo!\",\n  \"description\": \"Aproveite e peça direto pelo nosso site.\\n\\n💸 Ganhe 5% de desconto exclusivo em pedidos feitos pelo site!\\n\\nCorre lá e garanta o seu 😉\",\n  \"footer\": \"Pode Mais\",\n  \"buttons\": [\n    {\n      \"type\": \"url\",\n      \"displayText\": \"🛒 Visitar site\",\n      \"url\": \"https://podemais.store/\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -640,
+        -16
+      ],
+      "id": "1a87eccc-f7f0-477f-86fc-5b7598f44112",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1776,
+        32
+      ],
+      "id": "f4c0b2e0-a3ce-48c5-a764-1ff77f11bca2",
+      "name": "Webhook",
+      "webhookId": "fd30aa44-fc37-4b60-95ac-b15c8883fef2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0e0faf31-7e85-4fdd-ba9c-fd923474399d",
+              "leftValue": "={{ $json.msg.FromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1584,
+        448
+      ],
+      "id": "4115be33-66c0-45be-ba3a-ffcfcda60dba",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1360,
+        592
+      ],
+      "id": "66ea6a51-5ea0-42f1-b470-867e88ed03e3",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d2e23e34-17ee-400e-ae17-899aecba9faa",
+              "leftValue": "={{ $('formatado').first().json.pagamento }}",
+              "rightValue": "PIX",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "e4bfe8f6-0ce3-4488-9b41-a47b01c71268",
+              "leftValue": "={{ $('formatado').first().json.ehVendizap }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1088,
+        336
+      ],
+      "id": "320b0916-0ffa-4ff6-bf5c-b5058f4a3964",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        560
+      ],
+      "id": "692f0528-1f2d-4482-8413-255a50f4b294",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        192
+      ],
+      "id": "be69a5d5-e170-4dc6-abb5-cd2817b14372",
+      "name": "No Operation, do nothing2"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -912,
+        96
+      ],
+      "id": "321f8463-0d72-4658-a117-91bd269b0616",
+      "name": "Wait",
+      "webhookId": "32433ea4-23e6-4bbb-aca8-df1432af8d2d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "15725bc6-59ee-471a-8c77-4b6b98fbc211",
+              "name": "msg.telefone",
+              "value": "={{ $json.body.data.Info.Chat }}",
+              "type": "string"
+            },
+            {
+              "id": "8e414a94-9483-4877-ab00-1e2042c1e2a8",
+              "name": "msg.msgtext",
+              "value": "={{ $json.body.data.Message.conversation }}",
+              "type": "string"
+            },
+            {
+              "id": "ce69cfdf-b1c8-4e11-87f9-7bcec11f85f7",
+              "name": "msg.FromMe",
+              "value": "={{ $json.body.data.Info.IsFromMe }}",
+              "type": "boolean"
+            },
+            {
+              "id": "576e971d-8765-482e-8c38-6e5f0ba17907",
+              "name": "msg.messageType",
+              "value": "={{ $json.body.data.Info.Type }}",
+              "type": "string"
+            },
+            {
+              "id": "354f3a1f-a5c4-4b9e-af09-07b33fe6a058",
+              "name": "msg.msgtextMedia",
+              "value": "={{ $json.body.data.Message.extendedTextMessage.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1600,
+        128
+      ],
+      "id": "b6c104d6-4ead-4bd8-be20-5e5bcba1dc46",
+      "name": "campos"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $('campos').first().json.msg;\n\nlet texto = \"\";\n\nif (msg.messageType === \"text\") {\n  texto = msg.msgtext ?? \"\";\n} else if (msg.messageType === \"media\") {\n  texto = msg.msgtextMedia ?? \"\";\n}\n\nconst pagamento = texto.match(/Forma de pagamento:\\s*\\*?(.*?)\\*?\\n/i);\nconst valorTotal = texto.match(/Valor Total:\\s*\\*?R\\$\\s*([\\d.,]+)\\*?/i);\n\nconst ehPix = pagamento?.[1]?.trim().toUpperCase() === \"PIX\";\nconst ehVendizap = texto.includes(\"Pedido feito com Vendizap\");\n\nreturn [\n  {\n    telefone: msg.telefone,\n    messageType: msg.messageType,\n    texto,\n    pagamento: pagamento?.[1]?.trim() ?? null,\n    valorTotal: valorTotal?.[1]?.trim() ?? null,\n    ehPix,\n    ehVendizap,\n    processarPedido: ehPix && ehVendizap\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        176
+      ],
+      "id": "f34467f7-e323-4cae-9141-d3961af7d760",
+      "name": "formatado"
+    },
+    {
+      "parameters": {
+        "url": "https://ecommerce-core-api-production-3cc7.up.railway.app/api/store/settings/status",
+        "method": "GET",
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1150,
+        200
+      ],
+      "id": "check-store-status",
+      "name": "Check Store Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c-store-status",
+              "leftValue": "={{ $json.isOpen }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -950,
+        200
+      ],
+      "id": "if-store-open",
+      "name": "If Store Open"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        400
+      ],
+      "id": "noop-store-closed",
+      "name": "Store Closed - Do Nothing"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "campos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "formatado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "campos": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatado": {
+      "main": [
+        [
+          {
+            "node": "Check Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Store Status": {
+      "main": [
+        [
+          {
+            "node": "If Store Open",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Store Open": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Store Closed - Do Nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "3db5b3cf-759a-4bbf-82dd-d2a074b87036",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "245d1cfd90eb680a57a67423d7cd45a4d129db658f1038cdbf238f4f0eda1ae9"
+  },
+  "nodeGroups": [],
+  "id": "BFveBRW0oNoG4Xiu",
+  "tags": []
+}

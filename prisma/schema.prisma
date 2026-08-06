@@ -1,0 +1,510 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role     @default(USER)
+  refreshToken String?
+  expoPushToken String?
+  webPushSubscription Json?
+  createdAt    DateTime @default(now())
+
+  @@map("users")
+}
+
+model Category {
+  id         String    @id @default(uuid())
+  externalId String?   @unique
+  title      String
+  image      String?
+  oldUrl     String?
+  isVisible  Boolean   @default(true)
+  excludeFromBestSeller Boolean @default(false)
+  order      Int       @default(0)
+  deletedAt  DateTime?
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Variation {
+  id        String    @id @default(uuid())
+  title     String
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  options  VariationOption[]
+  products ProductVariation[]
+
+  @@map("variations")
+}
+
+model VariationOption {
+  id          String              @id @default(uuid())
+  value       String
+  variationId String
+  deletedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  order       Int                 @default(0)
+  variation   Variation           @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  itemOptions ProductItemOption[]
+
+  @@unique([variationId, value, order])
+  @@map("variation_options")
+}
+
+model Product {
+  id         String    @id @default(uuid())
+  externalId String?   @unique
+  title      String
+  categoryId String
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt @default(now())
+  isVisible  Boolean   @default(true)
+  isBestSeller Boolean @default(false)
+
+  category            Category           @relation(fields: [categoryId], references: [id])
+  images              ProductImage[]
+  variations          ProductVariation[]
+  items               ProductItem[]
+  price               Decimal?           @db.Decimal(10, 2)
+  promotionalPrice    Decimal?           @db.Decimal(10, 2)
+  costPrice           Decimal?           @db.Decimal(10, 2)
+  description         String?            @db.Text
+  descriptionFormated String?            @db.Text
+  orderItems          OrderItem[]
+  stockMovements      StockMovement[]
+
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  url       String
+  productId String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model ProductVariation {
+  id          String   @id @default(uuid())
+  productId   String
+  variationId String
+  createdAt   DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation Variation @relation(fields: [variationId], references: [id])
+
+  @@unique([productId, variationId])
+  @@map("product_variations")
+}
+
+model ProductItem {
+  id        String  @id @default(uuid())
+  productId String
+  stock     Int     @default(0)
+
+
+  hash      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options    ProductItemOption[]
+  orderItems OrderItem[]
+  stockMovements StockMovement[]
+
+  @@unique([productId, hash])
+  @@index([productId])
+  @@map("product_items")
+}
+
+model ProductItemOption {
+  id       String @id @default(uuid())
+  itemId   String
+  optionId String
+
+  item   ProductItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  option VariationOption @relation(fields: [optionId], references: [id])
+
+  @@unique([itemId, optionId])
+  @@map("product_item_options")
+}
+
+model StoreSettings {
+  id            String   @id @default(uuid())
+  storeName     String   @default("Minha Loja")
+  logoUrl       String?
+  whiteLogoUrl  String?
+  faviconUrl    String?
+  topHeaderText String?
+  bannerUrls    String[]
+  phone         String   @default("")
+  instagram     String?
+  pixelId       String?
+  marketingLinks Json?
+
+  // Endereço
+  cep          String  @default("")
+  street       String  @default("")
+  number       String  @default("")
+  neighborhood String  @default("")
+  city         String  @default("")
+  state        String  @default("")
+  complement   String?
+  hideAddress  Boolean @default(false)
+
+  // Pagamentos
+  pixEnabled Boolean @default(false)
+  pixKeyType String?
+  pixKey     String?
+  pixHolder  String?
+
+  payOnDeliveryCash       Boolean @default(false)
+  payOnDeliveryCardDebit  Boolean @default(false)
+  payOnDeliveryCardCredit Boolean @default(false)
+
+  // Descontos/Taxas adicionais salvos como JSON para flexibilidade
+  paymentRules Json?
+
+  deliveryOriginCep    String?
+  deliveryOriginNumber String?
+  deliveryRanges       Json?
+  installmentRules     Json?
+  businessHours        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("store_settings")
+}
+
+enum DiscountType {
+  VALUE
+  PERCENTAGE
+  FREE_SHIPPING
+}
+
+model Coupon {
+  id                      String       @id @default(uuid())
+  title                   String       @unique
+  status                  Boolean      @default(true)
+  type                    DiscountType
+  value                   Decimal?     @db.Decimal(10, 2)
+  validUntilDate          DateTime?
+  startTime               DateTime?
+  endTime                 DateTime?
+  maxUses                 Int?
+  currentUses             Int          @default(0)
+  minOrderValue           Decimal?     @db.Decimal(10, 2)
+  applyToPromotionalItems Boolean      @default(false)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  orders Order[]
+
+  @@map("coupons")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses CustomerAddress[]
+  orders    Order[]
+
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id           String   @id @default(uuid())
+  customerId   String
+  street       String
+  number       String
+  neighborhood String
+  city         String
+  state        String
+  cep          String
+  complement   String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_addresses")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+model Order {
+  id          String @id @default(uuid())
+  externalId  String? @unique
+  orderNumber Int    @unique @default(autoincrement())
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  customerName  String
+  customerPhone String
+
+  // Valores monetários
+  itemsTotal    Decimal @db.Decimal(10, 2)
+  freight       Decimal @db.Decimal(10, 2)
+  totalOrder    Decimal @db.Decimal(10, 2)
+  totalReceived Decimal @db.Decimal(10, 2)
+  cardFee       Decimal @default(0) @db.Decimal(10, 2)
+
+  // Novos campos segregados
+  paymentDiscount       Decimal @default(0) @db.Decimal(10, 2)
+  installmentSurcharge  Decimal @default(0) @db.Decimal(10, 2)
+  couponDiscount        Decimal @default(0) @db.Decimal(10, 2)
+  couponFreightDiscount Decimal @default(0) @db.Decimal(10, 2)
+  receiptDiscount       Decimal @default(0) @db.Decimal(10, 2)
+  receiptSurcharge      Decimal @default(0) @db.Decimal(10, 2)
+  amountProvided        Decimal? @db.Decimal(10, 2)
+  changeAmount          Decimal? @db.Decimal(10, 2)
+
+  // Regras aplicadas (JSON)
+  appliedTaxRule    Json?
+  appliedCouponRule Json?
+
+  // Pagamento
+  paymentType   String // Ex: "Online", "Presencial"
+  paymentMethod String // Ex: "PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro"
+  pixKey        String?
+
+  // Endereço de Entrega
+  street       String
+  number       String
+  neighborhood String
+  city         String
+  state        String
+  cep          String
+  complement   String?
+  observation  String?
+
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  installments  Int?          @default(1)
+  paymentDate   DateTime?
+  isPrinted     Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  courierTransactionId String?
+  courierTransaction   CourierTransaction? @relation(fields: [courierTransactionId], references: [id], onDelete: SetNull)
+
+  items OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String  @id @default(uuid())
+  orderId       String
+  productId     String?
+  productItemId String?
+  productName   String
+  price         Decimal @db.Decimal(10, 2)
+  quantity      Int
+  variation     String? // Armazena a string descritiva da variação escolhida
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productItem ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
+
+model CashRegister {
+  id           String            @id @default(uuid())
+  title        String
+  startDate    DateTime          @db.Date
+  endDate      DateTime          @db.Date
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  transactions CashTransaction[]
+
+  @@map("cash_registers")
+}
+
+model FixedCost {
+  id                String            @id @default(uuid())
+  name              String
+  value             Decimal           @db.Decimal(10, 2)
+  repeats           Boolean           @default(true)
+  type              String            @default("ALWAYS") // "ALWAYS", "INSTALLMENTS"
+  installmentsCount Int?              @default(1)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  transactions      CashTransaction[]
+
+  @@map("fixed_costs")
+}
+
+model CashTransaction {
+  id             String   @id @default(uuid())
+  cashRegisterId String?
+  type           String // "ENTRY", "OUTFLOW"
+  category       String?  @default("GENERAL")
+  amount         Decimal  @db.Decimal(10, 2)
+  description    String
+  date           DateTime @default(now())
+  fixedCostId    String?
+  createdAt      DateTime @default(now())
+
+  cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id], onDelete: SetNull)
+  fixedCost    FixedCost?    @relation(fields: [fixedCostId], references: [id], onDelete: SetNull)
+
+  @@map("cash_transactions")
+}
+
+model InvestmentTransaction {
+  id          String   @id @default(uuid())
+  type        String // "ENTRY", "OUTFLOW"
+  amount      Decimal  @db.Decimal(10, 2)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("investment_transactions")
+}
+
+model ImportJob {
+  id           String   @id @default(uuid())
+  type         String   // "PRODUCTS", "CATEGORIES", "ORDERS"
+  status       String   // "RUNNING", "COMPLETED", "FAILED"
+  lastSkip     Int      @default(0)
+  totalFetched Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("import_jobs")
+}
+
+enum StockMovementType {
+  ADD
+  SUBTRACT
+  SET
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  type          StockMovementType
+  quantity      Int
+  previousStock Int
+  newStock      Int
+  observation   String?           @db.Text
+  createdAt     DateTime          @default(now())
+  
+  productId     String
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  productItemId String?
+  productItem   ProductItem?      @relation(fields: [productItemId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([productItemId])
+  @@map("stock_movements")
+}
+
+model Courier {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions CourierTransaction[]
+
+  @@map("couriers")
+}
+
+enum CourierTransactionType {
+  FEE
+  PAYMENT
+}
+
+model CourierTransaction {
+  id        String                 @id @default(uuid())
+  courierId String
+  type      CourierTransactionType
+  amount    Decimal                @db.Decimal(10, 2)
+  description String
+  date      DateTime               @default(now())
+  createdAt DateTime               @default(now())
+
+  courier   Courier  @relation(fields: [courierId], references: [id], onDelete: Cascade)
+  orders    Order[]
+
+  @@map("courier_transactions")
+}
+
+model StoreSession {
+  id              String   @id @default(uuid())
+  sessionId       String   @unique
+  startedAt       DateTime @default(now())
+  lastHeartbeatAt DateTime @default(now())
+  durationSeconds Int      @default(0)
+  isConverted     Boolean  @default(false)
+  
+  cartDraft       CartDraft?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("store_sessions")
+}
+
+model CartDraft {
+  id           String       @id @default(uuid())
+  sessionId    String       @unique
+  session      StoreSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  cartItems    Json         // Array of products in cart
+  totalAmount  Decimal      @db.Decimal(10, 2)
+  isAbandoned  Boolean      @default(false)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("cart_drafts")
+}
