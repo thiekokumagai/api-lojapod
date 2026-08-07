@@ -86,8 +86,6 @@ describe('GetCashRegisterSummaryUseCase', () => {
       totalOutflows: 0,
       motoboyOutflows: 0,
       partnersOutflows: 0,
-      thiekoOutflows: 0,
-      muriloOutflows: 0,
       marketingOutflows: 0,
       totalInvestment: 0,
       totalProductCost: 0,
@@ -111,7 +109,7 @@ describe('GetCashRegisterSummaryUseCase', () => {
       { type: 'OUTFLOW', category: 'INVESTMENT', amount: 100, description: 'Investimento em Maquinário' },
       { type: 'OUTFLOW', category: 'MOTOBOY', amount: 50, description: 'Frete Motoboy' },
       { type: 'OUTFLOW', category: 'MARKETING', amount: 40, description: 'Anúncios Instagram' },
-      { type: 'OUTFLOW', category: 'PARTNERS', amount: 200, description: 'Retirada Thieko' },
+      { type: 'OUTFLOW', category: 'PARTNERS', amount: 200, description: 'Retirada Sócios' },
       { type: 'OUTFLOW', category: 'GENERAL', amount: 30, description: 'Material de Limpeza' },
     ]);
 
@@ -122,7 +120,6 @@ describe('GetCashRegisterSummaryUseCase', () => {
     expect(result.summary.motoboyOutflows).toBe(50);
     expect(result.summary.marketingOutflows).toBe(40);
     expect(result.summary.partnersOutflows).toBe(200);
-    expect(result.summary.thiekoOutflows).toBe(200);
     expect(result.summary.totalNet).toBe(-420);
   });
 });
