@@ -8,12 +8,40 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   USER
 }
 
+model Store {
+  id         String   @id @default(uuid())
+  subdomain  String   @unique
+  title      String
+  adminEmail String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users                 User[]
+  categories            Category[]
+  variations            Variation[]
+  products              Product[]
+  storeSettings         StoreSettings?
+  coupons               Coupon[]
+  customers             Customer[]
+  orders                Order[]
+  cashRegisters         CashRegister[]
+  fixedCosts            FixedCost[]
+  cashTransactions      CashTransaction[]
+  investmentTransactions InvestmentTransaction[]
+  couriers              Courier[]
+  storeSessions         StoreSession[]
+
+  @@map("stores")
+}
+
 model User {
   id           String   @id @default(uuid())
+  storeId      String?
   name         String
   email        String   @unique
   password     String
@@ -23,11 +51,14 @@ model User {
   webPushSubscription Json?
   createdAt    DateTime @default(now())
 
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@map("users")
 }
 
 model Category {
   id         String    @id @default(uuid())
+  storeId    String?
   externalId String?   @unique
   title      String
   image      String?
@@ -37,6 +68,7 @@ model Category {
   order      Int       @default(0)
   deletedAt  DateTime?
 
+  store    Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   products Product[]
 
   @@map("categories")
@@ -44,10 +76,12 @@ model Category {
 
 model Variation {
   id        String    @id @default(uuid())
+  storeId   String?
   title     String
   deletedAt DateTime?
   createdAt DateTime  @default(now())
 
+  store    Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   options  VariationOption[]
   products ProductVariation[]
 
@@ -70,6 +104,7 @@ model VariationOption {
 
 model Product {
   id         String    @id @default(uuid())
+  storeId    String?
   externalId String?   @unique
   title      String
   categoryId String
@@ -79,6 +114,7 @@ model Product {
   isVisible  Boolean   @default(true)
   isBestSeller Boolean @default(false)
 
+  store               Store?             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   category            Category           @relation(fields: [categoryId], references: [id])
   images              ProductImage[]
   variations          ProductVariation[]
@@ -123,7 +159,6 @@ model ProductItem {
   productId String
   stock     Int     @default(0)
 
-
   hash      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -152,6 +187,7 @@ model ProductItemOption {
 
 model StoreSettings {
   id            String   @id @default(uuid())
+  storeId       String?  @unique
   storeName     String   @default("Minha Loja")
   logoUrl       String?
   whiteLogoUrl  String?
@@ -195,6 +231,8 @@ model StoreSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@map("store_settings")
 }
 
@@ -206,6 +244,7 @@ enum DiscountType {
 
 model Coupon {
   id                      String       @id @default(uuid())
+  storeId                 String?
   title                   String       @unique
   status                  Boolean      @default(true)
   type                    DiscountType
@@ -220,6 +259,7 @@ model Coupon {
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
 
+  store  Store?  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orders Order[]
 
   @@map("coupons")
@@ -227,11 +267,13 @@ model Coupon {
 
 model Customer {
   id        String   @id @default(uuid())
+  storeId   String?
   name      String
   phone     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  store     Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   addresses CustomerAddress[]
   orders    Order[]
 
@@ -272,8 +314,9 @@ enum PaymentStatus {
 
 model Order {
   id          String @id @default(uuid())
+  storeId     String?
   externalId  String? @unique
-  orderNumber Int    @unique @default(autoincrement())
+  orderNumber Int    @default(autoincrement())
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id])
@@ -326,6 +369,8 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   couponId String?
   coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
@@ -356,11 +401,14 @@ model OrderItem {
 
 model CashRegister {
   id           String            @id @default(uuid())
+  storeId      String?
   title        String
   startDate    DateTime          @db.Date
   endDate      DateTime          @db.Date
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+
+  store        Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   transactions CashTransaction[]
 
   @@map("cash_registers")
@@ -368,6 +416,7 @@ model CashRegister {
 
 model FixedCost {
   id                String            @id @default(uuid())
+  storeId           String?
   name              String
   value             Decimal           @db.Decimal(10, 2)
   repeats           Boolean           @default(true)
@@ -375,13 +424,16 @@ model FixedCost {
   installmentsCount Int?              @default(1)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
-  transactions      CashTransaction[]
+
+  store        Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transactions CashTransaction[]
 
   @@map("fixed_costs")
 }
 
 model CashTransaction {
   id             String   @id @default(uuid())
+  storeId        String?
   cashRegisterId String?
   type           String // "ENTRY", "OUTFLOW"
   category       String?  @default("GENERAL")
@@ -391,6 +443,7 @@ model CashTransaction {
   fixedCostId    String?
   createdAt      DateTime @default(now())
 
+  store        Store?        @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id], onDelete: SetNull)
   fixedCost    FixedCost?    @relation(fields: [fixedCostId], references: [id], onDelete: SetNull)
 
@@ -399,11 +452,14 @@ model CashTransaction {
 
 model InvestmentTransaction {
   id          String   @id @default(uuid())
+  storeId     String?
   type        String // "ENTRY", "OUTFLOW"
   amount      Decimal  @db.Decimal(10, 2)
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("investment_transactions")
 }
@@ -448,12 +504,14 @@ model StockMovement {
 
 model Courier {
   id        String   @id @default(uuid())
+  storeId   String?
   name      String
   phone     String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  store        Store?               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   transactions CourierTransaction[]
 
   @@map("couriers")
@@ -481,12 +539,14 @@ model CourierTransaction {
 
 model StoreSession {
   id              String   @id @default(uuid())
+  storeId         String?
   sessionId       String   @unique
   startedAt       DateTime @default(now())
   lastHeartbeatAt DateTime @default(now())
   durationSeconds Int      @default(0)
   isConverted     Boolean  @default(false)
   
+  store           Store?     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cartDraft       CartDraft?
 
   createdAt       DateTime @default(now())

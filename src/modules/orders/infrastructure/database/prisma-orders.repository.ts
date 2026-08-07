@@ -477,7 +477,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       let customerIdToLink = order.customerId;
 
       if (!customerIdToLink && order.customerPhone) {
-        let customer = await tx.customer.findUnique({
+        let customer = await tx.customer.findFirst({
           where: { phone: order.customerPhone },
         });
 

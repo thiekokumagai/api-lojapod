@@ -22,6 +22,8 @@ import { ImportsModule } from './modules/imports/imports.module';
 import { PrintModule } from './modules/print/print.module';
 import { EventsModule } from './modules/events/events.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { TenantModule } from './modules/tenant/tenant.module';
+import { StoresModule } from './modules/stores/stores.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -35,6 +37,8 @@ import { ScheduleModule } from '@nestjs/schedule';
       serveRoot: '/public',
     }),
 
+    TenantModule,
+    StoresModule,
     PrismaModule,
     AuthModule,
     UsersModule,

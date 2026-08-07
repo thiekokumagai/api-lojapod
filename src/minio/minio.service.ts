@@ -1,11 +1,18 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Optional, Inject } from '@nestjs/common';
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import { UploadedFile as UploadedFileType } from '../common/types/uploaded-file.type';
+import { TenantContextService } from '../modules/tenant/tenant-context.service';
+
 @Injectable()
 export class MinioService implements OnModuleInit {
   private client: Minio.Client;
   private readonly bucket = 'podemaismidia';
+
+  constructor(
+    @Optional() private readonly tenantContextService?: TenantContextService,
+  ) {}
+
   async onModuleInit() {
     const { MINIO_ENDPOINT, MINIO_PORT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY } =
       process.env;
@@ -39,14 +46,15 @@ export class MinioService implements OnModuleInit {
       }
     } catch (error) {
       console.error(`[MinioService] Error checking/creating bucket: ${error.message}`);
-      // Don't crash the application if MinIO is temporarily unavailable (e.g. waking up on Railway)
     }
   }
 
-  async uploadFile(file: UploadedFileType, folder = '') {
+  async uploadFile(file: UploadedFileType, folder = '', storeSubdomain?: string) {
     if (!file) {
       throw new Error('Arquivo não enviado');
     }
+
+    const tenantSubdomain = storeSubdomain || this.tenantContextService?.getSubdomain() || 'demo';
 
     const mimeToExt: Record<string, string> = {
       'image/jpeg': 'jpg',
@@ -56,9 +64,12 @@ export class MinioService implements OnModuleInit {
 
     const fileExt = mimeToExt[file.mimetype] || 'jpg';
 
+    // MinIO folder per store: {tenantSubdomain}/{folder}/{customName | uuid.ext}
+    const pathPrefix = folder ? `${tenantSubdomain}/${folder}` : tenantSubdomain;
+
     const fileName = file.customName
-      ? `${folder}/${file.customName}`
-      : `${folder}/${randomUUID()}.${fileExt}`;
+      ? `${pathPrefix}/${file.customName}`
+      : `${pathPrefix}/${randomUUID()}.${fileExt}`;
 
     await this.client.putObject(this.bucket, fileName, file.buffer, file.size, {
       'Content-Type': file.mimetype,
@@ -68,6 +79,7 @@ export class MinioService implements OnModuleInit {
       fileName,
     };
   }
+
   async deleteFile(fileName: string) {
     if (!fileName) return;
 

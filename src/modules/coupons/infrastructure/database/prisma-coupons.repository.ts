@@ -53,7 +53,7 @@ export class PrismaCouponsRepository implements ICouponsRepository {
   }
 
   async findByTitle(title: string): Promise<Coupon | null> {
-    const data = await this.prisma.coupon.findUnique({ where: { title } });
+    const data = await this.prisma.coupon.findFirst({ where: { title } });
     if (!data) return null;
     return this.mapToDomain(data);
   }
