@@ -66,8 +66,13 @@ async function main() {
   console.log('👤 Admin da Loja Demo criado:', storeAdmin.email);
 
   // 4. Criar Store Settings para a Loja Demo
-  await prisma.storeSettings.create({
-    data: {
+  await prisma.storeSettings.upsert({
+    where: { storeId: demoStore.id },
+    update: {
+      storeName: demoStore.title,
+      phone: '67999999999',
+    },
+    create: {
       storeId: demoStore.id,
       storeName: demoStore.title,
       phone: '67999999999',

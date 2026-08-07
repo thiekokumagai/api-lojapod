@@ -18,7 +18,6 @@ import { InvestmentsModule } from './modules/investments/investments.module';
 import { CouriersModule } from './modules/couriers/couriers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CustomersModule } from './modules/customers/customers.module';
-import { ImportsModule } from './modules/imports/imports.module';
 import { PrintModule } from './modules/print/print.module';
 import { EventsModule } from './modules/events/events.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -54,7 +53,6 @@ import { ScheduleModule } from '@nestjs/schedule';
     CouriersModule,
     DashboardModule,
     CustomersModule,
-    ImportsModule,
     PrintModule,
     EventsModule,
     AnalyticsModule,

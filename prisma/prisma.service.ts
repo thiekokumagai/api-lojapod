@@ -27,6 +27,9 @@ export class PrismaService
       'InvestmentTransaction',
       'Courier',
       'StoreSession',
+      'CustomerAddress',
+      'StockMovement',
+      'CourierTransaction',
     ];
 
     this.$use(async (params, next) => {

@@ -36,6 +36,9 @@ model Store {
   investmentTransactions InvestmentTransaction[]
   couriers              Courier[]
   storeSessions         StoreSession[]
+  customerAddresses     CustomerAddress[]
+  stockMovements        StockMovement[]
+  courierTransactions   CourierTransaction[]
 
   @@map("stores")
 }
@@ -283,6 +286,7 @@ model Customer {
 
 model CustomerAddress {
   id           String   @id @default(uuid())
+  storeId      String?
   customerId   String
   street       String
   number       String
@@ -295,6 +299,7 @@ model CustomerAddress {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  store    Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@map("customer_addresses")
@@ -465,17 +470,7 @@ model InvestmentTransaction {
   @@map("investment_transactions")
 }
 
-model ImportJob {
-  id           String   @id @default(uuid())
-  type         String   // "PRODUCTS", "CATEGORIES", "ORDERS"
-  status       String   // "RUNNING", "COMPLETED", "FAILED"
-  lastSkip     Int      @default(0)
-  totalFetched Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  @@map("import_jobs")
-}
 
 enum StockMovementType {
   ADD
@@ -485,6 +480,7 @@ enum StockMovementType {
 
 model StockMovement {
   id            String            @id @default(uuid())
+  storeId       String?
   type          StockMovementType
   quantity      Int
   previousStock Int
@@ -492,6 +488,7 @@ model StockMovement {
   observation   String?           @db.Text
   createdAt     DateTime          @default(now())
   
+  store         Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   productId     String
   product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   
@@ -525,6 +522,7 @@ enum CourierTransactionType {
 
 model CourierTransaction {
   id        String                 @id @default(uuid())
+  storeId   String?
   courierId String
   type      CourierTransactionType
   amount    Decimal                @db.Decimal(10, 2)
@@ -532,6 +530,7 @@ model CourierTransaction {
   date      DateTime               @default(now())
   createdAt DateTime               @default(now())
 
+  store     Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
   courier   Courier  @relation(fields: [courierId], references: [id], onDelete: Cascade)
   orders    Order[]
 
