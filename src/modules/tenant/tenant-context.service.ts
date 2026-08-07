@@ -18,6 +18,13 @@ export class TenantContextService {
     return this.asyncLocalStorage.getStore()?.storeId;
   }
 
+  setStoreId(storeId: string): void {
+    const context = this.asyncLocalStorage.getStore();
+    if (context) {
+      context.storeId = storeId;
+    }
+  }
+
   getSubdomain(): string | undefined {
     return this.asyncLocalStorage.getStore()?.subdomain;
   }
