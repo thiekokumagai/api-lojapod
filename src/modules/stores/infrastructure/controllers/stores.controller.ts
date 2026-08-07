@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   UseGuards,
@@ -51,6 +52,17 @@ export class StoresController {
   @ApiResponse({ status: 201, description: 'Loja criada com sucesso' })
   async createStore(@Body() dto: CreateStoreDto) {
     return this.storesService.createStore(dto);
+  }
+
+  @Put(':id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Atualiza título, subdomínio, e-mail admin e senha da loja' })
+  async updateStore(
+    @Param('id') id: string,
+    @Body() body: { title?: string; subdomain?: string; adminEmail?: string; password?: string },
+  ) {
+    return this.storesService.updateStore(id, body);
   }
 
   @Get()

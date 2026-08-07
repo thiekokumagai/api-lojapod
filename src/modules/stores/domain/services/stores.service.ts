@@ -38,27 +38,102 @@ export class StoresService {
       },
     });
 
-    // Criar o usuário Admin da loja se senha fornecida
-    if (dto.password) {
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
-      await this.prisma.user.upsert({
-        where: { email: dto.adminEmail.trim().toLowerCase() },
-        update: {
-          storeId: store.id,
-          role: 'ADMIN',
-          password: hashedPassword,
-        },
-        create: {
-          name: `Admin - ${store.title}`,
-          email: dto.adminEmail.trim().toLowerCase(),
-          password: hashedPassword,
-          role: 'ADMIN',
-          storeId: store.id,
-        },
+    // Criar o usuário Admin da loja se senha fornecida (ou senha padrão admin123)
+    const passwordToUse = dto.password?.trim() || 'admin123';
+    const hashedPassword = await bcrypt.hash(passwordToUse, 10);
+
+    await this.prisma.user.upsert({
+      where: { email: dto.adminEmail.trim().toLowerCase() },
+      update: {
+        storeId: store.id,
+        role: 'ADMIN',
+        password: hashedPassword,
+      },
+      create: {
+        name: `Admin - ${store.title}`,
+        email: dto.adminEmail.trim().toLowerCase(),
+        password: hashedPassword,
+        role: 'ADMIN',
+        storeId: store.id,
+      },
+    });
+
+    return store;
+  }
+
+  async updateStore(id: string, dto: { title?: string; subdomain?: string; adminEmail?: string; password?: string }) {
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Loja não encontrada');
+    }
+
+    const updateData: any = {};
+
+    if (dto.title && dto.title.trim()) {
+      updateData.title = dto.title.trim();
+    }
+
+    if (dto.subdomain && dto.subdomain.trim()) {
+      const subdomainNormalized = dto.subdomain.trim().toLowerCase();
+      if (subdomainNormalized !== store.subdomain) {
+        const existingSubdomain = await this.prisma.store.findUnique({
+          where: { subdomain: subdomainNormalized },
+        });
+        if (existingSubdomain) {
+          throw new ConflictException(`O subdomínio "${subdomainNormalized}" já está em uso por outra loja`);
+        }
+        updateData.subdomain = subdomainNormalized;
+      }
+    }
+
+    if (dto.adminEmail && dto.adminEmail.trim()) {
+      updateData.adminEmail = dto.adminEmail.trim().toLowerCase();
+    }
+
+    const updatedStore = await this.prisma.store.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // 1. Atualizar StoreSettings storeName se o título mudou
+    if (updateData.title) {
+      await this.prisma.storeSettings.updateMany({
+        where: { storeId: id },
+        data: { storeName: updateData.title },
       });
     }
 
-    return store;
+    // 2. Sincronizar usuário Admin da loja se e-mail ou senha foram alterados
+    const adminUser = (await this.prisma.user.findFirst({
+      where: { storeId: id, role: 'ADMIN' },
+    })) || (await this.prisma.user.findFirst({
+      where: { email: store.adminEmail },
+    }));
+
+    if (adminUser) {
+      const userUpdateData: any = {};
+      if (updateData.adminEmail) {
+        userUpdateData.email = updateData.adminEmail;
+      }
+      if (updateData.title) {
+        userUpdateData.name = `Admin - ${updateData.title}`;
+      }
+      if (dto.password && dto.password.trim()) {
+        userUpdateData.password = await bcrypt.hash(dto.password.trim(), 10);
+      }
+
+      if (Object.keys(userUpdateData).length > 0) {
+        await this.prisma.user.update({
+          where: { id: adminUser.id },
+          data: userUpdateData,
+        });
+      }
+    }
+
+    return updatedStore;
   }
 
   async listStores() {
@@ -137,7 +212,6 @@ export class StoresService {
       throw new NotFoundException('Loja não encontrada');
     }
 
-    // Se a loja não tem um printToken gerado ainda, gera um
     if (!store.printToken) {
       const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
       store = await this.prisma.store.update({
