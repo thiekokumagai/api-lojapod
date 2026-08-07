@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Optional, Inject } from '@nestjs/common';
+import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import { UploadedFile as UploadedFileType } from '../common/types/uploaded-file.type';
@@ -49,12 +49,16 @@ export class MinioService implements OnModuleInit {
     }
   }
 
-  async uploadFile(file: UploadedFileType, folder = '', storeSubdomain?: string) {
+  async uploadFile(file: UploadedFileType, folder = '', storeId?: string) {
     if (!file) {
       throw new Error('Arquivo não enviado');
     }
 
-    const tenantSubdomain = storeSubdomain || this.tenantContextService?.getSubdomain() || 'demo';
+    const tenantStoreId = storeId || this.tenantContextService?.getStoreId();
+
+    if (!tenantStoreId) {
+      throw new Error('Loja não identificada para o upload');
+    }
 
     const mimeToExt: Record<string, string> = {
       'image/jpeg': 'jpg',
@@ -64,8 +68,8 @@ export class MinioService implements OnModuleInit {
 
     const fileExt = mimeToExt[file.mimetype] || 'jpg';
 
-    // MinIO folder per store: {tenantSubdomain}/{folder}/{customName | uuid.ext}
-    const pathPrefix = folder ? `${tenantSubdomain}/${folder}` : tenantSubdomain;
+    // Object path inside the bucket: {storeId}/{module}/{customName | uuid.ext}
+    const pathPrefix = folder ? `${tenantStoreId}/${folder}` : tenantStoreId;
 
     const fileName = file.customName
       ? `${pathPrefix}/${file.customName}`
