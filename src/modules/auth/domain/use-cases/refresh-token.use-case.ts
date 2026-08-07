@@ -23,16 +23,25 @@ export class RefreshTokenUseCase {
       throw new ForbiddenException('Token inválido');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const tokens = await this.generateTokens(user.id, user.email, user.role, user.storeId);
 
     const hash = await bcrypt.hash(tokens.refreshToken, 10);
     await this.authRepository.updateRefreshToken(user.id, hash);
 
-    return tokens;
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        storeId: user.storeId,
+      },
+    };
   }
 
-  private async generateTokens(userId: string, email: string) {
-    const payload = { sub: userId, email };
+  private async generateTokens(userId: string, email: string, role: string, storeId?: string | null) {
+    const payload = { sub: userId, email, role, storeId };
 
     const accessToken = await this.jwt.signAsync(payload, {
       secret: process.env.JWT_SECRET,

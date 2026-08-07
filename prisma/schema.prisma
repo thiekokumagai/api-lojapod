@@ -18,6 +18,7 @@ model Store {
   subdomain  String   @unique
   title      String
   adminEmail String
+  printToken String?  @unique @default(uuid())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

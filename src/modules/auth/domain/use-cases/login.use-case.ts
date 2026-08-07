@@ -23,15 +23,24 @@ export class LoginUseCase {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const tokens = await this.generateTokens(user.id, user.email, user.role, user.storeId);
 
     await this.persistRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        storeId: user.storeId,
+      },
+    };
   }
 
-  private async generateTokens(userId: string, email: string) {
-    const payload = { sub: userId, email };
+  private async generateTokens(userId: string, email: string, role: string, storeId?: string | null) {
+    const payload = { sub: userId, email, role, storeId };
 
     const accessToken = await this.jwt.signAsync(payload, {
       secret: process.env.JWT_SECRET,

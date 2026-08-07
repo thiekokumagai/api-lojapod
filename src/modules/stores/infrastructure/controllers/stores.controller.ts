@@ -22,6 +22,28 @@ export class StoresController {
     return this.storesService.getStoreBySubdomain(subdomain);
   }
 
+  @Post('print-agent/validate')
+  @ApiOperation({ summary: 'Valida o token de ativação do agente de impressão (Print Agent)' })
+  async validatePrintToken(@Body() body: { token: string }) {
+    return this.storesService.validatePrintToken(body.token);
+  }
+
+  @Get(':id/print-token')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtém o token de impressão da loja' })
+  async getPrintToken(@Param('id') id: string) {
+    return this.storesService.getPrintTokenForStore(id);
+  }
+
+  @Post(':id/print-token/rotate')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Gera um novo token de impressão para a loja' })
+  async rotatePrintToken(@Param('id') id: string) {
+    return this.storesService.rotatePrintToken(id);
+  }
+
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)

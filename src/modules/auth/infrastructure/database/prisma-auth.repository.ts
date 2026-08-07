@@ -14,8 +14,11 @@ export class PrismaAuthRepository implements IAuthRepository {
       where: { email },
       select: {
         id: true,
+        name: true,
         email: true,
         password: true,
+        role: true,
+        storeId: true,
         refreshToken: true,
       },
     });
@@ -26,8 +29,11 @@ export class PrismaAuthRepository implements IAuthRepository {
       where: { id },
       select: {
         id: true,
+        name: true,
         email: true,
         password: true,
+        role: true,
+        storeId: true,
         refreshToken: true,
       },
     });

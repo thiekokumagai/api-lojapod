@@ -1,7 +1,12 @@
+import { Role } from '@prisma/client';
+
 export interface AuthUserRecord {
   id: string;
+  name?: string | null;
   email: string;
   password: string;
+  role: Role;
+  storeId?: string | null;
   refreshToken: string | null;
 }
 

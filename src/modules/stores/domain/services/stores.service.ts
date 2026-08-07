@@ -1,7 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { CreateStoreDto } from '../../infrastructure/dtos/create-store.dto';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StoresService {
@@ -18,11 +19,14 @@ export class StoresService {
       throw new ConflictException(`Já existe uma loja cadastrada com o subdomínio "${subdomainNormalized}"`);
     }
 
+    const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
+
     const store = await this.prisma.store.create({
       data: {
         subdomain: subdomainNormalized,
         title: dto.title.trim(),
         adminEmail: dto.adminEmail.trim().toLowerCase(),
+        printToken,
       },
     });
 
@@ -100,5 +104,62 @@ export class StoresService {
     }
 
     return store;
+  }
+
+  async validatePrintToken(token: string) {
+    if (!token || !token.trim()) {
+      throw new UnauthorizedException('Token de impressão não informado');
+    }
+
+    const store = await this.prisma.store.findUnique({
+      where: { printToken: token.trim() },
+    });
+
+    if (!store) {
+      throw new UnauthorizedException('Token de impressão inválido');
+    }
+
+    return {
+      success: true,
+      storeId: store.id,
+      storeName: store.title,
+      subdomain: store.subdomain,
+      printToken: store.printToken,
+    };
+  }
+
+  async getPrintTokenForStore(storeId: string) {
+    let store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Loja não encontrada');
+    }
+
+    // Se a loja não tem um printToken gerado ainda, gera um
+    if (!store.printToken) {
+      const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
+      store = await this.prisma.store.update({
+        where: { id: storeId },
+        data: { printToken },
+      });
+    }
+
+    return {
+      printToken: store.printToken,
+    };
+  }
+
+  async rotatePrintToken(storeId: string) {
+    const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
+    const store = await this.prisma.store.update({
+      where: { id: storeId },
+      data: { printToken },
+    });
+
+    return {
+      printToken: store.printToken,
+    };
   }
 }

@@ -10,30 +10,57 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(private readonly prisma: PrismaService) {}
 
   async handleConnection(client: Socket) {
-    const storeId = client.handshake.query.store_id;
+    const token = (client.handshake.auth?.token || client.handshake.query?.token || client.handshake.query?.print_token) as string;
+    let storeId = client.handshake.query.store_id as string;
+    let storeName = '';
+
+    if (token) {
+      const store = await this.prisma.store.findUnique({
+        where: { printToken: token.trim() },
+      });
+
+      if (store) {
+        storeId = store.id;
+        storeName = store.title;
+      } else {
+        console.warn(`⚠️ Connection rejected: Invalid print token "${token}" (Socket: ${client.id})`);
+        client.emit('auth_error', { message: 'Token de impressão inválido' });
+        client.disconnect();
+        return;
+      }
+    } else if (storeId) {
+      const store = await this.prisma.store.findUnique({
+        where: { id: storeId },
+      });
+      if (store) {
+        storeName = store.title;
+      }
+    }
+
     if (storeId) {
-      client.join(`loja_${storeId}`);
-      console.log(`🖨️ Print Agent conectado! Loja: ${storeId} (Socket: ${client.id})`);
+      const sala = `loja_${storeId}`;
+      client.join(sala);
+      console.log(`🖨️ Print Agent conectado! Loja: ${storeName || storeId} (Sala: ${sala}, Socket: ${client.id})`);
       
-      // Auto-recuperação: Buscar pedidos que não foram impressos (ex: PC estava desligado)
+      // Auto-recuperação: Buscar pedidos da loja que não foram impressos
       try {
         const pedidosPendentes = await this.prisma.order.findMany({
-          where: { isPrinted: false },
-          include: { items: true } // A relação no Prisma se chama 'items', não 'orderItems'
+          where: { storeId, isPrinted: false },
+          include: { items: true },
         });
         
         if (pedidosPendentes.length > 0) {
-          console.log(`📦 Encontrados ${pedidosPendentes.length} pedidos pendentes para impressão. Disparando...`);
+          console.log(`📦 Encontrados ${pedidosPendentes.length} pedidos pendentes para a loja ${storeName || storeId}. Disparando...`);
           for (const pedido of pedidosPendentes) {
-            this.emitNovoPedido(storeId as string, pedido);
+            this.emitNovoPedido(storeId, pedido);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao buscar pedidos pendentes:', error.message);
       }
       
     } else {
-      console.log(`⚠️ Print Agent conectou sem store_id (Socket: ${client.id})`);
+      console.warn(`⚠️ Print Agent conectou sem token ou store_id (Socket: ${client.id})`);
     }
   }
 
@@ -56,7 +83,7 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data: { isPrinted: true },
       });
       console.log(`✅ Status isPrinted=true atualizado para o pedido #${pedidoId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Erro ao atualizar isPrinted do pedido #${pedidoId}`, error.message);
     }
   }
