@@ -7,24 +7,32 @@ import { TenantContextService } from '../modules/tenant/tenant-context.service';
 @Injectable()
 export class MinioService implements OnModuleInit {
   private client: Minio.Client;
-  private readonly bucket = 'podemaismidia';
+  private bucket: string;
 
   constructor(
     @Optional() private readonly tenantContextService?: TenantContextService,
   ) {}
 
   async onModuleInit() {
-    const { MINIO_ENDPOINT, MINIO_PORT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY } =
-      process.env;
+    const {
+      MINIO_ENDPOINT,
+      MINIO_PORT,
+      MINIO_ACCESS_KEY,
+      MINIO_SECRET_KEY,
+      MINIO_BUCKET,
+    } = process.env;
 
     if (
       !MINIO_ENDPOINT ||
       !MINIO_PORT ||
       !MINIO_ACCESS_KEY ||
-      !MINIO_SECRET_KEY
+      !MINIO_SECRET_KEY ||
+      !MINIO_BUCKET
     ) {
       throw new Error('MinIO env vars not defined');
     }
+
+    this.bucket = MINIO_BUCKET;
 
     this.client = new Minio.Client({
       endPoint: MINIO_ENDPOINT,
