@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 
@@ -20,25 +21,29 @@ export class StoreSettingsController {
   async getStoreStatus() {
     const settings = await this.getSettingsUseCase.execute();
     const businessHours = settings.businessHours || [];
-    
+
     if (!businessHours || businessHours.length === 0) {
       return { isOpen: false };
     }
 
     // Usar fuso horário de Campo Grande (AMT)
-    const nowStr = new Date().toLocaleString("en-US", {timeZone: "America/Campo_Grande"});
+    const nowStr = new Date().toLocaleString('en-US', {
+      timeZone: 'America/Campo_Grande',
+    });
     const now = new Date(nowStr);
-    
+
     const dayOfWeek = now.getDay();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const todayRule = businessHours.find((rule: any) => rule.days.includes(dayOfWeek));
+    const todayRule = businessHours.find((rule: any) =>
+      rule.days.includes(dayOfWeek),
+    );
 
     let isOpen = false;
     if (todayRule && todayRule.intervals.length > 0) {
       isOpen = todayRule.intervals.some((interval: any) => {
-        const [openHour, openMin] = interval.open.split(":").map(Number);
-        const [closeHour, closeMin] = interval.close.split(":").map(Number);
+        const [openHour, openMin] = interval.open.split(':').map(Number);
+        const [closeHour, closeMin] = interval.close.split(':').map(Number);
         const openMinutes = openHour * 60 + openMin;
         const closeMinutes = closeHour * 60 + closeMin;
 
@@ -61,12 +66,31 @@ export class StoreSettingsController {
 
   @Get('manifest.json')
   @ApiOperation({ summary: 'Obter manifest.json dinâmico para PWA' })
-  async getManifest() {
+  async getManifest(@Req() req: Request) {
     const settings = await this.getSettingsUseCase.execute();
-    
+
+    const originHeader = req.headers.origin;
+    const refererHeader = req.headers.referer;
+
+    // Tenta pegar o Origin ou Referer primeiro (ideal para requisições cross-origin do frontend)
+    let requestOrigin = '';
+    try {
+      requestOrigin =
+        originHeader || (refererHeader ? new URL(refererHeader).origin : '');
+    } catch (e) {
+      // Ignora erro de parse
+    }
+
+    // Se o navegador não enviou, usamos o próprio host da requisição dinamicamente
+    if (!requestOrigin) {
+      const protocol =
+        req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      requestOrigin = `${protocol}://${req.headers.host}`;
+    }
+
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
-    const bucket = process.env.MINIO_BUCKET || 'lojapod';
-    
+    const bucket = process.env.MINIO_BUCKET || 'podemaismidia';
+
     // Função para montar a URL da imagem (apenas para paths relativos de minio)
     const buildImg = (path?: string | null) => {
       if (!path) return '';
@@ -78,25 +102,26 @@ export class StoreSettingsController {
     const iconSrc = buildImg(settings.faviconUrl) || '/favicon-512x512.png';
 
     return {
-      name: settings.storeName || 'Loja Pod',
-      short_name: settings.storeName || 'Loja',
+      name: settings.storeName || 'Pod e Mais',
+      short_name: settings.storeName || 'Pod e Mais',
       description: 'Painel Administrativo da loja',
       theme_color: '#ffffff',
       background_color: '#ffffff',
       display: 'standalone',
+      start_url: requestOrigin + '/',
+      scope: requestOrigin + '/',
       icons: [
         {
           src: iconSrc,
           sizes: '192x192',
-          type: 'image/png'
+          type: 'image/png',
         },
         {
           src: iconSrc,
           sizes: '512x512',
           type: 'image/png',
-          purpose: 'any maskable'
-        }
-      ]
-    };
+          purpose: 'any maskable',
+        },
+      ],
   }
 }
