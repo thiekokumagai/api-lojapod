@@ -101,6 +101,14 @@ export class StoreSettingsController {
 
     const iconSrc = buildImg(settings.faviconUrl) || '/favicon-512x512.png';
 
+    // Detectar dinamicamente o mimetype com base na extensão
+    let iconType = 'image/png';
+    const lowerSrc = iconSrc.toLowerCase();
+    if (lowerSrc.endsWith('.webp')) iconType = 'image/webp';
+    else if (lowerSrc.endsWith('.jpg') || lowerSrc.endsWith('.jpeg')) iconType = 'image/jpeg';
+    else if (lowerSrc.endsWith('.svg')) iconType = 'image/svg+xml';
+    else if (lowerSrc.endsWith('.gif')) iconType = 'image/gif';
+
     return {
       name: settings.storeName || 'Loja Pod',
       short_name: settings.storeName || 'Loja Pod',
@@ -114,12 +122,12 @@ export class StoreSettingsController {
         {
           src: iconSrc,
           sizes: '192x192',
-          type: 'image/png',
+          type: iconType,
         },
         {
           src: iconSrc,
           sizes: '512x512',
-          type: 'image/png',
+          type: iconType,
           purpose: 'any maskable',
         },
       ],
