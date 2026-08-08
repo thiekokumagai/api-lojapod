@@ -89,7 +89,7 @@ export class StoreSettingsController {
     }
 
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
-    const bucket = process.env.MINIO_BUCKET || 'podemaismidia';
+    const bucket = process.env.MINIO_BUCKET || 'lojapod';
 
     // Função para montar a URL da imagem (apenas para paths relativos de minio)
     const buildImg = (path?: string | null) => {
@@ -102,8 +102,8 @@ export class StoreSettingsController {
     const iconSrc = buildImg(settings.faviconUrl) || '/favicon-512x512.png';
 
     return {
-      name: settings.storeName || 'Pod e Mais',
-      short_name: settings.storeName || 'Pod e Mais',
+      name: settings.storeName || 'Loja Pod',
+      short_name: settings.storeName || 'Loja Pod',
       description: 'Painel Administrativo da loja',
       theme_color: '#ffffff',
       background_color: '#ffffff',
@@ -123,5 +123,6 @@ export class StoreSettingsController {
           purpose: 'any maskable',
         },
       ],
+    };
   }
 }
