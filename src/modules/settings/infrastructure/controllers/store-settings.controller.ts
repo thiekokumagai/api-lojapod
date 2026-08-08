@@ -58,4 +58,45 @@ export class StoreSettingsController {
       freightPrice: 15,
     };
   }
+
+  @Get('manifest.json')
+  @ApiOperation({ summary: 'Obter manifest.json dinâmico para PWA' })
+  async getManifest() {
+    const settings = await this.getSettingsUseCase.execute();
+    
+    const minioUrl = process.env.MINIO_PUBLIC_URL || '';
+    const bucket = process.env.MINIO_BUCKET || 'lojapod';
+    
+    // Função para montar a URL da imagem (apenas para paths relativos de minio)
+    const buildImg = (path?: string | null) => {
+      if (!path) return '';
+      if (path.startsWith('http')) return path;
+      if (path.startsWith('settings/')) return `${minioUrl}/${bucket}/${path}`;
+      return path;
+    };
+
+    const iconSrc = buildImg(settings.faviconUrl) || '/favicon-512x512.png';
+
+    return {
+      name: settings.storeName || 'Loja Pod',
+      short_name: settings.storeName || 'Loja',
+      description: 'Painel Administrativo da loja',
+      theme_color: '#ffffff',
+      background_color: '#ffffff',
+      display: 'standalone',
+      icons: [
+        {
+          src: iconSrc,
+          sizes: '192x192',
+          type: 'image/png'
+        },
+        {
+          src: iconSrc,
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'any maskable'
+        }
+      ]
+    };
+  }
 }
