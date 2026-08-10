@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { CashTransaction } from '../entities/cash-transaction.entity';
 import { IFixedCostsRepository } from '../repositories/ifixed-costs.repository';
@@ -34,6 +35,27 @@ export class PayFixedCostUseCase {
         );
       }
       registerId = activeRegister.id;
+    }
+
+    // Verificar se esta conta fixa já foi paga no caixa especificado
+    const alreadyPaid = await this.repository.hasTransactionInRegister(
+      fixedCost.id,
+      registerId,
+    );
+    if (alreadyPaid) {
+      throw new ConflictException('Esta conta fixa já foi paga neste caixa');
+    }
+
+    // Para contas do tipo INSTALLMENTS, verificar se todas as parcelas já foram quitadas
+    if (
+      fixedCost.repeats &&
+      fixedCost.type === 'INSTALLMENTS' &&
+      fixedCost.installmentsCount &&
+      (fixedCost.paidInstallments ?? 0) >= fixedCost.installmentsCount
+    ) {
+      throw new BadRequestException(
+        'Esta conta fixa parcelada já teve todas as parcelas quitadas',
+      );
     }
 
     const description = input.description || `Pagamento: ${fixedCost.name}`;

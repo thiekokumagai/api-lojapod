@@ -36,4 +36,8 @@ export abstract class IFixedCostsRepository {
   abstract deleteTransaction(id: string): Promise<CashTransaction>;
 
   abstract findActiveCashRegister(): Promise<{ id: string } | null>;
+  abstract hasTransactionInRegister(
+    fixedCostId: string,
+    cashRegisterId: string,
+  ): Promise<boolean>;
 }

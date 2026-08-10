@@ -8,7 +8,8 @@ import { IFixedCostsRepository } from '../../domain/repositories/ifixed-costs.re
 export class PrismaFixedCostsRepository implements IFixedCostsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private mapFixedCost(record: any): FixedCost {
+  private mapFixedCost(record: any, paidInstallments?: number): FixedCost {
+    const paid = paidInstallments ?? 0;
     return {
       id: record.id,
       name: record.name,
@@ -16,6 +17,8 @@ export class PrismaFixedCostsRepository implements IFixedCostsRepository {
       repeats: record.repeats,
       type: record.type,
       installmentsCount: record.installmentsCount,
+      paidInstallments: paid,
+      currentInstallment: paid + 1,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
@@ -36,17 +39,62 @@ export class PrismaFixedCostsRepository implements IFixedCostsRepository {
   }
 
   async findAll(): Promise<FixedCost[]> {
+    const activeRegister = await this.findActiveCashRegister();
     const records = await this.prisma.fixedCost.findMany({
+      include: {
+        transactions: {
+          where: { type: 'OUTFLOW' },
+          select: { id: true, cashRegisterId: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
-    return records.map((r) => this.mapFixedCost(r));
+
+    const result: FixedCost[] = [];
+
+    for (const record of records) {
+      const outflows = record.transactions || [];
+      const paidCount = outflows.length;
+
+      // Se for parcelado e todas as parcelas foram quitadas, oculta definitivamente
+      if (
+        record.repeats &&
+        record.type === 'INSTALLMENTS' &&
+        record.installmentsCount &&
+        paidCount >= record.installmentsCount
+      ) {
+        continue;
+      }
+
+      // Se houver caixa ativo aberto, oculta se já tiver registrado pagamento (OUTFLOW) neste caixa
+      if (activeRegister) {
+        const paidInCurrentRegister = outflows.some(
+          (t) => t.cashRegisterId === activeRegister.id,
+        );
+        if (paidInCurrentRegister) {
+          continue;
+        }
+      }
+
+      result.push(this.mapFixedCost(record, paidCount));
+    }
+
+    return result;
   }
 
   async findById(id: string): Promise<FixedCost | null> {
     const record = await this.prisma.fixedCost.findUnique({
       where: { id },
+      include: {
+        transactions: {
+          where: { type: 'OUTFLOW' },
+          select: { id: true, cashRegisterId: true },
+        },
+      },
     });
-    return record ? this.mapFixedCost(record) : null;
+    if (!record) return null;
+    const paidCount = record.transactions ? record.transactions.length : 0;
+    return this.mapFixedCost(record, paidCount);
   }
 
   async create(data: {
@@ -137,13 +185,35 @@ export class PrismaFixedCostsRepository implements IFixedCostsRepository {
   }
 
   async findActiveCashRegister(): Promise<{ id: string } | null> {
-    const today = new Date();
-    return this.prisma.cashRegister.findFirst({
-      where: {
-        startDate: { lte: today },
-        endDate: { gte: today },
-      },
-      select: { id: true },
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Campo_Grande',
+    }).format(new Date());
+
+    const registers = await this.prisma.cashRegister.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, startDate: true, endDate: true },
     });
+
+    const active = registers.find((r) => {
+      const startStr = r.startDate.toISOString().split('T')[0];
+      const endStr = r.endDate.toISOString().split('T')[0];
+      return todayStr >= startStr && todayStr <= endStr;
+    });
+
+    return active ? { id: active.id } : null;
+  }
+
+  async hasTransactionInRegister(
+    fixedCostId: string,
+    cashRegisterId: string,
+  ): Promise<boolean> {
+    const count = await this.prisma.cashTransaction.count({
+      where: {
+        fixedCostId,
+        cashRegisterId,
+        type: 'OUTFLOW',
+      },
+    });
+    return count > 0;
   }
 }
