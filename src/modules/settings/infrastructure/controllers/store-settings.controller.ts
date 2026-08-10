@@ -1,5 +1,4 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 
@@ -66,48 +65,32 @@ export class StoreSettingsController {
 
   @Get('manifest.json')
   @ApiOperation({ summary: 'Obter manifest.json dinâmico para PWA' })
-  async getManifest(@Req() req: Request) {
+  async getManifest() {
     const settings = await this.getSettingsUseCase.execute();
-
-    const originHeader = req.headers.origin;
-    const refererHeader = req.headers.referer;
-
-    // Tenta pegar o Origin ou Referer primeiro (ideal para requisições cross-origin do frontend)
-    let requestOrigin = '';
-    try {
-      requestOrigin =
-        originHeader || (refererHeader ? new URL(refererHeader).origin : '');
-    } catch (e) {
-      // Ignora erro de parse
-    }
-
-    // Se o navegador não enviou, usamos o próprio host da requisição dinamicamente
-    if (!requestOrigin) {
-      const protocol =
-        req.headers['x-forwarded-proto'] || req.protocol || 'http';
-      requestOrigin = `${protocol}://${req.headers.host}`;
-    }
 
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
     const bucket = process.env.MINIO_BUCKET || 'lojapod';
+    const adminFrontendUrl = (process.env.ADMIN_FRONTEND_URL || '').replace(
+      /\/$/,
+      '',
+    );
 
     // Função para montar a URL da imagem (apenas para paths relativos de minio)
     const buildImg = (path?: string | null) => {
       if (!path) return '';
       if (path.startsWith('http')) return path;
-      if (path.startsWith('settings/')) return `${minioUrl}/${bucket}/${path}`;
-      return path;
+      return `${minioUrl}/${bucket}/${path.replace(/^\//, '')}`;
     };
 
-    const iconSrc = buildImg(settings.faviconUrl) || '/favicon-512x512.png';
-
-    // Detectar dinamicamente o mimetype com base na extensão
-    let iconType = 'image/png';
-    const lowerSrc = iconSrc.toLowerCase();
-    if (lowerSrc.endsWith('.webp')) iconType = 'image/webp';
-    else if (lowerSrc.endsWith('.jpg') || lowerSrc.endsWith('.jpeg')) iconType = 'image/jpeg';
-    else if (lowerSrc.endsWith('.svg')) iconType = 'image/svg+xml';
-    else if (lowerSrc.endsWith('.gif')) iconType = 'image/gif';
+    const faviconDirectory = settings.faviconUrl?.includes('/')
+      ? settings.faviconUrl.slice(0, settings.faviconUrl.lastIndexOf('/'))
+      : '';
+    const icon192Src = faviconDirectory
+      ? buildImg(`${faviconDirectory}/pwa-icon-192.png`)
+      : '/favicon-192x192.png';
+    const icon512Src = faviconDirectory
+      ? buildImg(`${faviconDirectory}/pwa-icon-512.png`)
+      : '/favicon-512x512.png';
 
     return {
       name: settings.storeName || 'Loja Pod',
@@ -116,18 +99,18 @@ export class StoreSettingsController {
       theme_color: '#ffffff',
       background_color: '#ffffff',
       display: 'standalone',
-      start_url: requestOrigin + '/',
-      scope: requestOrigin + '/',
+      start_url: `${adminFrontendUrl}/`,
+      scope: `${adminFrontendUrl}/`,
       icons: [
         {
-          src: iconSrc,
+          src: icon192Src,
           sizes: '192x192',
-          type: iconType,
+          type: 'image/png',
         },
         {
-          src: iconSrc,
+          src: icon512Src,
           sizes: '512x512',
-          type: iconType,
+          type: 'image/png',
           purpose: 'any maskable',
         },
       ],

@@ -148,4 +148,82 @@ export class SettingsController {
       fileName: upload.fileName,
     };
   }
+
+  @Post('upload/favicon')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Fazer upload do favicon da loja' })
+  async uploadFavicon(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('Arquivo não enviado');
+    }
+
+    const [icon192, icon512] = await Promise.all([
+      sharp(file.buffer)
+        .resize(192, 192, { fit: 'cover' })
+        .png()
+        .toBuffer(),
+      sharp(file.buffer)
+        .resize(512, 512, { fit: 'cover' })
+        .png()
+        .toBuffer(),
+    ]);
+
+    const oldSettings = await this.getSettingsUseCase.execute();
+    if (oldSettings?.faviconUrl) {
+      const lastSlash = oldSettings.faviconUrl.lastIndexOf('/');
+      const directory =
+        lastSlash >= 0 ? oldSettings.faviconUrl.slice(0, lastSlash) : '';
+      const oldFiles = new Set([
+        oldSettings.faviconUrl,
+        `${directory ? `${directory}/` : ''}pwa-icon-192.png`,
+        `${directory ? `${directory}/` : ''}pwa-icon-512.png`,
+      ]);
+
+      await Promise.all(
+        [...oldFiles].map((path) =>
+          this.minioService.deleteFile(path).catch(() => {}),
+        ),
+      );
+    }
+
+    const [upload192, upload512] = await Promise.all([
+      this.minioService.uploadFile(
+        {
+          originalname: 'pwa-icon-192.png',
+          customName: 'pwa-icon-192.png',
+          buffer: icon192,
+          size: icon192.length,
+          mimetype: 'image/png',
+        },
+        'settings',
+      ),
+      this.minioService.uploadFile(
+        {
+          originalname: 'pwa-icon-512.png',
+          customName: 'pwa-icon-512.png',
+          buffer: icon512,
+          size: icon512.length,
+          mimetype: 'image/png',
+        },
+        'settings',
+      ),
+    ]);
+
+    return {
+      url: upload192.fileName,
+      fileName: upload192.fileName,
+      icon192: upload192.fileName,
+      icon512: upload512.fileName,
+    };
+  }
 }
