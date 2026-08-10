@@ -10,6 +10,11 @@ export class StoresService {
 
   async createStore(dto: CreateStoreDto) {
     const subdomainNormalized = dto.subdomain.trim().toLowerCase();
+    const RESERVED_SUBDOMAINS = ['app', 'admin', 'api', 'www', 'localhost', 'superadmin'];
+
+    if (RESERVED_SUBDOMAINS.includes(subdomainNormalized)) {
+      throw new ConflictException(`O subdomínio "${subdomainNormalized}" é um nome reservado pelo sistema e não pode ser utilizado.`);
+    }
 
     const existingStore = await this.prisma.store.findUnique({
       where: { subdomain: subdomainNormalized },
@@ -78,6 +83,12 @@ export class StoresService {
 
     if (dto.subdomain && dto.subdomain.trim()) {
       const subdomainNormalized = dto.subdomain.trim().toLowerCase();
+      const RESERVED_SUBDOMAINS = ['app', 'admin', 'api', 'www', 'localhost', 'superadmin'];
+
+      if (RESERVED_SUBDOMAINS.includes(subdomainNormalized)) {
+        throw new ConflictException(`O subdomínio "${subdomainNormalized}" é um nome reservado pelo sistema e não pode ser utilizado.`);
+      }
+
       if (subdomainNormalized !== store.subdomain) {
         const existingSubdomain = await this.prisma.store.findUnique({
           where: { subdomain: subdomainNormalized },
