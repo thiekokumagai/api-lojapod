@@ -1,14 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { StoreSettings } from '../../domain/entities/store-settings.entity';
 import { ISettingsRepository } from '../../domain/repositories/isettings.repository';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
 export class PrismaSettingsRepository implements ISettingsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
 
   async get(): Promise<StoreSettings | null> {
-    const record = await this.prisma.storeSettings.findFirst();
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      return null;
+    }
+    const record = await this.prisma.storeSettings.findFirst({
+      where: { storeId },
+    });
     if (!record) return null;
     return record as unknown as StoreSettings;
   }
@@ -16,9 +26,17 @@ export class PrismaSettingsRepository implements ISettingsRepository {
   async save(
     settings: Omit<StoreSettings, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<StoreSettings> {
-    const existing = await this.prisma.storeSettings.findFirst();
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      throw new BadRequestException('Contexto de loja não informado');
+    }
+
+    const existing = await this.prisma.storeSettings.findFirst({
+      where: { storeId },
+    });
 
     const dataPayload = {
+      storeId,
       storeName: settings.storeName,
       logoUrl: settings.logoUrl,
       whiteLogoUrl: settings.whiteLogoUrl,
