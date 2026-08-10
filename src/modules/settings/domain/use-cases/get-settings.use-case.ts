@@ -1,47 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { StoreSettings } from '../entities/store-settings.entity';
 import { ISettingsRepository } from '../repositories/isettings.repository';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
 export class GetSettingsUseCase {
-  constructor(private readonly settingsRepository: ISettingsRepository) {}
+  constructor(
+    private readonly settingsRepository: ISettingsRepository,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
 
   async execute(): Promise<StoreSettings> {
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      throw new NotFoundException('URL ou subdomínio não encontrado');
+    }
+
     const settings = await this.settingsRepository.get();
     if (!settings) {
-      return this.settingsRepository.save({
-        storeName: 'Minha Loja',
-        logoUrl: null,
-        whiteLogoUrl: null,
-        faviconUrl: null,
-        topHeaderText: null,
-        bannerUrls: [],
-        phone: '',
-        instagram: null,
-        pixelId: null,
-        marketingLinks: [],
-        cep: '',
-        street: '',
-        number: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        complement: null,
-        hideAddress: false,
-        deliveryOriginCep: null,
-        deliveryOriginNumber: null,
-        deliveryRanges: [],
-        installmentRules: [],
-        businessHours: [],
-        pixEnabled: false,
-        pixKeyType: null,
-        pixKey: null,
-        pixHolder: null,
-        payOnDeliveryCash: false,
-        payOnDeliveryCardDebit: false,
-        payOnDeliveryCardCredit: false,
-        paymentRules: [],
-      });
+      throw new NotFoundException('URL ou subdomínio não encontrado');
     }
     return settings;
   }

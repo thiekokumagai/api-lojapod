@@ -45,15 +45,6 @@ export class TenantMiddleware implements NestMiddleware {
       });
       if (store) {
         storeId = store.id;
-      } else {
-        // Tenta buscar a loja demo como fallback
-        const demoStore = await this.prisma.store.findUnique({
-          where: { subdomain: 'demo' },
-        });
-        if (demoStore) {
-          storeId = demoStore.id;
-          subdomain = 'demo';
-        }
       }
     } catch (error) {
       // Ignora falha de resolução inicial durante inicializações
