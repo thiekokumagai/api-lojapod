@@ -32,6 +32,8 @@ export class StoresService {
         title: dto.title.trim(),
         adminEmail: dto.adminEmail.trim().toLowerCase(),
         printToken,
+        subscriptionExpiresAt: dto.subscriptionExpiresAt ? new Date(dto.subscriptionExpiresAt) : undefined,
+        monthlyFee: dto.monthlyFee !== undefined ? Number(dto.monthlyFee) : undefined,
       },
     });
 
@@ -66,7 +68,7 @@ export class StoresService {
     return store;
   }
 
-  async updateStore(id: string, dto: { title?: string; subdomain?: string; adminEmail?: string; password?: string }) {
+  async updateStore(id: string, dto: { title?: string; subdomain?: string; adminEmail?: string; password?: string; subscriptionExpiresAt?: string; monthlyFee?: number }) {
     const store = await this.prisma.store.findUnique({
       where: { id },
     });
@@ -102,6 +104,14 @@ export class StoresService {
 
     if (dto.adminEmail && dto.adminEmail.trim()) {
       updateData.adminEmail = dto.adminEmail.trim().toLowerCase();
+    }
+
+    if (dto.subscriptionExpiresAt) {
+      updateData.subscriptionExpiresAt = new Date(dto.subscriptionExpiresAt);
+    }
+    
+    if (dto.monthlyFee !== undefined) {
+      updateData.monthlyFee = Number(dto.monthlyFee);
     }
 
     const updatedStore = await this.prisma.store.update({

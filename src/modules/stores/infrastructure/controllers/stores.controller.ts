@@ -8,6 +8,7 @@ import {
   Body,
   Param,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StoresService } from '../../domain/services/stores.service';
@@ -18,6 +19,15 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 @Controller('stores')
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
+
+  @Get('me')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtém detalhes da loja do usuário logado' })
+  async getMyStore(@Req() req: any) {
+    const storeId = req.user.storeId;
+    return this.storesService.getStoreById(storeId);
+  }
 
   @Get('by-subdomain/:subdomain')
   @ApiOperation({ summary: 'Obtém dados públicos da loja pelo subdomínio (Storefront)' })
@@ -62,7 +72,7 @@ export class StoresController {
   @ApiOperation({ summary: 'Atualiza título, subdomínio, e-mail admin e senha da loja' })
   async updateStore(
     @Param('id') id: string,
-    @Body() body: { title?: string; subdomain?: string; adminEmail?: string; password?: string },
+    @Body() body: { title?: string; subdomain?: string; adminEmail?: string; password?: string; subscriptionExpiresAt?: string; monthlyFee?: number },
   ) {
     return this.storesService.updateStore(id, body);
   }
