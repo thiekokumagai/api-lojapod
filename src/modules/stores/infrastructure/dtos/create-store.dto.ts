@@ -26,12 +26,4 @@ export class CreateStoreDto {
   @MinLength(6)
   password?: string;
 
-  @ApiProperty({ example: '2026-09-01T00:00:00.000Z', required: false })
-  @IsString()
-  @IsOptional()
-  subscriptionExpiresAt?: string;
-
-  @ApiProperty({ example: 99.90, required: false })
-  @IsOptional()
-  monthlyFee?: number;
 }

@@ -20,14 +20,6 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
-  @Get('me')
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Obtém detalhes da loja do usuário logado' })
-  async getMyStore(@Req() req: any) {
-    const storeId = req.user.storeId;
-    return this.storesService.getStoreById(storeId);
-  }
 
   @Get('by-subdomain/:subdomain')
   @ApiOperation({ summary: 'Obtém dados públicos da loja pelo subdomínio (Storefront)' })

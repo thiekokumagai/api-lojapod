@@ -42,10 +42,6 @@ model Store {
 
   isActive              Boolean  @default(true)
 
-  subscriptionExpiresAt DateTime?
-  monthlyFee            Decimal  @default(0) @db.Decimal(10, 2)
-  invoices              StoreInvoice[]
-
   @@map("stores")
 }
 
@@ -575,21 +571,4 @@ model CartDraft {
   @@map("cart_drafts")
 }
 
-model StoreInvoice {
-  id            String   @id @default(uuid())
-  storeId       String
-  amount        Decimal  @db.Decimal(10, 2)
-  status        String   // PENDING, PAID, CANCELLED
-  pixQrCode     String?  @db.Text
-  pixCopiaECola String?  @db.Text
-  pixTxId       String?  @unique
-  referenceMonth String  // Ex: "2026-08"
 
-  createdAt     DateTime @default(now())
-  paidAt        DateTime?
-  updatedAt     DateTime @updatedAt
-
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
-  @@map("store_invoices")
-}

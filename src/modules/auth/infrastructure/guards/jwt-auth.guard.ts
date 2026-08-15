@@ -29,24 +29,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const req = context.switchToHttp().getRequest();
     const user = req.user;
 
-    // Se a rota for de pagamento (para gerar Pix), não bloqueamos
-    if (req.route?.path?.includes('/subscriptions/current-invoice')) {
-      return true;
-    }
-
     if (user && user.storeId && user.role !== 'SUPER_ADMIN') {
       const store = await this.prisma.store.findUnique({
         where: { id: user.storeId },
-        select: { subscriptionExpiresAt: true, isActive: true }
+        select: { isActive: true }
       });
 
-      if (store) {
-        if (!store.isActive) {
-          throw new HttpException('Assinatura Inativa', HttpStatus.PAYMENT_REQUIRED);
-        }
-        if (store.subscriptionExpiresAt && new Date(store.subscriptionExpiresAt) < new Date()) {
-          throw new HttpException('Assinatura Expirada', HttpStatus.PAYMENT_REQUIRED);
-        }
+      if (store && !store.isActive) {
+        throw new HttpException('Loja Inativa', HttpStatus.FORBIDDEN);
       }
     }
 
