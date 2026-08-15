@@ -60,9 +60,10 @@ async function bootstrap() {
       return next();
     }
 
-    html = html.replace(/__OG_TITLE__/g, title);
-    html = html.replace(/__OG_DESC__/g, description);
-    html = html.replace(/__OG_IMAGE__/g, image);
+    html = html.replace(/Lojapod \| A sua loja/g, title);
+    html = html.replace(/content="Os melhores produtos estão aqui\."/g, `content="${description}"`);
+    html = html.replace(/content="Lojapod"/g, `content="${title}"`);
+    html = html.replace(/content="\/placeholder\.svg"/g, `content="${image}"`);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
