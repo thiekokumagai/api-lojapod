@@ -7,7 +7,6 @@ export interface CreateCategoryInput {
   image?: string | null;
   isVisible?: boolean;
   excludeFromBestSeller?: boolean;
-  oldUrl?: string;
 }
 
 @Injectable()
@@ -23,7 +22,6 @@ export class CreateCategoryUseCase {
       image: input.image ?? null,
       isVisible: input.isVisible ?? true,
       excludeFromBestSeller: input.excludeFromBestSeller ?? false,
-      oldUrl: input.oldUrl ?? null,
       order: nextOrder,
     });
   }

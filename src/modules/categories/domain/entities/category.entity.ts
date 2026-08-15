@@ -2,7 +2,6 @@ export interface Category {
   id: string;
   title: string;
   image: string | null;
-  oldUrl: string | null;
   isVisible: boolean;
   excludeFromBestSeller: boolean;
   order: number;

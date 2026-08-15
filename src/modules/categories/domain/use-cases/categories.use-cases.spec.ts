@@ -18,11 +18,10 @@ describe('Categories Use Cases', () => {
   const mockCategory: Category = {
     id: 'uuid-1',
     title: 'Descartáveis',
-    image: 'image.png',
+    image: null,
     isVisible: true,
     order: 1,
     deletedAt: null,
-    oldUrl: null,
     excludeFromBestSeller: false,
   };
 
