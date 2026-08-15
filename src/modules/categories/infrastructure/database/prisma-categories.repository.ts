@@ -53,7 +53,6 @@ export class PrismaCategoriesRepository implements ICategoriesRepository {
     data: {
       title?: string;
       image?: string | null;
-      oldUrl?: string | null;
       isVisible?: boolean;
       excludeFromBestSeller?: boolean;
     },
@@ -63,7 +62,6 @@ export class PrismaCategoriesRepository implements ICategoriesRepository {
       data: {
         title: data.title,
         image: data.image,
-        oldUrl: data.oldUrl,
         isVisible: data.isVisible,
         excludeFromBestSeller: data.excludeFromBestSeller,
       },

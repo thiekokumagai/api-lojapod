@@ -8,7 +8,6 @@ export interface UpdateCategoryInput {
   image?: string | null;
   isVisible?: boolean;
   excludeFromBestSeller?: boolean;
-  oldUrl?: string;
 }
 
 @Injectable()
