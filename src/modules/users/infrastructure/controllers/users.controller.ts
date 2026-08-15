@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Patch } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -20,8 +20,10 @@ import { UpdateWebPushSubscriptionUseCase } from '../../domain/use-cases/update-
 import { TestPushNotificationUseCase } from '../../domain/use-cases/test-push-notification.use-case';
 import { UpdatePushTokenDto } from '../dtos/update-push-token.dto';
 import { UpdateWebPushSubscriptionDto } from '../dtos/update-web-push-subscription.dto';
+import { UpdatePasswordDto } from '../dtos/update-password.dto';
 import { CurrentUser } from '../../../auth/infrastructure/decorators/current-user.decorator';
 import type { JwtPayload } from '../../../auth/infrastructure/types/jwt-payload.type';
+import { UpdatePasswordUseCase } from '../../domain/use-cases/update-password.use-case';
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -35,7 +37,22 @@ export class UsersController {
     private readonly updatePushTokenUseCase: UpdatePushTokenUseCase,
     private readonly updateWebPushSubscriptionUseCase: UpdateWebPushSubscriptionUseCase,
     private readonly testPushNotificationUseCase: TestPushNotificationUseCase,
+    private readonly updatePasswordUseCase: UpdatePasswordUseCase,
   ) {}
+
+  @Patch('password')
+  @ApiOperation({ summary: 'Atualizar senha do usuário' })
+  @ApiResponse({
+    status: 200,
+    description: 'Senha atualizada com sucesso',
+  })
+  async updatePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdatePasswordDto,
+  ) {
+    await this.updatePasswordUseCase.execute(user.sub, dto);
+    return { success: true };
+  }
 
   @Get()
   @ApiOperation({ summary: 'Listar usuários' })

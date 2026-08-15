@@ -8,6 +8,7 @@ import { DeleteUserUseCase } from './domain/use-cases/delete-user.use-case';
 import { UpdatePushTokenUseCase } from './domain/use-cases/update-push-token.use-case';
 import { TestPushNotificationUseCase } from './domain/use-cases/test-push-notification.use-case';
 import { UpdateWebPushSubscriptionUseCase } from './domain/use-cases/update-web-push-subscription.use-case';
+import { UpdatePasswordUseCase } from './domain/use-cases/update-password.use-case';
 import { PushNotificationService } from '../../shared/services/push-notification.service';
 import { SettingsModule } from '../settings/settings.module';
 
@@ -21,6 +22,7 @@ import { SettingsModule } from '../settings/settings.module';
     UpdatePushTokenUseCase,
     UpdateWebPushSubscriptionUseCase,
     TestPushNotificationUseCase,
+    UpdatePasswordUseCase,
     PushNotificationService,
     {
       provide: IUsersRepository,
