@@ -205,6 +205,10 @@ export class StoresService {
       throw new UnauthorizedException('Token de impressão inválido');
     }
 
+    if (!store.isActive) {
+      throw new UnauthorizedException('Loja inativa. A impressora não pode ser autenticada.');
+    }
+
     return {
       success: true,
       storeId: store.id,
