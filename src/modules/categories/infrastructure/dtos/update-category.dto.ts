@@ -55,8 +55,6 @@ export class UpdateCategoryDto {
   @IsBoolean()
   removeImage?: boolean;
 
-  @ApiProperty({ example: 'vitrine/pod_mais_86c37d8a', required: false })
-
 }
 
 export class UpdateOrderItemDto {

@@ -34,6 +34,4 @@ export class CreateCategoryDto {
   @IsBoolean()
   excludeFromBestSeller?: boolean;
 
-  @ApiProperty({ example: 'vitrine/pod_mais_86c37d8a', required: false })
-
 }
