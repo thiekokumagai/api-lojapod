@@ -496,7 +496,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             });
           }
         }
-        customerIdToLink = customer.id;
+        if (customer) {
+          customerIdToLink = customer.id;
+        }
       }
 
       if (customerIdToLink) {

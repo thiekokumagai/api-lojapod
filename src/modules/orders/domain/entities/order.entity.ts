@@ -30,6 +30,7 @@ export class Order {
   customerName: string;
   customerPhone: string;
   customerId?: string | null;
+  storeId?: string | null;
 
   itemsTotal: number;
   freight: number;
