@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { StoreSettings } from '../entities/store-settings.entity';
 import { ISettingsRepository } from '../repositories/isettings.repository';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
@@ -14,6 +14,11 @@ export class GetSettingsUseCase {
     const storeId = this.tenantContextService.getStoreId();
     if (!storeId) {
       throw new NotFoundException('URL ou subdomínio não encontrado');
+    }
+
+    const isActive = this.tenantContextService.getIsActive();
+    if (isActive === false) {
+      throw new ForbiddenException('STORE_OFFLINE');
     }
 
     const settings = await this.settingsRepository.get();

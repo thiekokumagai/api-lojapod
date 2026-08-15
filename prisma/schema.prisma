@@ -40,6 +40,8 @@ model Store {
   stockMovements        StockMovement[]
   courierTransactions   CourierTransaction[]
 
+  isActive              Boolean  @default(true)
+
   @@map("stores")
 }
 

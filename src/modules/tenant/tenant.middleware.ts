@@ -38,6 +38,7 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     let storeId: string | undefined;
+    let isActive: boolean | undefined;
 
     try {
       const store = await this.prisma.store.findUnique({
@@ -45,12 +46,13 @@ export class TenantMiddleware implements NestMiddleware {
       });
       if (store) {
         storeId = store.id;
+        isActive = store.isActive;
       }
     } catch (error) {
       // Ignora falha de resolução inicial durante inicializações
     }
 
-    this.tenantContextService.run({ storeId, subdomain }, () => {
+    this.tenantContextService.run({ storeId, subdomain, isActive }, () => {
       next();
     });
   }

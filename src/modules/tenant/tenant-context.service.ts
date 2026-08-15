@@ -4,6 +4,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 export interface TenantContext {
   storeId?: string;
   subdomain?: string;
+  isActive?: boolean;
 }
 
 @Injectable()
@@ -27,6 +28,10 @@ export class TenantContextService {
 
   getSubdomain(): string | undefined {
     return this.asyncLocalStorage.getStore()?.subdomain;
+  }
+  
+  getIsActive(): boolean | undefined {
+    return this.asyncLocalStorage.getStore()?.isActive;
   }
 
   getContext(): TenantContext | undefined {

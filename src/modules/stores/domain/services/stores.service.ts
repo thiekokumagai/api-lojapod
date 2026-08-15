@@ -247,4 +247,37 @@ export class StoresService {
       printToken: store.printToken,
     };
   }
+
+  async toggleActive(id: string) {
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Loja não encontrada');
+    }
+
+    const updatedStore = await this.prisma.store.update({
+      where: { id },
+      data: { isActive: !store.isActive },
+    });
+
+    return updatedStore;
+  }
+
+  async deleteStore(id: string) {
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Loja não encontrada');
+    }
+
+    await this.prisma.store.delete({
+      where: { id },
+    });
+
+    return { success: true, message: 'Loja excluída com sucesso' };
+  }
 }

@@ -3,6 +3,8 @@ import {
   Get,
   Post,
   Put,
+  Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -79,5 +81,20 @@ export class StoresController {
   @ApiOperation({ summary: 'Obtém detalhes de uma loja específica por ID (Super Admin)' })
   async getStoreById(@Param('id') id: string) {
     return this.storesService.getStoreById(id);
+  }
+  @Patch(':id/toggle-active')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Ativa ou desativa uma loja (Super Admin)' })
+  async toggleActive(@Param('id') id: string) {
+    return this.storesService.toggleActive(id);
+  }
+
+  @Delete(':id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Exclui uma loja permanentemente (Super Admin)' })
+  async deleteStore(@Param('id') id: string) {
+    return this.storesService.deleteStore(id);
   }
 }
