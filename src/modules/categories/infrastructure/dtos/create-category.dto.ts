@@ -35,7 +35,5 @@ export class CreateCategoryDto {
   excludeFromBestSeller?: boolean;
 
   @ApiProperty({ example: 'vitrine/pod_mais_86c37d8a', required: false })
-  @IsOptional()
-  @IsString()
-  oldUrl?: string;
+
 }

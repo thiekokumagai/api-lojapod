@@ -173,7 +173,6 @@ export class CategoriesController {
       ...(body.title !== undefined && { title: body.title }),
       ...(body.isVisible !== undefined && { isVisible: body.isVisible }),
       ...(body.excludeFromBestSeller !== undefined && { excludeFromBestSeller: body.excludeFromBestSeller }),
-      ...(body.oldUrl !== undefined && { oldUrl: body.oldUrl }),
       ...(image !== undefined && { image }),
     });
   }
