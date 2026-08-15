@@ -274,7 +274,7 @@ model Customer {
   id        String   @id @default(uuid())
   storeId   String?
   name      String
-  phone     String   @unique
+  phone     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -282,6 +282,7 @@ model Customer {
   addresses CustomerAddress[]
   orders    Order[]
 
+  @@unique([storeId, phone])
   @@map("customers")
 }
 

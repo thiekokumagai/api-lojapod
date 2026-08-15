@@ -478,16 +478,23 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
       if (!customerIdToLink && order.customerPhone) {
         let customer = await tx.customer.findFirst({
-          where: { phone: order.customerPhone },
+          where: { phone: order.customerPhone, storeId: order.storeId || null },
         });
 
         if (!customer) {
-          customer = await tx.customer.create({
-            data: {
-              name: order.customerName,
-              phone: order.customerPhone,
-            },
-          });
+          try {
+            customer = await tx.customer.create({
+              data: {
+                name: order.customerName,
+                phone: order.customerPhone,
+                storeId: order.storeId,
+              },
+            });
+          } catch (e: any) {
+            customer = await tx.customer.findFirst({
+              where: { phone: order.customerPhone, storeId: order.storeId || null },
+            });
+          }
         }
         customerIdToLink = customer.id;
       }
