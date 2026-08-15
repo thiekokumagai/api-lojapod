@@ -110,6 +110,7 @@ export class CategoriesController {
     return this.createCategoryUseCase.execute({
       title: body.title,
       image,
+      isVisible: body.isVisible ?? true,
       excludeFromBestSeller: body.excludeFromBestSeller ?? false,
     });
   }
