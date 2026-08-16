@@ -49,7 +49,13 @@ export class PushNotificationService {
     if (!process.env.VAPID_PUBLIC_KEY) return;
 
     const settings = await this.settingsRepo.get();
-    let iconUrl = '/favicon-192x192.png';
+    const adminFrontendUrl = (process.env.ADMIN_FRONTEND_URL || '').replace(
+      /\/$/,
+      '',
+    );
+    let iconUrl = adminFrontendUrl
+      ? `${adminFrontendUrl}/favicon-192x192.png`
+      : '/favicon-192x192.png';
     if (settings?.faviconUrl) {
       if (settings.faviconUrl.startsWith('http')) {
         iconUrl = settings.faviconUrl;

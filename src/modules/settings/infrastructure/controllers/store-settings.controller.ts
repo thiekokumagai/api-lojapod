@@ -76,21 +76,37 @@ export class StoreSettingsController {
     );
 
     // Função para montar a URL da imagem (apenas para paths relativos de minio)
+
+    // Função para montar a URL da imagem (apenas para paths relativos de minio)
     const buildImg = (path?: string | null) => {
       if (!path) return '';
       if (path.startsWith('http')) return path;
       return `${minioUrl}/${bucket}/${path.replace(/^\//, '')}`;
     };
 
-    const faviconDirectory = settings.faviconUrl?.includes('/')
-      ? settings.faviconUrl.slice(0, settings.faviconUrl.lastIndexOf('/'))
-      : '';
-    const icon192Src = faviconDirectory
-      ? buildImg(`${faviconDirectory}/pwa-icon-192.png`)
+    let icon192Src = adminFrontendUrl
+      ? `${adminFrontendUrl}/favicon-192x192.png`
       : '/favicon-192x192.png';
-    const icon512Src = faviconDirectory
-      ? buildImg(`${faviconDirectory}/pwa-icon-512.png`)
+    let icon512Src = adminFrontendUrl
+      ? `${adminFrontendUrl}/favicon-512x512.png`
       : '/favicon-512x512.png';
+
+    if (settings.faviconUrl) {
+      const faviconDirectory = settings.faviconUrl.includes('/')
+        ? settings.faviconUrl.slice(0, settings.faviconUrl.lastIndexOf('/'))
+        : '';
+
+      if (settings.faviconUrl.startsWith('http')) {
+        icon192Src = settings.faviconUrl;
+        icon512Src = settings.faviconUrl;
+      } else if (faviconDirectory) {
+        icon192Src = buildImg(`${faviconDirectory}/pwa-icon-192.png`);
+        icon512Src = buildImg(`${faviconDirectory}/pwa-icon-512.png`);
+      } else {
+        icon192Src = buildImg(settings.faviconUrl);
+        icon512Src = buildImg(settings.faviconUrl);
+      }
+    }
 
     return {
       name: settings.storeName || 'Loja Pod',
