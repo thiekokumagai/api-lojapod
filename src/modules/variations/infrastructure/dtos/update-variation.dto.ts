@@ -8,7 +8,18 @@ import {
   IsInt,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
+
+export class UpdateVariationOptionDto {
+  @ApiPropertyOptional({ example: 'uuid-123' })
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @ApiProperty({ example: '35mg' })
+  @IsString()
+  value: string;
+}
 
 export class UpdateVariationDto {
   @ApiPropertyOptional({ example: 'Teor de Nicotina' })
@@ -16,12 +27,27 @@ export class UpdateVariationDto {
   @IsString()
   title?: string;
 
-  @ApiPropertyOptional({ example: ['3mg', '20mg', '35mg', '50mg'] })
+  @ApiPropertyOptional({
+    example: [
+      { id: 'uuid-1', value: '3mg' },
+      { value: '35mg' },
+      '50mg',
+    ],
+  })
   @IsOptional()
   @IsArray()
-  @ArrayUnique()
-  @IsString({ each: true })
-  options?: string[];
+  @Transform(({ value }) => {
+    if (!Array.isArray(value)) return value;
+    return value.map((item) => {
+      if (typeof item === 'string') {
+        return { value: item };
+      }
+      return item;
+    });
+  })
+  @ValidateNested({ each: true })
+  @Type(() => UpdateVariationOptionDto)
+  options?: UpdateVariationOptionDto[];
 }
 
 export class UpdateOrderItemDto {
