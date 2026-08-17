@@ -198,12 +198,19 @@ export class StoresService {
       throw new UnauthorizedException('Token de impressão não informado');
     }
 
-    const store = await this.prisma.store.findUnique({
-      where: { printToken: token.trim() },
+    const cleanToken = token.trim().toUpperCase();
+
+    const store = await this.prisma.store.findFirst({
+      where: {
+        OR: [
+          { printToken: cleanToken },
+          { printToken: token.trim() },
+        ],
+      },
     });
 
     if (!store) {
-      throw new UnauthorizedException('Token de impressão inválido');
+      throw new UnauthorizedException('Token de impressão inválido. Verifique o token no Painel Admin.');
     }
 
     if (!store.isActive) {
