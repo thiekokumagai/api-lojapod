@@ -39,20 +39,20 @@ export class PrismaService
         // Intercepta buscas (findMany, findFirst, count, aggregate, groupBy)
         if (['findMany', 'findFirst', 'count', 'aggregate', 'groupBy'].includes(params.action)) {
           params.args = params.args || {};
-          params.args.where = { storeId, ...(params.args.where || {}) };
+          params.args.where = { ...(params.args.where || {}), storeId };
         }
         // Intercepta criação de registros (create)
         else if (params.action === 'create') {
           params.args = params.args || {};
-          params.args.data = { storeId, ...(params.args.data || {}) };
+          params.args.data = { ...(params.args.data || {}), storeId };
         }
         // Intercepta criação em lote (createMany)
         else if (params.action === 'createMany') {
           params.args = params.args || {};
           if (Array.isArray(params.args.data)) {
             params.args.data = params.args.data.map((item: any) => ({
-              storeId,
               ...item,
+              storeId,
             }));
           }
         }
