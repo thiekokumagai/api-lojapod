@@ -107,8 +107,11 @@ export class GetDashboardStatsUseCase {
       conversao = Number(((totalPedidos / visitas) * 100).toFixed(1));
     }
 
-    const abandonos = await this.prisma.cartDraft.count({
+    const abandonos = sessions.length === 0 ? 0 : await this.prisma.cartDraft.count({
       where: {
+        sessionId: {
+          in: sessions.map(s => s.sessionId),
+        },
         updatedAt: {
           gte: start,
           lte: end,
@@ -257,16 +260,10 @@ export class GetDashboardStatsUseCase {
     }
 
     // 4. Best-Selling Products (Optionally filtered by categoryId)
-    const orderItems = await this.prisma.orderItem.findMany({
+    const orderItems = orders.length === 0 ? [] : await this.prisma.orderItem.findMany({
       where: {
-        order: {
-          createdAt: {
-            gte: start,
-            lte: end,
-          },
-          status: {
-            not: 'CANCELLED',
-          },
+        orderId: {
+          in: orders.map(o => o.id),
         },
         ...(filters.categoryId && {
           product: {
