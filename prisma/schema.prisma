@@ -250,7 +250,7 @@ enum DiscountType {
 model Coupon {
   id                      String       @id @default(uuid())
   storeId                 String?
-  title                   String       @unique
+  title                   String
   status                  Boolean      @default(true)
   type                    DiscountType
   value                   Decimal?     @db.Decimal(10, 2)
@@ -267,6 +267,7 @@ model Coupon {
   store  Store?  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orders Order[]
 
+  @@unique([storeId, title])
   @@map("coupons")
 }
 
