@@ -7,6 +7,7 @@ import {
   Put,
   Patch,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { CreateCouponUseCase } from '../../domain/use-cases/create-coupon.use-case';
 import { UpdateCouponUseCase } from '../../domain/use-cases/update-coupon.use-case';
@@ -15,9 +16,13 @@ import { ToggleCouponStatusUseCase } from '../../domain/use-cases/toggle-coupon-
 import { ValidateCouponUseCase } from '../../domain/use-cases/validate-coupon.use-case';
 import { CreateCouponDto } from '../dtos/create-coupon.dto';
 import { UpdateCouponDto } from '../dtos/update-coupon.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
+import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 
 @ApiTags('Coupons')
+@ApiBearerAuth('access-token')
+@UseGuards(JwtAuthGuard)
 @Controller('coupons')
 export class CouponsController {
   constructor(
@@ -52,6 +57,7 @@ export class CouponsController {
     return this.toggleCouponStatusUseCase.execute(id);
   }
 
+  @Public()
   @Post('validate')
   @ApiOperation({ summary: 'Validate a coupon' })
   async validate(
