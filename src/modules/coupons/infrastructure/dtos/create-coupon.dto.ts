@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsDateString,
   IsPositive,
+  Matches,
 } from 'class-validator';
 import { DiscountType } from '../../domain/entities/coupon.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -13,6 +14,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class CreateCouponDto {
   @ApiProperty()
   @IsString()
+  @Matches(/^\S+$/, { message: 'O título não pode conter espaços' })
   title: string;
 
   @ApiPropertyOptional()
