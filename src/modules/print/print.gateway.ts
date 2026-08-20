@@ -15,12 +15,12 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
     let storeName = '';
 
     if (token) {
-      const cleanToken = token.trim().toUpperCase();
+      const cleanToken = token.trim();
       const store = await this.prisma.store.findFirst({
         where: {
           OR: [
-            { printToken: cleanToken },
-            { printToken: token.trim() },
+            { printToken: { equals: cleanToken, mode: 'insensitive' } },
+            { printToken: { equals: cleanToken.toUpperCase(), mode: 'insensitive' } },
           ],
         },
       });

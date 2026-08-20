@@ -198,13 +198,13 @@ export class StoresService {
       throw new UnauthorizedException('Token de impressão não informado');
     }
 
-    const cleanToken = token.trim().toUpperCase();
+    const cleanToken = token.trim();
 
     const store = await this.prisma.store.findFirst({
       where: {
         OR: [
-          { printToken: cleanToken },
-          { printToken: token.trim() },
+          { printToken: { equals: cleanToken, mode: 'insensitive' } },
+          { printToken: { equals: cleanToken.toUpperCase(), mode: 'insensitive' } },
         ],
       },
     });

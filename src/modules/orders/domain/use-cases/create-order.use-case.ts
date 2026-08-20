@@ -7,6 +7,7 @@ import { PushNotificationService } from '../../../../shared/services/push-notifi
 import { IUsersRepository } from '../../../users/domain/repositories/iusers.repository';
 import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -19,6 +20,7 @@ export class CreateOrderUseCase {
     private readonly usersRepository: IUsersRepository,
     private readonly printGateway: PrintGateway,
     private readonly eventsGateway: EventsGateway,
+    private readonly tenantContextService: TenantContextService,
   ) {}
 
   async execute(
@@ -28,6 +30,8 @@ export class CreateOrderUseCase {
       let couponId: string | undefined = undefined;
       let couponDiscountValue = Number(data.couponDiscount) || 0;
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
+
+      const storeId = data.storeId || this.tenantContextService.getStoreId() || undefined;
 
       if (data.couponTitle) {
         let nonPromoTotal = (data as any).nonPromoItemsTotal !== undefined 
@@ -59,6 +63,7 @@ export class CreateOrderUseCase {
 
       const order = new Order({
         ...data,
+        storeId: storeId || data.storeId,
         couponDiscount: couponDiscountValue,
         couponFreightDiscount: couponFreightDiscountValue,
         couponId: couponId,
@@ -138,10 +143,10 @@ export class CreateOrderUseCase {
 
       // Disparar WebSocket para impressão
       try {
-        // Envia para a loja 1 (ajuste se tiver multi-tenant)
         if (savedOrder.status !== 'CANCELLED') {
           const orderForPrint = { ...savedOrder, showProductPrices: data.showProductPrices };
-          this.printGateway.emitNovoPedido('1', orderForPrint);
+          const targetPrintStoreId = savedOrder.storeId || storeId || '1';
+          this.printGateway.emitNovoPedido(targetPrintStoreId, orderForPrint);
         }
       } catch (err) {
         console.error('Erro ao emitir pedido para impressão', err);

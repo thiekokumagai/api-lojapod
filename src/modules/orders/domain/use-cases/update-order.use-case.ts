@@ -5,6 +5,7 @@ import { ValidateCouponUseCase } from '../../../coupons/domain/use-cases/validat
 import type { ICouponsRepository } from '../../../coupons/domain/repositories/icoupons.repository';
 import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
 export class UpdateOrderUseCase {
@@ -15,6 +16,7 @@ export class UpdateOrderUseCase {
     private readonly couponsRepository: ICouponsRepository,
     private readonly printGateway: PrintGateway,
     private readonly eventsGateway: EventsGateway,
+    private readonly tenantContextService: TenantContextService,
   ) {}
 
   async execute(
@@ -32,6 +34,8 @@ export class UpdateOrderUseCase {
       let couponId: string | undefined = undefined;
       let couponDiscountValue = Number(data.couponDiscount) || 0;
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
+
+      const storeId = data.storeId || existingOrder.storeId || this.tenantContextService.getStoreId() || undefined;
 
       if (data.couponTitle) {
         const { coupon, discountAmount } =
@@ -51,6 +55,7 @@ export class UpdateOrderUseCase {
       const orderToUpdate = new Order({
         ...existingOrder,
         ...data,
+        storeId,
         couponDiscount: couponDiscountValue,
         couponFreightDiscount: couponFreightDiscountValue,
         couponId: couponId,
@@ -86,7 +91,8 @@ export class UpdateOrderUseCase {
       try {
         if (savedOrder.status !== 'CANCELLED') {
           const orderForPrint = { ...savedOrder, showProductPrices: data.showProductPrices };
-          this.printGateway.emitNovoPedido('1', orderForPrint);
+          const printStoreId = savedOrder.storeId || existingOrder.storeId || storeId || '1';
+          this.printGateway.emitNovoPedido(printStoreId, orderForPrint);
         }
       } catch (err) {
         console.error('Erro ao emitir pedido para impressão', err);

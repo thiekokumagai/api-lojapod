@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 import {
   Order,
   OrderStatus,
@@ -14,11 +15,15 @@ import {
 
 @Injectable()
 export class PrismaOrdersRepository implements IOrdersRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
 
   private mapToDomain(record: any): Order {
     return new Order({
       id: record.id,
+      storeId: record.storeId,
       orderNumber: record.orderNumber,
       customerId: record.customerId,
       customerName: record.customerName,
@@ -96,6 +101,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
   async findMany(filters: OrderFilters): Promise<PaginatedOrders> {
     const where: any = {};
+    const tenantStoreId = this.tenantContextService.getStoreId();
+    if (tenantStoreId) {
+      where.storeId = tenantStoreId;
+    }
 
     if (filters.search) {
       where.OR = [
@@ -265,6 +274,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
   async save(order: Order): Promise<Order> {
     const payload = {
+      storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
       customerId: order.customerId,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
@@ -569,6 +579,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
 
       const payload = {
+        storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
         customerId: customerIdToLink,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
@@ -754,6 +765,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         }
       }
       const payload = {
+        storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
         customerId: customerIdToLink || undefined,
