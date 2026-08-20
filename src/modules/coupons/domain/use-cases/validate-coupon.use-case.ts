@@ -5,6 +5,7 @@ import { Coupon, DiscountType } from '../entities/coupon.entity';
 interface ValidateCouponInput {
   title: string;
   orderTotal: number;
+  nonPromoItemsTotal?: number;
 }
 
 export interface ValidateCouponOutput {
@@ -89,14 +90,26 @@ export class ValidateCouponUseCase {
     }
 
     let discountAmount = 0;
-    if (coupon.type === DiscountType.VALUE) {
-      discountAmount = Math.min(Number(coupon.value) || 0, input.orderTotal);
-    } else if (coupon.type === DiscountType.PERCENTAGE) {
-      discountAmount = Math.min(
-        (input.orderTotal * (Number(coupon.value) || 0)) / 100,
-        input.orderTotal,
-      );
-    } else if (coupon.type === DiscountType.FREE_SHIPPING) {
+    
+    // Calcula o valor sobre o qual o cupom será aplicado
+    const applicableTotal = coupon.applyToPromotionalItems 
+      ? input.orderTotal 
+      : (input.nonPromoItemsTotal ?? input.orderTotal);
+
+    if (applicableTotal > 0) {
+      if (coupon.type === DiscountType.VALUE) {
+        discountAmount = Math.min(Number(coupon.value) || 0, applicableTotal);
+      } else if (coupon.type === DiscountType.PERCENTAGE) {
+        discountAmount = Math.min(
+          (applicableTotal * (Number(coupon.value) || 0)) / 100,
+          applicableTotal,
+        );
+      }
+    } else if (coupon.type !== DiscountType.FREE_SHIPPING && !coupon.applyToPromotionalItems) {
+      throw new BadRequestException('Este cupom não se aplica aos itens promocionais do carrinho.');
+    }
+
+    if (coupon.type === DiscountType.FREE_SHIPPING) {
       // FRETE GRÁTIS: O desconto é o próprio valor do frete.
       // Retornaremos discountAmount = 0, e a lógica será aplicada no create-order
       discountAmount = 0;

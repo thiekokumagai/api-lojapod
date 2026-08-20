@@ -63,7 +63,8 @@ export class CouponsController {
   async validate(
     @Body('title') title: string,
     @Body('orderTotal') orderTotal: number,
+    @Body('nonPromoItemsTotal') nonPromoItemsTotal?: number,
   ) {
-    return this.validateCouponUseCase.execute({ title, orderTotal });
+    return this.validateCouponUseCase.execute({ title, orderTotal, nonPromoItemsTotal });
   }
 }
