@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, UseGuards, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Param, Delete } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { CreateCourierUseCase } from '../../domain/use-cases/create-courier.use-case';
+import { UpdateCourierUseCase } from '../../domain/use-cases/update-courier.use-case';
 import { GetCouriersUseCase } from '../../domain/use-cases/get-couriers.use-case';
 import { RegisterCourierFeeUseCase } from '../../domain/use-cases/register-courier-fee.use-case';
 import { PayCourierUseCase } from '../../domain/use-cases/pay-courier.use-case';
@@ -15,6 +16,7 @@ import { DeleteCourierTransactionUseCase } from '../../domain/use-cases/delete-c
 export class CouriersController {
   constructor(
     private readonly createCourierUseCase: CreateCourierUseCase,
+    private readonly updateCourierUseCase: UpdateCourierUseCase,
     private readonly getCouriersUseCase: GetCouriersUseCase,
     private readonly registerCourierFeeUseCase: RegisterCourierFeeUseCase,
     private readonly payCourierUseCase: PayCourierUseCase,
@@ -30,6 +32,14 @@ export class CouriersController {
   @Post()
   async createCourier(@Body() data: { name: string; phone: string }) {
     return this.createCourierUseCase.execute(data);
+  }
+
+  @Put(':id')
+  async updateCourier(
+    @Param('id') id: string,
+    @Body() data: { name?: string; phone?: string; isActive?: boolean },
+  ) {
+    return this.updateCourierUseCase.execute(id, data);
   }
 
   @Post('fee')
