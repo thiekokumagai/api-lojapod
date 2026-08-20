@@ -53,16 +53,17 @@ export class ValidateCouponUseCase {
     }
 
     if (coupon.startTime || coupon.endTime) {
-      // Comparar apenas o horário
-      const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes();
+      // O frontend envia a hora digitada como UTC (ex: 20:00 vira 20:00Z).
+      // Portanto, extraímos a hora digitada usando getUTCHours().
+      // Comparamos com a hora atual no fuso do Brasil (BRT: UTC-3).
+      let currentHours = now.getUTCHours() - 3;
+      if (currentHours < 0) currentHours += 24;
+      const currentMinutes = now.getUTCMinutes();
       const currentTotalMinutes = currentHours * 60 + currentMinutes;
 
       if (coupon.startTime) {
-        const startHours = coupon.startTime.getUTCHours() - 3; // Supondo timezone BRT para validação, o ideal seria o timezone correto ou usar a hora enviada
-        // Vamos usar a hora local da máquina/servidor para simplificar
-        const sH = coupon.startTime.getHours();
-        const sM = coupon.startTime.getMinutes();
+        const sH = coupon.startTime.getUTCHours();
+        const sM = coupon.startTime.getUTCMinutes();
         if (currentTotalMinutes < sH * 60 + sM) {
           throw new BadRequestException(
             'Este cupom ainda não é válido neste horário.',
@@ -71,8 +72,14 @@ export class ValidateCouponUseCase {
       }
 
       if (coupon.endTime) {
-        const eH = coupon.endTime.getHours();
-        const eM = coupon.endTime.getMinutes();
+        let eH = coupon.endTime.getUTCHours();
+        const eM = coupon.endTime.getUTCMinutes();
+        
+        // Se a hora final for 00:00, consideramos como 24:00 (final do dia)
+        if (eH === 0 && eM === 0) {
+          eH = 24;
+        }
+
         if (currentTotalMinutes > eH * 60 + eM) {
           throw new BadRequestException(
             'Este cupom não é mais válido neste horário.',
