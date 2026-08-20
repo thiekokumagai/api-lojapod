@@ -30,11 +30,23 @@ export class CreateOrderUseCase {
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
       if (data.couponTitle) {
+        let nonPromoTotal = (data as any).nonPromoItemsTotal !== undefined 
+          ? Number((data as any).nonPromoItemsTotal) 
+          : undefined;
+
+        if (nonPromoTotal === undefined && data.items && Array.isArray(data.items)) {
+          nonPromoTotal = data.items.reduce((acc: number, item: any) => {
+            const isPromo = item.isPromo || item.isPromotional || (item.oldPrice !== undefined && item.oldPrice > 0);
+            if (isPromo) return acc;
+            return acc + (Number(item.price) || 0) * (Number(item.quantity) || 1);
+          }, 0);
+        }
+
         const { coupon, discountAmount } =
           await this.validateCouponUseCase.execute({
             title: data.couponTitle,
             orderTotal: Number(data.itemsTotal) || 0,
-            nonPromoItemsTotal: (data as any).nonPromoItemsTotal !== undefined ? Number((data as any).nonPromoItemsTotal) : undefined,
+            nonPromoItemsTotal: nonPromoTotal,
           });
 
         couponId = coupon.id;

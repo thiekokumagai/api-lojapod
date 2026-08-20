@@ -94,7 +94,11 @@ export class ValidateCouponUseCase {
     // Calcula o valor sobre o qual o cupom será aplicado
     const applicableTotal = coupon.applyToPromotionalItems 
       ? input.orderTotal 
-      : (input.nonPromoItemsTotal ?? input.orderTotal);
+      : (input.nonPromoItemsTotal !== undefined ? input.nonPromoItemsTotal : input.orderTotal);
+
+    if (!coupon.applyToPromotionalItems && applicableTotal <= 0) {
+      throw new BadRequestException('Este cupom não se aplica aos itens promocionais do carrinho.');
+    }
 
     if (applicableTotal > 0) {
       if (coupon.type === DiscountType.VALUE) {
@@ -105,8 +109,6 @@ export class ValidateCouponUseCase {
           applicableTotal,
         );
       }
-    } else if (coupon.type !== DiscountType.FREE_SHIPPING && !coupon.applyToPromotionalItems) {
-      throw new BadRequestException('Este cupom não se aplica aos itens promocionais do carrinho.');
     }
 
     if (coupon.type === DiscountType.FREE_SHIPPING) {
