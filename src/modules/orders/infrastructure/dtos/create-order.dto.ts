@@ -70,6 +70,12 @@ export class CreateOrderDto {
   @IsOptional()
   couponDiscount?: number;
 
+  @ApiPropertyOptional({ example: 100.0, description: 'Total sem promoção' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  nonPromoItemsTotal?: number;
+
   @ApiPropertyOptional({
     example: 15.0,
     description: 'Desconto de frete pelo cupom',

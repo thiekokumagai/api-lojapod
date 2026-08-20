@@ -34,6 +34,7 @@ export class CreateOrderUseCase {
           await this.validateCouponUseCase.execute({
             title: data.couponTitle,
             orderTotal: Number(data.itemsTotal) || 0,
+            nonPromoItemsTotal: (data as any).nonPromoItemsTotal !== undefined ? Number((data as any).nonPromoItemsTotal) : undefined,
           });
 
         couponId = coupon.id;
