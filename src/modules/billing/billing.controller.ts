@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, Ip, Param, Post, Req, UseGuards } from 
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/infrastructure/guards/jwt-auth.guard';
+import { AllowInactive } from '../auth/decorators/allow-inactive.decorator';
 import { BillingService } from './billing.service';
 import { AdminBillingActionDto } from './infrastructure/dtos/admin-billing-action.dto';
 import { SuperAdminGuard } from './infrastructure/guards/super-admin.guard';
@@ -21,6 +22,7 @@ export class BillingController {
   @Get('checkout')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AllowInactive()
   checkout(@Req() req: Request & { user: { storeId?: string } }) {
     if (!req.user.storeId) return { checkoutUrl: null };
     return this.billing.getCheckout(req.user.storeId);
