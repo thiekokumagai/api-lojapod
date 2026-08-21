@@ -193,11 +193,35 @@ export class BillingService {
   }
 
   @Cron('0 * * * *')
-  async suspendExpiredGracePeriods(): Promise<void> {
-    const expired = await this.prisma.storeSubscription.findMany({ where: { status: BillingStatus.PAST_DUE, gracePeriodEndsAt: { lte: new Date() } }, select: { id: true, storeId: true } });
-    for (const item of expired) {
+  async checkBillingStatuses(): Promise<void> {
+    const now = new Date();
+
+    // 1. Verificar trials expirados
+    const expiredTrials = await this.prisma.storeSubscription.findMany({
+      where: { status: BillingStatus.TRIALING, trialEndsAt: { lte: now } },
+      select: { id: true }
+    });
+
+    for (const trial of expiredTrials) {
+      const gracePeriodEndsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      await this.prisma.storeSubscription.update({
+        where: { id: trial.id },
+        data: {
+          status: BillingStatus.PAST_DUE,
+          overdueSince: now,
+          gracePeriodEndsAt
+        }
+      });
+    }
+
+    // 2. Suspender assinaturas com carência vencida
+    const expiredGrace = await this.prisma.storeSubscription.findMany({ 
+      where: { status: BillingStatus.PAST_DUE, gracePeriodEndsAt: { lte: now } }, 
+      select: { id: true, storeId: true } 
+    });
+    for (const item of expiredGrace) {
       await this.prisma.$transaction([
-        this.prisma.storeSubscription.update({ where: { id: item.id }, data: { status: BillingStatus.SUSPENDED, suspendedAt: new Date() } }),
+        this.prisma.storeSubscription.update({ where: { id: item.id }, data: { status: BillingStatus.SUSPENDED, suspendedAt: now } }),
         this.prisma.store.update({ where: { id: item.storeId }, data: { isActive: false } }),
       ]);
     }
