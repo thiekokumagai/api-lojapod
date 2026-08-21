@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Ip, Param, Post, Req, UseGuards } from 
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/infrastructure/guards/jwt-auth.guard';
-import { AllowInactive } from '../auth/decorators/allow-inactive.decorator';
+import { AllowInactive } from '../auth/infrastructure/decorators/allow-inactive.decorator';
 import { BillingService } from './billing.service';
 import { AdminBillingActionDto } from './infrastructure/dtos/admin-billing-action.dto';
 import { SuperAdminGuard } from './infrastructure/guards/super-admin.guard';
