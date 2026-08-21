@@ -24,6 +24,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { StoresModule } from './modules/stores/stores.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BillingModule } from './modules/billing/billing.module';
 
 
 
@@ -58,6 +59,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     PrintModule,
     EventsModule,
     AnalyticsModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

@@ -13,6 +13,28 @@ enum Role {
   USER
 }
 
+enum BillingStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELED
+}
+
+enum BillingPaymentMethod {
+  CREDIT_CARD
+  PIX_AUTO
+  UNKNOWN
+}
+
+enum BillingPaymentStatus {
+  PENDING
+  PAID
+  REFUSED
+  REFUNDED
+  CHARGEBACK
+}
+
 model Store {
   id         String   @id @default(uuid())
   subdomain  String   @unique
@@ -39,6 +61,9 @@ model Store {
   customerAddresses      CustomerAddress[]
   stockMovements         StockMovement[]
   courierTransactions    CourierTransaction[]
+  subscription           StoreSubscription?
+  billingPayments        BillingPayment[]
+  adminAuditLogs         AdminAuditLog[]
 
   isActive Boolean @default(true)
 
@@ -57,9 +82,94 @@ model User {
   webPushSubscription Json?
   createdAt           DateTime @default(now())
 
-  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store          Store?          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  adminAuditLogs AdminAuditLog[]
 
   @@map("users")
+}
+
+model StoreSubscription {
+  id                     String               @id @default(uuid())
+  storeId                String               @unique
+  provider               String               @default("CAKTO")
+  providerCustomerId     String?
+  providerSubscriptionId String?              @unique
+  providerOrderId        String?              @unique
+  paymentMethod          BillingPaymentMethod @default(UNKNOWN)
+  status                 BillingStatus        @default(TRIALING)
+  monthlyFee             Decimal              @default(150.00) @db.Decimal(10, 2)
+  supportSelected        Boolean              @default(false)
+  supportPaidAt          DateTime?
+  trialStartedAt         DateTime             @default(now())
+  trialEndsAt            DateTime?
+  currentPeriodEndsAt    DateTime?
+  paymentDueAt           DateTime?
+  overdueSince           DateTime?
+  gracePeriodEndsAt      DateTime?
+  suspendedAt            DateTime?
+  canceledAt             DateTime?
+  lastProviderSyncAt     DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  payments BillingPayment[]
+
+  @@index([status, gracePeriodEndsAt])
+  @@map("store_subscriptions")
+}
+
+model BillingPayment {
+  id                String               @id @default(uuid())
+  storeId           String
+  subscriptionId    String?
+  providerPaymentId String?              @unique
+  providerOrderId   String?
+  kind              String               @default("MONTHLY_FEE")
+  method            BillingPaymentMethod @default(UNKNOWN)
+  status            BillingPaymentStatus @default(PENDING)
+  amount            Decimal              @db.Decimal(10, 2)
+  dueAt             DateTime?
+  paidAt            DateTime?
+  raw               Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  subscription StoreSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@map("billing_payments")
+}
+
+model CaktoWebhookEvent {
+  id          String    @id @default(uuid())
+  providerId  String    @unique
+  event       String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@map("cakto_webhook_events")
+}
+
+model AdminAuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  storeId   String?
+  action    String
+  reason    String?
+  before    Json?
+  after     Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  actor User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@map("admin_audit_logs")
 }
 
 model Category {

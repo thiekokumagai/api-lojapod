@@ -35,6 +35,14 @@ export class StoresService {
       },
     });
 
+    await this.prisma.storeSubscription.create({
+      data: {
+        storeId: store.id,
+        monthlyFee: 150,
+        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
     // Criar as configurações iniciais da loja
     await this.prisma.storeSettings.create({
       data: {
@@ -152,6 +160,7 @@ export class StoresService {
     return this.prisma.store.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        subscription: true,
         _count: {
           select: {
             products: true,
