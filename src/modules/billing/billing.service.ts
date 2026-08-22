@@ -162,6 +162,8 @@ export class BillingService {
     if (!checkoutUrl) throw new BadRequestException('CAKTO_CHECKOUT_URL não configurada');
     const url = new URL(checkoutUrl);
     url.searchParams.set('sck', store.id);
+    url.searchParams.set('email', store.adminEmail);
+    url.searchParams.set('name', store.title);
     return { checkoutUrl: url.toString(), storeId, email: store.adminEmail, subscription: store.subscription };
   }
 
