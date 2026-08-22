@@ -194,6 +194,35 @@ export class BillingService {
     return updated;
   }
 
+  async adminEditSubscription(storeId: string, data: { status?: BillingStatus; trialEndsAt?: Date | null; currentPeriodEndsAt?: Date | null; gracePeriodEndsAt?: Date | null; monthlyFee?: number }) {
+    const current = await this.prisma.storeSubscription.findUnique({ where: { storeId } });
+    if (!current) {
+      // Create if it doesn't exist
+      return this.prisma.storeSubscription.create({
+        data: {
+          storeId,
+          status: data.status || BillingStatus.TRIALING,
+          trialEndsAt: data.trialEndsAt,
+          currentPeriodEndsAt: data.currentPeriodEndsAt,
+          gracePeriodEndsAt: data.gracePeriodEndsAt,
+          monthlyFee: data.monthlyFee || 150,
+        }
+      });
+    }
+
+    return this.prisma.storeSubscription.update({
+      where: { storeId },
+      data: {
+        status: data.status,
+        trialEndsAt: data.trialEndsAt,
+        currentPeriodEndsAt: data.currentPeriodEndsAt,
+        gracePeriodEndsAt: data.gracePeriodEndsAt,
+        monthlyFee: data.monthlyFee,
+        // Also ensure store isActive matches the logic if it's being manually edited to SUSPENDED or ACTIVE
+      }
+    });
+  }
+
   @Cron('0 * * * *')
   async checkBillingStatuses(): Promise<void> {
     const now = new Date();

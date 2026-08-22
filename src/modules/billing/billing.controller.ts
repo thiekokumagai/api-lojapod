@@ -44,4 +44,17 @@ export class BillingController {
   action(@Param('storeId') storeId: string, @Body() dto: AdminBillingActionDto, @Req() req: Request & { user: { sub: string } }, @Ip() ip: string) {
     return this.billing.adminAction(storeId, dto.action, dto.reason, req.user.sub, ip);
   }
+
+  @Post('admin/subscriptions/:storeId')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  editSubscription(@Param('storeId') storeId: string, @Body() data: any) {
+    return this.billing.adminEditSubscription(storeId, {
+      status: data.status,
+      trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
+      currentPeriodEndsAt: data.currentPeriodEndsAt ? new Date(data.currentPeriodEndsAt) : null,
+      gracePeriodEndsAt: data.gracePeriodEndsAt ? new Date(data.gracePeriodEndsAt) : null,
+      monthlyFee: data.monthlyFee ? Number(data.monthlyFee) : undefined,
+    });
+  }
 }
