@@ -104,9 +104,14 @@ export class BillingService {
     if (['subscription_created', 'subscription_renewed', 'purchase_approved'].includes(event)) {
       let periodEnd = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date', 'data.subscription.next_payment_date'));
       
-      // Se não vier data de vencimento no webhook, jogamos 30 dias pra frente como padrão
+      // Se não vier data de vencimento no webhook, calculamos +30 dias
       if (!periodEnd) {
-        periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        // Se já tiver uma data futura (trial ou vencimento atual), somamos 30 dias a partir dela, para o cliente não perder dias caso pague adiantado
+        const baseDate = subscription.currentPeriodEndsAt && subscription.currentPeriodEndsAt > now 
+          ? subscription.currentPeriodEndsAt 
+          : (subscription.trialEndsAt && subscription.trialEndsAt > now ? subscription.trialEndsAt : now);
+          
+        periodEnd = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
       }
 
       await this.prisma.$transaction([
