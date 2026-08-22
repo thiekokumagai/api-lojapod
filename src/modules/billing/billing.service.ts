@@ -82,7 +82,7 @@ export class BillingService {
   }
 
   private async applyWebhook(event: string, payload: Payload): Promise<void> {
-    const storeId = this.text(payload, 'metadata.storeId', 'metadata.sck', 'data.metadata.storeId', 'data.metadata.sck', 'data.storeId', 'storeId');
+    const storeId = this.text(payload, 'metadata.storeId', 'metadata.sck', 'data.metadata.storeId', 'data.metadata.sck', 'data.storeId', 'storeId', 'data.sck', 'sck');
     const providerSubscriptionId = this.text(payload, 'subscription.id', 'data.subscription.id', 'subscription', 'data.subscription');
     const providerOrderId = this.text(payload, 'order.id', 'data.order.id', 'order_id', 'data.id');
 
