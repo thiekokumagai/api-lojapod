@@ -54,18 +54,19 @@ export class BillingService {
     if (!timingSafeEqual(a, b)) throw new UnauthorizedException('Webhook Cakto inválido');
   }
 
-  async processWebhook(payload: Payload): Promise<{ received: true; duplicate?: boolean }> {
-    const event = this.text(payload, 'event', 'type', 'event_type') || 'unknown';
-    const providerId = this.text(payload, 'id', 'event_id', 'data.id') ||
-      createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  async processWebhook(payload: any): Promise<{ received: boolean }> {
+    const orderId = payload.data?.id || 'unknown';
+    // Se a Cakto não enviar um ID único de evento, usamos o ID do pedido + nome do evento para garantir idempotência
+    const providerId = payload.id || `${orderId}_${payload.event}`;
+    const event = payload.event;
+    
+    if (!providerId || orderId === 'unknown') return { received: true };
 
-    const existing = await this.prisma.caktoWebhookEvent.findUnique({ where: { providerId } });
-    if (existing?.processedAt) return { received: true, duplicate: true };
+    const exists = await this.prisma.caktoWebhookEvent.findUnique({ where: { providerId } });
+    if (exists) return { received: true };
 
-    await this.prisma.caktoWebhookEvent.upsert({
-      where: { providerId },
-      create: { providerId, event, payload: payload as Prisma.InputJsonValue },
-      update: { event, payload: payload as Prisma.InputJsonValue, error: null },
+    await this.prisma.caktoWebhookEvent.create({
+      data: { providerId, event, payload: payload as object },
     });
 
     try {
@@ -101,7 +102,13 @@ export class BillingService {
     const now = new Date();
 
     if (['subscription_created', 'subscription_renewed', 'purchase_approved'].includes(event)) {
-      const periodEnd = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date'));
+      let periodEnd = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date', 'data.subscription.next_payment_date'));
+      
+      // Se não vier data de vencimento no webhook, jogamos 30 dias pra frente como padrão
+      if (!periodEnd) {
+        periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
+
       await this.prisma.$transaction([
         this.prisma.storeSubscription.update({
           where: { id: subscription.id },
