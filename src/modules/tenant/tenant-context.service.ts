@@ -37,4 +37,14 @@ export class TenantContextService {
   getContext(): TenantContext | undefined {
     return this.asyncLocalStorage.getStore();
   }
+
+  setTenantContext(context: Partial<TenantContext>): void {
+    const current = this.asyncLocalStorage.getStore();
+    if (current) {
+      if (context.storeId !== undefined) current.storeId = context.storeId;
+      if (context.subdomain !== undefined) current.subdomain = context.subdomain;
+      if (context.isActive !== undefined) current.isActive = context.isActive;
+    }
+  }
 }
+

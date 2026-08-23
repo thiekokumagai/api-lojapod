@@ -16,9 +16,25 @@ export class PrismaSettingsRepository implements ISettingsRepository {
     if (!storeId) {
       return null;
     }
-    const record = await this.prisma.storeSettings.findFirst({
+    let record = await this.prisma.storeSettings.findFirst({
       where: { storeId },
     });
+
+    if (!record) {
+      const store = await this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { title: true },
+      });
+      if (store) {
+        record = await this.prisma.storeSettings.create({
+          data: {
+            storeId,
+            storeName: store.title,
+          },
+        });
+      }
+    }
+
     if (!record) return null;
     return record as unknown as StoreSettings;
   }

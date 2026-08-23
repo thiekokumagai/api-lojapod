@@ -4,12 +4,14 @@ import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { IS_ALLOW_INACTIVE_KEY } from '../decorators/allow-inactive.decorator';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(
     private reflector: Reflector,
     private prisma: PrismaService,
+    private tenantContextService: TenantContextService,
   ) {
     super();
   }
@@ -35,14 +37,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const req = context.switchToHttp().getRequest();
     const user = req.user;
 
-    if (!isAllowInactive && user && user.storeId && user.role !== 'SUPER_ADMIN') {
+    if (user && user.storeId) {
       const store = await this.prisma.store.findUnique({
         where: { id: user.storeId },
-        select: { isActive: true }
+        select: { id: true, isActive: true, subdomain: true },
       });
 
-      if (store && !store.isActive) {
-        throw new HttpException('Loja Inativa', HttpStatus.FORBIDDEN);
+      if (store) {
+        this.tenantContextService.setTenantContext({
+          storeId: store.id,
+          isActive: store.isActive,
+          subdomain: store.subdomain,
+        });
+
+        if (!isAllowInactive && user.role !== 'SUPER_ADMIN' && !store.isActive) {
+          throw new HttpException('Loja Inativa', HttpStatus.FORBIDDEN);
+        }
       }
     }
 
