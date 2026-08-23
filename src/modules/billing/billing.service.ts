@@ -513,7 +513,12 @@ export class BillingService {
       }
 
       const periodEndPayload = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date', 'data.subscription.next_payment_date'));
-      const defaultNextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      // Calcular exatamente o mesmo dia do mês seguinte (ex: 23/08 -> 23/09)
+      const baseDate = (subscription.trialEndsAt && subscription.trialEndsAt > now) ? new Date(subscription.trialEndsAt) : new Date(now);
+      const defaultNextMonth = new Date(baseDate);
+      defaultNextMonth.setMonth(defaultNextMonth.getMonth() + 1);
+
       const periodEnd = periodEndPayload || defaultNextMonth;
       const finalAmount = payloadAmount > 0 ? payloadAmount : (matchedPlan ? Number(matchedPlan.price) : (isSetupProduct ? 300 : 150));
 
