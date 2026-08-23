@@ -9,26 +9,36 @@ export class StoresService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createStore(dto: CreateStoreDto) {
-    const subdomainNormalized = dto.subdomain.trim().toLowerCase();
-    const RESERVED_SUBDOMAINS = ['app', 'admin', 'api', 'www', 'localhost', 'superadmin'];
+    let subdomainBase = dto.subdomain ? dto.subdomain.trim().toLowerCase() : '';
 
-    if (RESERVED_SUBDOMAINS.includes(subdomainNormalized)) {
-      throw new ConflictException(`O subdomínio "${subdomainNormalized}" é um nome reservado pelo sistema e não pode ser utilizado.`);
+    if (!subdomainBase) {
+      subdomainBase = dto.title
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      if (!subdomainBase) subdomainBase = 'loja';
     }
 
-    const existingStore = await this.prisma.store.findUnique({
-      where: { subdomain: subdomainNormalized },
-    });
+    const RESERVED_SUBDOMAINS = ['app', 'admin', 'api', 'www', 'localhost', 'superadmin'];
+    let finalSubdomain = subdomainBase;
 
-    if (existingStore) {
-      throw new ConflictException(`Já existe uma loja cadastrada com o subdomínio "${subdomainNormalized}"`);
+    if (RESERVED_SUBDOMAINS.includes(finalSubdomain) || await this.prisma.store.findUnique({ where: { subdomain: finalSubdomain } })) {
+      if (dto.subdomain) {
+        throw new ConflictException(`O subdomínio "${subdomainBase}" já está em uso ou é reservado pelo sistema.`);
+      }
+      finalSubdomain = `${subdomainBase}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
     const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
 
     const store = await this.prisma.store.create({
       data: {
-        subdomain: subdomainNormalized,
+        subdomain: finalSubdomain,
         title: dto.title.trim(),
         adminEmail: dto.adminEmail.trim().toLowerCase(),
         printToken,
@@ -51,9 +61,11 @@ export class StoresService {
       create: {
         storeId: store.id,
         storeName: store.title,
+        phone: dto.phone ? dto.phone.trim() : undefined,
       },
       update: {
         storeName: store.title,
+        ...(dto.phone ? { phone: dto.phone.trim() } : {}),
       },
     });
 

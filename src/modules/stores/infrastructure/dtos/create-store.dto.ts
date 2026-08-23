@@ -1,14 +1,14 @@
 import { IsString, IsEmail, IsNotEmpty, Matches, MinLength, IsOptional } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateStoreDto {
-  @ApiProperty({ example: 'minhaloja', description: 'Subdomínio único da loja' })
+  @ApiPropertyOptional({ example: 'minhaloja', description: 'Subdomínio único da loja' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @Matches(/^[a-z0-9-]+$/, {
     message: 'Subdomínio deve conter apenas letras minúsculas, números e hífens',
   })
-  subdomain: string;
+  subdomain?: string;
 
   @ApiProperty({ example: 'Minha Loja Pod', description: 'Título / Nome da Loja' })
   @IsString()
@@ -20,10 +20,14 @@ export class CreateStoreDto {
   @IsNotEmpty()
   adminEmail: string;
 
-  @ApiProperty({ example: 'senha123', description: 'Senha inicial para o administrador da loja' })
+  @ApiPropertyOptional({ example: '11999999999', description: 'Telefone / WhatsApp da loja' })
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: 'senha123', description: 'Senha inicial para o administrador da loja' })
   @IsString()
   @IsOptional()
   @MinLength(6)
   password?: string;
-
 }
