@@ -466,17 +466,31 @@ export class BillingService {
         'data.product.short_id', 'product.short_id'
       );
 
-      // Tentar localizar o plano dinâmico cadastrado no banco pelo providerProductId ou ID
-      let matchedPlan = productId
-        ? await this.prisma.billingPlan.findFirst({
-            where: {
-              OR: [
-                { providerProductId: productId },
-                { id: productId },
-              ],
-            },
-          })
+      // Extrair o planId da checkoutUrl se estiver presente nos parâmetros da URL
+      let planIdFromUrl: string | undefined;
+      const checkoutUrlStr = this.text(payload, 'data.checkoutUrl', 'checkoutUrl');
+      if (checkoutUrlStr) {
+        try {
+          const u = new URL(checkoutUrlStr);
+          planIdFromUrl = u.searchParams.get('planId') || undefined;
+        } catch {}
+      }
+
+      // Tentar localizar o plano dinâmico cadastrado no banco pelo planId da URL, providerProductId ou ID
+      let matchedPlan = planIdFromUrl
+        ? await this.prisma.billingPlan.findUnique({ where: { id: planIdFromUrl } })
         : null;
+
+      if (!matchedPlan && productId) {
+        matchedPlan = await this.prisma.billingPlan.findFirst({
+          where: {
+            OR: [
+              { providerProductId: productId },
+              { id: productId },
+            ],
+          },
+        });
+      }
 
       const offerName = this.text(payload, 'data.offer.name', 'offer.name', 'data.product.name', 'product.name');
       if (!matchedPlan && offerName) {
