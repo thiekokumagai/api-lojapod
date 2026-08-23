@@ -1,16 +1,36 @@
-import { Body, Controller, Get, Headers, Ip, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Ip, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/infrastructure/guards/jwt-auth.guard';
-import { AllowInactive } from '../auth/infrastructure/decorators/allow-inactive.decorator';
+import { AllowInactive } from '../auth/decorators/allow-inactive.decorator';
+import { Public } from '../auth/infrastructure/decorators/public.decorator';
 import { BillingService } from './billing.service';
 import { AdminBillingActionDto } from './infrastructure/dtos/admin-billing-action.dto';
+import { CreatePlanDto } from './infrastructure/dtos/create-plan.dto';
+import { UpdatePlanDto } from './infrastructure/dtos/update-plan.dto';
 import { SuperAdminGuard } from './infrastructure/guards/super-admin.guard';
 
 @ApiTags('Billing')
 @Controller('billing')
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
+
+  @Get('plans')
+  @Public()
+  @ApiOperation({ summary: 'Listar planos públicos ativos' })
+  listPublicPlans() {
+    return this.billing.listPublicPlans();
+  }
+
+  @Get('my-subscription')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @AllowInactive()
+  @ApiOperation({ summary: 'Obter detalhes da assinatura e histórico financeiro da loja' })
+  getMySubscription(@Req() req: Request & { user: { storeId?: string } }) {
+    if (!req.user.storeId) return null;
+    return this.billing.getMySubscription(req.user.storeId);
+  }
 
   @Post('webhooks/cakto')
   @ApiOperation({ summary: 'Recebe eventos da Cakto' })
@@ -23,9 +43,53 @@ export class BillingController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @AllowInactive()
-  checkout(@Req() req: Request & { user: { storeId?: string } }) {
+  checkout(
+    @Req() req: Request & { user: { storeId?: string } },
+    @Query('plan') plan?: string,
+    @Query('planId') planId?: string,
+  ) {
     if (!req.user.storeId) return { checkoutUrl: null };
-    return this.billing.getCheckout(req.user.storeId);
+    return this.billing.getCheckout(req.user.storeId, planId || plan);
+  }
+
+  @Get('admin/plans')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Listar todos os planos (Super Admin)' })
+  listAdminPlans() {
+    return this.billing.listAdminPlans();
+  }
+
+  @Post('admin/plans/sync-cakto')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Sincronizar e importar produtos diretamente da API da Cakto' })
+  syncCaktoProducts() {
+    return this.billing.syncCaktoProducts();
+  }
+
+  @Post('admin/plans')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Criar novo plano (Super Admin)' })
+  createPlan(@Body() dto: CreatePlanDto) {
+    return this.billing.createPlan(dto);
+  }
+
+  @Put('admin/plans/:id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Atualizar plano (Super Admin)' })
+  updatePlan(@Param('id') id: string, @Body() dto: UpdatePlanDto) {
+    return this.billing.updatePlan(id, dto);
+  }
+
+  @Delete('admin/plans/:id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Desativar plano (Super Admin)' })
+  deletePlan(@Param('id') id: string) {
+    return this.billing.deletePlan(id);
   }
 
   @Get('admin/overview')
@@ -43,18 +107,5 @@ export class BillingController {
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   action(@Param('storeId') storeId: string, @Body() dto: AdminBillingActionDto, @Req() req: Request & { user: { sub: string } }, @Ip() ip: string) {
     return this.billing.adminAction(storeId, dto.action, dto.reason, req.user.sub, ip);
-  }
-
-  @Post('admin/subscriptions/:storeId')
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard, SuperAdminGuard)
-  editSubscription(@Param('storeId') storeId: string, @Body() data: any) {
-    return this.billing.adminEditSubscription(storeId, {
-      status: data.status,
-      trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
-      currentPeriodEndsAt: data.currentPeriodEndsAt ? new Date(data.currentPeriodEndsAt) : null,
-      gracePeriodEndsAt: data.gracePeriodEndsAt ? new Date(data.gracePeriodEndsAt) : null,
-      monthlyFee: data.monthlyFee ? Number(data.monthlyFee) : undefined,
-    });
   }
 }
