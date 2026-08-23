@@ -334,8 +334,12 @@ export class BillingService {
 
   async processWebhook(payload: Payload): Promise<{ received: true; duplicate?: boolean }> {
     const event = this.text(payload, 'event', 'type', 'event_type') || 'unknown';
-    const providerId = this.text(payload, 'id', 'event_id', 'data.id') ||
+    const rawId = this.text(payload, 'id', 'event_id', 'data.id') ||
       createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+
+    // Chave única composta pelo TIPO DO EVENTO + ID da transação
+    // Evita que um webhook prévio (ex: "pix_gerado") bloqueie um webhook posterior (ex: "purchase_approved") de mesma ID
+    const providerId = `${event}:${rawId}`;
 
     const existing = await this.prisma.caktoWebhookEvent.findUnique({ where: { providerId } });
     if (existing?.processedAt) return { received: true, duplicate: true };
@@ -360,29 +364,24 @@ export class BillingService {
   }
 
   async reprocessWebhooks() {
-    const unproc = await this.prisma.caktoWebhookEvent.findMany({
-      where: {
-        OR: [
-          { processedAt: null },
-          { error: { not: null } }
-        ]
-      },
+    const events = await this.prisma.caktoWebhookEvent.findMany({
+      orderBy: { createdAt: 'asc' },
     });
     const results: any[] = [];
-    for (const ev of unproc) {
+    for (const ev of events) {
       try {
         await this.applyWebhook(ev.event, ev.payload as Payload);
         await this.prisma.caktoWebhookEvent.update({
           where: { id: ev.id },
           data: { processedAt: new Date(), error: null },
         });
-        results.push({ id: ev.id, providerId: ev.providerId, status: 'success' });
+        results.push({ id: ev.id, providerId: ev.providerId, event: ev.event, status: 'success' });
       } catch (err: any) {
         await this.prisma.caktoWebhookEvent.update({
           where: { id: ev.id },
           data: { error: err?.message || 'Erro ao reprocessar' },
         });
-        results.push({ id: ev.id, providerId: ev.providerId, status: 'error', error: err?.message });
+        results.push({ id: ev.id, providerId: ev.providerId, event: ev.event, status: 'error', error: err?.message });
       }
     }
     return results;
