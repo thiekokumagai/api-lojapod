@@ -2,7 +2,7 @@ import { Injectable, ExecutionContext, HttpException, HttpStatus } from '@nestjs
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { IS_ALLOW_INACTIVE_KEY } from '../decorators/allow-inactive.decorator';
+import { IS_ALLOW_INACTIVE_KEY } from '../../decorators/allow-inactive.decorator';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
 @Injectable()
