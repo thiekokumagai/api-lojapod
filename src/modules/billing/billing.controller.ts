@@ -117,4 +117,12 @@ export class BillingController {
   updateSubscription(@Param('storeId') storeId: string, @Body() dto: UpdateStoreSubscriptionDto) {
     return this.billing.updateStoreSubscription(storeId, dto);
   }
+
+  @Get('admin/payments')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Listar histórico de todas as transações e pagamentos das lojas (Super Admin)' })
+  payments() {
+    return this.billing.listAllPayments();
+  }
 }

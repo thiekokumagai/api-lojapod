@@ -213,6 +213,17 @@ export class BillingService {
     });
   }
 
+  async listAllPayments() {
+    return this.prisma.billingPayment.findMany({
+      include: {
+        store: { select: { id: true, title: true, subdomain: true, adminEmail: true } },
+        plan: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
   async createPlan(dto: CreatePlanDto) {
     const providerProductId = dto.providerProductId && dto.providerProductId.trim() !== '' ? dto.providerProductId.trim() : null;
 
