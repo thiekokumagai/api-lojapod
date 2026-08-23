@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
+import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 
 @ApiTags('Store Settings')
 @Controller('store/settings')
@@ -43,10 +44,9 @@ export class StoreSettingsController {
       isOpen = todayRule.intervals.some((interval: any) => {
         const [openHour, openMin] = interval.open.split(':').map(Number);
         const [closeHour, closeMin] = interval.close.split(':').map(Number);
-        const openMinutes = openHour * 60 + openMin;
-        const closeMinutes = closeHour * 60 + closeMin;
-
-        return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+        const openTotal = openHour * 60 + openMin;
+        const closeTotal = closeHour * 60 + closeMin;
+        return currentMinutes >= openTotal && currentMinutes < closeTotal;
       });
     }
 
@@ -56,7 +56,6 @@ export class StoreSettingsController {
   @Post('calculate-freight')
   @ApiOperation({ summary: 'Calcular frete para a vitrine' })
   async calculateFreight(@Body() body: { destination: string }) {
-    // Retornando valor de mock para o frete, já que o supabase foi removido
     return {
       distanceKm: 5,
       freightPrice: 15,
@@ -64,9 +63,15 @@ export class StoreSettingsController {
   }
 
   @Get('manifest.json')
+  @Public()
   @ApiOperation({ summary: 'Obter manifest.json dinâmico para PWA' })
   async getManifest() {
-    const settings = await this.getSettingsUseCase.execute();
+    let settings: any = null;
+    try {
+      settings = await this.getSettingsUseCase.execute();
+    } catch (e) {
+      settings = { storeName: 'LojaPod', faviconUrl: null };
+    }
 
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
     const bucket = process.env.MINIO_BUCKET || 'lojapod';
