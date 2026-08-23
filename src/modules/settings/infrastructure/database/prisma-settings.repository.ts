@@ -70,17 +70,11 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       paymentRules: settings.paymentRules ?? [],
     };
 
-    let result;
-    if (existing) {
-      result = await this.prisma.storeSettings.update({
-        where: { id: existing.id },
-        data: dataPayload,
-      });
-    } else {
-      result = await this.prisma.storeSettings.create({
-        data: dataPayload,
-      });
-    }
+    const result = await this.prisma.storeSettings.upsert({
+      where: { storeId },
+      create: dataPayload,
+      update: dataPayload,
+    });
 
     return result as unknown as StoreSettings;
   }

@@ -35,18 +35,24 @@ export class StoresService {
       },
     });
 
-    await this.prisma.storeSubscription.create({
-      data: {
+    await this.prisma.storeSubscription.upsert({
+      where: { storeId: store.id },
+      create: {
         storeId: store.id,
         monthlyFee: 150,
         trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
+      update: {},
     });
 
     // Criar as configurações iniciais da loja
-    await this.prisma.storeSettings.create({
-      data: {
+    await this.prisma.storeSettings.upsert({
+      where: { storeId: store.id },
+      create: {
         storeId: store.id,
+        storeName: store.title,
+      },
+      update: {
         storeName: store.title,
       },
     });
