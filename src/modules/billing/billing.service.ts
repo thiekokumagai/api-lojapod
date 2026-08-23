@@ -359,37 +359,136 @@ export class BillingService {
     }
   }
 
+  async reprocessWebhooks() {
+    const unproc = await this.prisma.caktoWebhookEvent.findMany({
+      where: {
+        OR: [
+          { processedAt: null },
+          { error: { not: null } }
+        ]
+      },
+    });
+    const results: any[] = [];
+    for (const ev of unproc) {
+      try {
+        await this.applyWebhook(ev.event, ev.payload as Payload);
+        await this.prisma.caktoWebhookEvent.update({
+          where: { id: ev.id },
+          data: { processedAt: new Date(), error: null },
+        });
+        results.push({ id: ev.id, providerId: ev.providerId, status: 'success' });
+      } catch (err: any) {
+        await this.prisma.caktoWebhookEvent.update({
+          where: { id: ev.id },
+          data: { error: err?.message || 'Erro ao reprocessar' },
+        });
+        results.push({ id: ev.id, providerId: ev.providerId, status: 'error', error: err?.message });
+      }
+    }
+    return results;
+  }
+
   private async applyWebhook(event: string, payload: Payload): Promise<void> {
-    const storeId = this.text(payload, 'metadata.storeId', 'metadata.sck', 'data.metadata.storeId', 'data.metadata.sck', 'data.storeId', 'storeId');
-    const providerSubscriptionId = this.text(payload, 'subscription.id', 'data.subscription.id', 'subscription', 'data.subscription');
-    const providerOrderId = this.text(payload, 'order.id', 'data.order.id', 'order_id', 'data.id');
+    const storeId = this.text(
+      payload,
+      'metadata.storeId', 'metadata.sck',
+      'data.metadata.storeId', 'data.metadata.sck',
+      'data.storeId', 'storeId',
+      'data.sck', 'sck'
+    );
+    const customerEmail = this.text(
+      payload,
+      'customer.email', 'data.customer.email',
+      'email', 'data.email'
+    );
+    const providerSubscriptionId = this.text(
+      payload,
+      'subscription.id', 'data.subscription.id',
+      'subscription', 'data.subscription'
+    );
+    const providerOrderId = this.text(
+      payload,
+      'order.id', 'data.order.id',
+      'order_id', 'data.id', 'id'
+    );
 
     let subscription = storeId
       ? await this.prisma.storeSubscription.findUnique({ where: { storeId } })
       : null;
+
+    if (!subscription && customerEmail) {
+      const storeByEmail = await this.prisma.store.findFirst({
+        where: { adminEmail: { equals: customerEmail, mode: 'insensitive' } },
+        include: { subscription: true },
+      });
+      if (storeByEmail?.subscription) {
+        subscription = storeByEmail.subscription;
+      }
+    }
+
     if (!subscription && providerSubscriptionId) {
       subscription = await this.prisma.storeSubscription.findUnique({ where: { providerSubscriptionId } });
     }
     if (!subscription && providerOrderId) {
       subscription = await this.prisma.storeSubscription.findUnique({ where: { providerOrderId } });
     }
-    if (!subscription) return;
+    if (!subscription) {
+      console.warn('[Webhook Warning] Nenhuma loja encontrada para o payload:', { storeId, customerEmail, providerSubscriptionId, providerOrderId, event });
+      throw new NotFoundException(`Assinatura de loja não encontrada (storeId: ${storeId || customerEmail || 'desconhecido'})`);
+    }
 
-    const paymentMethod = this.method(this.text(payload, 'paymentMethod', 'data.paymentMethod', 'payment_method'));
+    const paymentMethod = this.method(
+      this.text(
+        payload,
+        'paymentMethod', 'data.paymentMethod',
+        'payment_method', 'paymentMethodName',
+        'data.paymentMethodName'
+      )
+    );
     const now = new Date();
 
     if (['subscription_created', 'subscription_renewed', 'purchase_approved', 'order_paid', 'payment_approved'].includes(event)) {
-      const payloadAmount = Number(this.text(payload, 'amount', 'data.amount', 'order.amount', 'data.order.amount', 'payment.amount') || 0);
+      const payloadAmount = Number(
+        this.text(
+          payload,
+          'amount', 'data.amount',
+          'baseAmount', 'data.baseAmount',
+          'order.amount', 'data.order.amount',
+          'payment.amount'
+        ) || 0
+      );
       const planMeta = this.text(payload, 'metadata.plan', 'data.metadata.plan');
-      const productId = this.text(payload, 'product_id', 'data.product_id', 'order.product_id', 'data.order.product_id');
+      const productId = this.text(
+        payload,
+        'product_id', 'data.product_id',
+        'order.product_id', 'data.order.product_id',
+        'data.offer.id', 'offer.id',
+        'data.product.id', 'product.id',
+        'data.product.short_id', 'product.short_id'
+      );
 
-      // Tentar localizar o plano dinâmico cadastrado no banco pelo providerProductId
+      // Tentar localizar o plano dinâmico cadastrado no banco pelo providerProductId ou ID
       let matchedPlan = productId
-        ? await this.prisma.billingPlan.findFirst({ where: { providerProductId: productId } })
+        ? await this.prisma.billingPlan.findFirst({
+            where: {
+              OR: [
+                { providerProductId: productId },
+                { id: productId },
+              ],
+            },
+          })
         : null;
 
+      const offerName = this.text(payload, 'data.offer.name', 'offer.name', 'data.product.name', 'product.name');
+      if (!matchedPlan && offerName) {
+        matchedPlan = await this.prisma.billingPlan.findFirst({
+          where: { name: { contains: offerName, mode: 'insensitive' } },
+        });
+      }
       if (!matchedPlan && planMeta) {
-        matchedPlan = await this.prisma.billingPlan.findFirst({ where: { name: { contains: planMeta, mode: 'insensitive' } } });
+        matchedPlan = await this.prisma.billingPlan.findFirst({
+          where: { name: { contains: planMeta, mode: 'insensitive' } },
+        });
       }
 
       // Se não encontrou pelo ID do produto, verifica pelo checkoutType e valor
@@ -417,6 +516,7 @@ export class BillingService {
       const periodEndPayload = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date', 'data.subscription.next_payment_date'));
       const defaultNextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       const periodEnd = periodEndPayload || defaultNextMonth;
+      const finalAmount = payloadAmount > 0 ? payloadAmount : (matchedPlan ? Number(matchedPlan.price) : (isSetupProduct ? 300 : 150));
 
       await this.prisma.$transaction([
         this.prisma.storeSubscription.update({
@@ -447,7 +547,7 @@ export class BillingService {
         BillingPaymentStatus.PAID,
         paymentMethod,
         kind,
-        matchedPlan ? Number(matchedPlan.price) : (isSetupProduct ? 300 : 150),
+        finalAmount,
         matchedPlan?.id,
       );
       return;

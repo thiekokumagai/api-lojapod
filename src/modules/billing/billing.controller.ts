@@ -125,4 +125,12 @@ export class BillingController {
   payments() {
     return this.billing.listAllPayments();
   }
+
+  @Post('admin/webhooks/reprocess')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Reprocessar webhooks pendentes ou com falha (Super Admin)' })
+  reprocessWebhooks() {
+    return this.billing.reprocessWebhooks();
+  }
 }
