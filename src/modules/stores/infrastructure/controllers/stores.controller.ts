@@ -13,6 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StoresService } from '../../domain/services/stores.service';
 import { CreateStoreDto } from '../dtos/create-store.dto';
+import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 
 @ApiTags('Stores')
@@ -47,6 +48,14 @@ export class StoresController {
   @ApiOperation({ summary: 'Gera um novo token de impressão para a loja' })
   async rotatePrintToken(@Param('id') id: string) {
     return this.storesService.rotatePrintToken(id);
+  }
+
+  @Post('register-trial')
+  @Public()
+  @ApiOperation({ summary: 'Cadastra uma nova loja para teste grátis (Público)' })
+  @ApiResponse({ status: 201, description: 'Loja criada com sucesso em trial grátis' })
+  async registerTrialStore(@Body() dto: CreateStoreDto) {
+    return this.storesService.createStore(dto);
   }
 
   @Post()
