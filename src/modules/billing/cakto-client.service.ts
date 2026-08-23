@@ -24,8 +24,11 @@ export class CaktoClientService {
     return Boolean(this.config.get('CAKTO_CLIENT_ID') && this.config.get('CAKTO_CLIENT_SECRET'));
   }
 
-  getCheckoutUrl(): string | null {
-    return this.config.get('CAKTO_CHECKOUT_URL') || null;
+  getCheckoutUrl(plan?: 'SETUP_ERP' | 'MONTHLY'): string | null {
+    if (plan === 'SETUP_ERP') {
+      return this.config.get('CAKTO_CHECKOUT_SETUP_URL') || this.config.get('CAKTO_CHECKOUT_URL') || null;
+    }
+    return this.config.get('CAKTO_CHECKOUT_SUBSCRIPTION_URL') || this.config.get('CAKTO_CHECKOUT_URL') || null;
   }
 
   private async getAccessToken(): Promise<string> {
@@ -51,7 +54,7 @@ export class CaktoClientService {
     }
   }
 
-  private async request<T>(method: 'GET' | 'POST', url: string, data?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
     const token = await this.getAccessToken();
     try {
       const response = await this.http.request<T>({
@@ -65,7 +68,11 @@ export class CaktoClientService {
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         this.accessToken = undefined;
       }
-      throw new BadGatewayException('Falha na comunicação com a Cakto');
+      const responseData = axios.isAxiosError(error) ? error.response?.data : null;
+      const detail = responseData
+        ? (typeof responseData === 'object' ? JSON.stringify(responseData) : String(responseData))
+        : (error instanceof Error ? error.message : 'Falha na comunicação com a Cakto');
+      throw new BadGatewayException(`Erro Cakto: ${detail}`);
     }
   }
 
@@ -79,5 +86,33 @@ export class CaktoClientService {
 
   getOrder(id: string): Promise<Record<string, unknown>> {
     return this.request('GET', `/public_api/orders/${encodeURIComponent(id)}/`);
+  }
+
+  listProducts(): Promise<any> {
+    return this.request('GET', '/public_api/products/');
+  }
+
+  listOffers(): Promise<any> {
+    return this.request('GET', '/public_api/offers/');
+  }
+
+  listSubscriptions(): Promise<any> {
+    return this.request('GET', '/public_api/subscriptions/');
+  }
+
+  listOrders(): Promise<any> {
+    return this.request('GET', '/public_api/orders/');
+  }
+
+  createProduct(data: Record<string, unknown>): Promise<any> {
+    return this.request('POST', '/public_api/products/', data);
+  }
+
+  updateProduct(id: string, data: Record<string, unknown>): Promise<any> {
+    return this.request('PUT', `/public_api/products/${encodeURIComponent(id)}/`, data);
+  }
+
+  updateOffer(id: string, data: Record<string, unknown>): Promise<any> {
+    return this.request('PUT', `/public_api/offers/${encodeURIComponent(id)}/`, data);
   }
 }

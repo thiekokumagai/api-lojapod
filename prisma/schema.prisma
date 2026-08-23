@@ -88,9 +88,38 @@ model User {
   @@map("users")
 }
 
+enum BillingPlanCheckoutType {
+  SINGLE_PRODUCT
+  RECURRING_SUBSCRIPTION
+}
+
+model BillingPlan {
+  id                     String                  @id @default(uuid())
+  name                   String
+  description            String?
+  price                  Decimal                 @db.Decimal(10, 2)
+  trialDays              Int                     @default(7)
+  isActive               Boolean                 @default(true)
+  isPublic               Boolean                 @default(true)
+  checkoutType           BillingPlanCheckoutType @default(RECURRING_SUBSCRIPTION)
+  providerProductId      String?                 @unique
+  nextSubscriptionPlanId String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  nextSubscriptionPlan BillingPlan?  @relation("PlanSequence", fields: [nextSubscriptionPlanId], references: [id], onDelete: SetNull)
+  previousPlans        BillingPlan[] @relation("PlanSequence")
+
+  subscriptions StoreSubscription[]
+  payments      BillingPayment[]
+
+  @@map("billing_plans")
+}
+
 model StoreSubscription {
   id                     String               @id @default(uuid())
   storeId                String               @unique
+  planId                 String?
   provider               String               @default("CAKTO")
   providerCustomerId     String?
   providerSubscriptionId String?              @unique
@@ -113,6 +142,7 @@ model StoreSubscription {
   updatedAt              DateTime             @updatedAt
 
   store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  plan     BillingPlan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
   payments BillingPayment[]
 
   @@index([status, gracePeriodEndsAt])
@@ -123,6 +153,7 @@ model BillingPayment {
   id                String               @id @default(uuid())
   storeId           String
   subscriptionId    String?
+  planId            String?
   providerPaymentId String?              @unique
   providerOrderId   String?
   kind              String               @default("MONTHLY_FEE")
@@ -137,6 +168,7 @@ model BillingPayment {
 
   store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   subscription StoreSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  plan         BillingPlan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([storeId, createdAt])
   @@map("billing_payments")

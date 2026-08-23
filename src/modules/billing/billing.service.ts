@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { BillingPaymentMethod, BillingPaymentStatus, BillingStatus, Prisma } from '@prisma/client';
+import { BillingPaymentMethod, BillingPaymentStatus, BillingStatus, BillingPlanCheckoutType, Prisma } from '@prisma/client';
 import { createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CaktoClientService } from './cakto-client.service';
+import { CreatePlanDto } from './infrastructure/dtos/create-plan.dto';
+import { UpdatePlanDto } from './infrastructure/dtos/update-plan.dto';
 
 type Payload = Record<string, unknown>;
 
@@ -44,6 +46,270 @@ export class BillingService {
     if (value?.toLowerCase().includes('card') || value?.toLowerCase().includes('credit')) return BillingPaymentMethod.CREDIT_CARD;
     return BillingPaymentMethod.UNKNOWN;
   }
+
+  // --- GESTÃO DE PLANOS (DINÂMICO NO BANCO) ---
+
+  async listPublicPlans() {
+    return this.prisma.billingPlan.findMany({
+      where: { isActive: true, isPublic: true },
+      include: { nextSubscriptionPlan: true },
+      orderBy: { price: 'asc' },
+    });
+  }
+
+  async listAdminPlans() {
+    return this.prisma.billingPlan.findMany({
+      include: { nextSubscriptionPlan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async syncCaktoProducts() {
+    if (!this.cakto.isConfigured()) {
+      throw new BadRequestException('Chaves da API da Cakto (CAKTO_CLIENT_ID e CAKTO_CLIENT_SECRET) não configuradas no .env');
+    }
+
+    try {
+      const [productsRes, offersRes] = await Promise.allSettled([
+        this.cakto.listProducts(),
+        this.cakto.listOffers(),
+      ]);
+
+      const rawProducts = productsRes.status === 'fulfilled' ? productsRes.value : [];
+      const rawOffers = offersRes.status === 'fulfilled' ? offersRes.value : [];
+
+      const productsList = Array.isArray(rawProducts) ? rawProducts : (rawProducts?.results || rawProducts?.data || rawProducts?.items || []);
+      const offersList = Array.isArray(rawOffers) ? rawOffers : (rawOffers?.results || rawOffers?.data || rawOffers?.items || []);
+
+      const combined = [...productsList, ...offersList];
+      const importedPlans: any[] = [];
+
+      for (const item of combined) {
+        const providerProductId = String(item.id || item.product_id || item.offer_id || item.code || '');
+        if (!providerProductId) continue;
+
+        // Filtrar apenas produtos com status "active" na Cakto
+        const itemStatus = item.status !== undefined
+          ? String(item.status).toLowerCase()
+          : (item.active !== undefined ? (item.active ? 'active' : 'inactive') : 'active');
+
+        if (itemStatus !== 'active' && itemStatus !== 'ativo' && itemStatus !== 'true') {
+          continue;
+        }
+
+        const name = String(item.name || item.title || item.offer_name || (item.product && item.product.name) || `Produto Cakto ${providerProductId}`);
+        const description = String(
+          item.description ||
+          item.details ||
+          item.about ||
+          item.summary ||
+          item.product_description ||
+          item.offer_description ||
+          (item.product && typeof item.product === 'object' ? (item.product.description || item.product.details || item.product.about) : '') ||
+          (Array.isArray(item.offers) && item.offers[0] ? (item.offers[0].description || item.offers[0].details) : '') ||
+          ''
+        ).trim() || null;
+
+        const rawVal = Number(item.price || item.amount || item.value || item.price_cents || (item.product && item.product.price) || 0);
+        let price = rawVal;
+        if (rawVal >= 1000 && Number.isInteger(rawVal)) {
+          price = rawVal / 100;
+        } else if (rawVal <= 0) {
+          price = 150;
+        }
+
+        const typeStr = String(item.type || item.billing_type || item.payment_type || '').toLowerCase();
+        let checkoutType: BillingPlanCheckoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
+
+        if (['subscription', 'recurring', 'recorrente', 'signature'].includes(typeStr)) {
+          checkoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
+        } else if (['unique', 'single', 'one_time', 'avulso', 'unico'].includes(typeStr)) {
+          checkoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
+        } else if (name.toLowerCase().includes('assinatura') || name.toLowerCase().includes('mensal')) {
+          checkoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
+        }
+
+        const existing = await this.prisma.billingPlan.findFirst({
+          where: { providerProductId },
+        });
+
+        if (existing) {
+          const updated = await this.prisma.billingPlan.update({
+            where: { id: existing.id },
+            data: {
+              name,
+              description: description || existing.description || null,
+              price,
+              checkoutType,
+              providerProductId,
+            },
+          });
+          importedPlans.push(updated);
+        } else {
+          const created = await this.prisma.billingPlan.create({
+            data: {
+              name,
+              description,
+              price,
+              providerProductId,
+              checkoutType,
+              isActive: true,
+              isPublic: true,
+            },
+          });
+          importedPlans.push(created);
+        }
+      }
+
+      // Se importou produtos reais da Cakto, limpa os planos semente/dummy antigos que não possuem assinaturas ou pagamentos vinculados
+      if (importedPlans.length > 0) {
+        await this.prisma.billingPlan.deleteMany({
+          where: {
+            providerProductId: null,
+            subscriptions: { none: {} },
+            payments: { none: {} },
+          },
+        });
+      }
+
+      return {
+        message: importedPlans.length > 0
+          ? `${importedPlans.length} plano(s) sincronizados com a Cakto com os preços e links reais da sua conta!`
+          : 'Nenhum produto novo encontrado na API da Cakto.',
+        plans: importedPlans,
+        rawProductsCount: combined.length,
+      };
+    } catch (error: any) {
+      throw new BadRequestException(`Erro ao consultar a API da Cakto: ${error.message || 'Verifique suas credenciais no .env.'}`);
+    }
+  }
+
+  async listSubscriptions() {
+    // Auto-backfill: garantir que toda loja no banco tenha um StoreSubscription
+    const storesWithoutSub = await this.prisma.store.findMany({
+      where: { subscription: { is: null } },
+      select: { id: true },
+    });
+
+    if (storesWithoutSub.length > 0) {
+      await this.prisma.storeSubscription.createMany({
+        data: storesWithoutSub.map((s) => ({
+          storeId: s.id,
+          monthlyFee: 150.0,
+          trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return this.prisma.storeSubscription.findMany({
+      include: {
+        store: { select: { id: true, title: true, subdomain: true, adminEmail: true, isActive: true } },
+        plan: true,
+        payments: { orderBy: { createdAt: 'desc' }, take: 5 },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async createPlan(dto: CreatePlanDto) {
+    const providerProductId = dto.providerProductId && dto.providerProductId.trim() !== '' ? dto.providerProductId.trim() : null;
+
+    return this.prisma.billingPlan.create({
+      data: {
+        name: dto.name,
+        description: dto.description || null,
+        price: dto.price,
+        trialDays: dto.trialDays ?? 7,
+        isActive: dto.isActive ?? true,
+        isPublic: dto.isPublic ?? true,
+        checkoutType: dto.checkoutType,
+        providerProductId,
+        nextSubscriptionPlanId: dto.nextSubscriptionPlanId && dto.nextSubscriptionPlanId.trim() !== '' ? dto.nextSubscriptionPlanId.trim() : null,
+      },
+    });
+  }
+
+  async updatePlan(id: string, dto: UpdatePlanDto) {
+    const existing = await this.prisma.billingPlan.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Plano não encontrado');
+
+    const providerProductId = dto.providerProductId !== undefined 
+      ? (dto.providerProductId && dto.providerProductId.trim() !== '' ? dto.providerProductId.trim() : null)
+      : existing.providerProductId;
+
+    const nextSubscriptionPlanId = dto.nextSubscriptionPlanId !== undefined
+      ? (dto.nextSubscriptionPlanId && dto.nextSubscriptionPlanId.trim() !== '' ? dto.nextSubscriptionPlanId.trim() : null)
+      : existing.nextSubscriptionPlanId;
+
+    if (providerProductId && this.cakto.isConfigured()) {
+      const priceNum = Number(dto.price !== undefined ? dto.price : existing.price);
+      const priceStr = priceNum.toFixed(2);
+      const salesPageUrl = `https://pay.cakto.com.br/${providerProductId}`;
+      const updateData = {
+        name: dto.name ?? existing.name,
+        description: dto.description !== undefined ? (dto.description || '') : (existing.description || ''),
+        price: priceStr,
+        salesPage: salesPageUrl,
+      };
+
+      try {
+        await this.cakto.updateProduct(providerProductId, updateData);
+      } catch (prodErr: any) {
+        try {
+          await this.cakto.updateOffer(providerProductId, updateData);
+        } catch (offerErr: any) {
+          console.warn(`[Cakto Sync Error] Não foi possível atualizar o produto/oferta na Cakto (ID: ${providerProductId}):`, prodErr?.message || offerErr?.message);
+        }
+      }
+    }
+
+    return this.prisma.billingPlan.update({
+      where: { id },
+      data: {
+        name: dto.name ?? existing.name,
+        description: dto.description !== undefined ? (dto.description || null) : existing.description,
+        price: dto.price !== undefined ? dto.price : existing.price,
+        trialDays: dto.trialDays !== undefined ? dto.trialDays : existing.trialDays,
+        isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
+        isPublic: dto.isPublic !== undefined ? dto.isPublic : existing.isPublic,
+        checkoutType: dto.checkoutType ?? existing.checkoutType,
+        providerProductId,
+        nextSubscriptionPlanId,
+      },
+    });
+  }
+
+  async deletePlan(id: string) {
+    return this.prisma.billingPlan.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
+
+  // --- CONSULTA DE ASSINATURA E HISTÓRICO DA LOJA ---
+
+  async getMySubscription(storeId: string) {
+    const subscription = await this.prisma.storeSubscription.findUnique({
+      where: { storeId },
+      include: {
+        plan: { include: { nextSubscriptionPlan: true } },
+        payments: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (!subscription) throw new NotFoundException('Assinatura não encontrada para a loja');
+
+    const availablePlans = await this.listPublicPlans();
+
+    return {
+      subscription,
+      availablePlans,
+      payments: subscription.payments,
+    };
+  }
+
+  // --- WEBHOOKS E DECODIFICAÇÃO DINÂMICA ---
 
   validateWebhookSecret(received?: string, bodySecret?: string): void {
     const expected = this.config.get<string>('CAKTO_WEBHOOK_SECRET');
@@ -100,16 +366,58 @@ export class BillingService {
     const paymentMethod = this.method(this.text(payload, 'paymentMethod', 'data.paymentMethod', 'payment_method'));
     const now = new Date();
 
-    if (['subscription_created', 'subscription_renewed', 'purchase_approved'].includes(event)) {
-      const periodEnd = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date'));
+    if (['subscription_created', 'subscription_renewed', 'purchase_approved', 'order_paid', 'payment_approved'].includes(event)) {
+      const payloadAmount = Number(this.text(payload, 'amount', 'data.amount', 'order.amount', 'data.order.amount', 'payment.amount') || 0);
+      const planMeta = this.text(payload, 'metadata.plan', 'data.metadata.plan');
+      const productId = this.text(payload, 'product_id', 'data.product_id', 'order.product_id', 'data.order.product_id');
+
+      // Tentar localizar o plano dinâmico cadastrado no banco pelo providerProductId
+      let matchedPlan = productId
+        ? await this.prisma.billingPlan.findFirst({ where: { providerProductId: productId } })
+        : null;
+
+      if (!matchedPlan && planMeta) {
+        matchedPlan = await this.prisma.billingPlan.findFirst({ where: { name: { contains: planMeta, mode: 'insensitive' } } });
+      }
+
+      // Se não encontrou pelo ID do produto, verifica pelo checkoutType e valor
+      const isSetupProduct = matchedPlan
+        ? matchedPlan.checkoutType === BillingPlanCheckoutType.SINGLE_PRODUCT
+        : (planMeta === 'SETUP_ERP' || payloadAmount >= 250 || productId?.includes('300') || (event === 'purchase_approved' && !providerSubscriptionId));
+
+      const kind = isSetupProduct ? 'SETUP_ERP_WITH_FIRST_MONTH' : 'MONTHLY_FEE';
+
+      // Se for produto único com plano recorrente vinculado no banco (nextSubscriptionPlanId)
+      let nextPlanId = subscription.planId;
+      let nextMonthlyFee = Number(subscription.monthlyFee);
+
+      if (matchedPlan) {
+        if (matchedPlan.checkoutType === BillingPlanCheckoutType.SINGLE_PRODUCT && matchedPlan.nextSubscriptionPlanId) {
+          nextPlanId = matchedPlan.nextSubscriptionPlanId;
+          const nextPlan = await this.prisma.billingPlan.findUnique({ where: { id: matchedPlan.nextSubscriptionPlanId } });
+          if (nextPlan) nextMonthlyFee = Number(nextPlan.price);
+        } else if (matchedPlan.checkoutType === BillingPlanCheckoutType.RECURRING_SUBSCRIPTION) {
+          nextPlanId = matchedPlan.id;
+          nextMonthlyFee = Number(matchedPlan.price);
+        }
+      }
+
+      const periodEndPayload = this.date(this.text(payload, 'current_period_end', 'data.current_period_end', 'subscription.next_payment_date', 'data.subscription.next_payment_date'));
+      const defaultNextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const periodEnd = periodEndPayload || defaultNextMonth;
+
       await this.prisma.$transaction([
         this.prisma.storeSubscription.update({
           where: { id: subscription.id },
           data: {
+            planId: nextPlanId || subscription.planId,
             providerSubscriptionId: providerSubscriptionId || subscription.providerSubscriptionId,
             providerOrderId: providerOrderId || subscription.providerOrderId,
             paymentMethod,
             status: BillingStatus.ACTIVE,
+            monthlyFee: nextMonthlyFee,
+            supportSelected: isSetupProduct ? true : subscription.supportSelected,
+            supportPaidAt: isSetupProduct ? now : subscription.supportPaidAt,
             currentPeriodEndsAt: periodEnd,
             overdueSince: null,
             gracePeriodEndsAt: null,
@@ -119,7 +427,17 @@ export class BillingService {
         }),
         this.prisma.store.update({ where: { id: subscription.storeId }, data: { isActive: true } }),
       ]);
-      await this.recordPayment(subscription.id, subscription.storeId, payload, BillingPaymentStatus.PAID, paymentMethod);
+
+      await this.recordPayment(
+        subscription.id,
+        subscription.storeId,
+        payload,
+        BillingPaymentStatus.PAID,
+        paymentMethod,
+        kind,
+        matchedPlan ? Number(matchedPlan.price) : (isSetupProduct ? 300 : 150),
+        matchedPlan?.id,
+      );
       return;
     }
 
@@ -144,25 +462,103 @@ export class BillingService {
     }
   }
 
-  private async recordPayment(subscriptionId: string, storeId: string, payload: Payload, status: BillingPaymentStatus, method: BillingPaymentMethod) {
+  private async recordPayment(
+    subscriptionId: string,
+    storeId: string,
+    payload: Payload,
+    status: BillingPaymentStatus,
+    method: BillingPaymentMethod,
+    kind: string = 'MONTHLY_FEE',
+    overrideAmount?: number,
+    planId?: string,
+  ) {
     const providerPaymentId = this.text(payload, 'payment.id', 'data.payment.id', 'order.id', 'data.id');
     if (!providerPaymentId) return;
-    const amount = Number(this.text(payload, 'amount', 'data.amount', 'order.amount') || 150);
+    const rawAmount = Number(this.text(payload, 'amount', 'data.amount', 'order.amount', 'payment.amount') || 0);
+    const amount = overrideAmount || (rawAmount > 0 ? rawAmount : (kind.includes('SETUP') ? 300 : 150));
+
     await this.prisma.billingPayment.upsert({
       where: { providerPaymentId },
-      create: { providerPaymentId, storeId, subscriptionId, amount, method, status, paidAt: status === BillingPaymentStatus.PAID ? new Date() : null, raw: payload as Prisma.InputJsonValue },
-      update: { status, method, paidAt: status === BillingPaymentStatus.PAID ? new Date() : undefined, raw: payload as Prisma.InputJsonValue },
+      create: {
+        providerPaymentId,
+        storeId,
+        subscriptionId,
+        planId: planId || null,
+        amount,
+        kind,
+        method,
+        status,
+        paidAt: status === BillingPaymentStatus.PAID ? new Date() : null,
+        raw: payload as Prisma.InputJsonValue,
+      },
+      update: {
+        status,
+        method,
+        kind,
+        amount,
+        planId: planId || undefined,
+        paidAt: status === BillingPaymentStatus.PAID ? new Date() : undefined,
+        raw: payload as Prisma.InputJsonValue,
+      },
     });
   }
 
-  async getCheckout(storeId: string) {
+  async getCheckout(storeId: string, planIdOrType?: string) {
     const store = await this.prisma.store.findUnique({ where: { id: storeId }, include: { subscription: true } });
     if (!store) throw new NotFoundException('Loja não encontrada');
-    const checkoutUrl = this.cakto.getCheckoutUrl();
-    if (!checkoutUrl) throw new BadRequestException('CAKTO_CHECKOUT_URL não configurada');
+
+    let targetPlan: any = null;
+
+    if (planIdOrType) {
+      try {
+        targetPlan = await this.prisma.billingPlan.findUnique({ where: { id: planIdOrType } });
+      } catch {
+        targetPlan = null;
+      }
+
+      if (!targetPlan) {
+        targetPlan = await this.prisma.billingPlan.findFirst({
+          where: {
+            isActive: true,
+            OR: [
+              { providerProductId: planIdOrType },
+              { checkoutType: planIdOrType as any },
+              { name: { contains: planIdOrType, mode: 'insensitive' } },
+            ],
+          },
+        });
+      }
+    }
+
+    if (!targetPlan) {
+      targetPlan = await this.prisma.billingPlan.findFirst({
+        where: { isActive: true },
+        orderBy: { price: 'asc' },
+      });
+    }
+
+    if (!targetPlan) {
+      throw new BadRequestException('Nenhum plano ativo foi encontrado no banco de dados. Cadastre ou importe planos no Super Admin.');
+    }
+
+    if (!targetPlan.providerProductId) {
+      throw new BadRequestException(
+        `O plano "${targetPlan.name}" não possui um ID do Produto na Cakto cadastrado. Clique em 'Importar da Cakto' no painel Super Admin.`
+      );
+    }
+
+    const checkoutUrl = `https://pay.cakto.com.br/${targetPlan.providerProductId}`;
     const url = new URL(checkoutUrl);
     url.searchParams.set('sck', store.id);
-    return { checkoutUrl: url.toString(), storeId, email: store.adminEmail, subscription: store.subscription };
+    url.searchParams.set('planId', targetPlan.id);
+
+    return {
+      checkoutUrl: url.toString(),
+      storeId,
+      email: store.adminEmail,
+      subscription: store.subscription,
+      plan: targetPlan,
+    };
   }
 
   async overview() {
@@ -171,10 +567,6 @@ export class BillingService {
       this.prisma.billingPayment.aggregate({ where: { status: BillingPaymentStatus.PAID }, _sum: { amount: true }, _count: { _all: true } }),
     ]);
     return { statuses: Object.fromEntries(stores.map((item) => [item.status, item._count._all])), paidAmount: Number(payments._sum.amount || 0), paidCount: payments._count._all, providerConfigured: this.cakto.isConfigured() };
-  }
-
-  listSubscriptions() {
-    return this.prisma.storeSubscription.findMany({ include: { store: { select: { id: true, title: true, subdomain: true, adminEmail: true, isActive: true } }, payments: { orderBy: { createdAt: 'desc' }, take: 5 } }, orderBy: { updatedAt: 'desc' } });
   }
 
   async adminAction(storeId: string, action: 'SUSPEND' | 'REACTIVATE' | 'CANCEL', reason: string, actorId: string, ipAddress?: string) {
