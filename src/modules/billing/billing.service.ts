@@ -7,6 +7,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CaktoClientService } from './cakto-client.service';
 import { CreatePlanDto } from './infrastructure/dtos/create-plan.dto';
 import { UpdatePlanDto } from './infrastructure/dtos/update-plan.dto';
+import { UpdateStoreSubscriptionDto } from './infrastructure/dtos/update-store-subscription.dto';
 
 type Payload = Record<string, unknown>;
 
@@ -581,6 +582,55 @@ export class BillingService {
       await tx.adminAuditLog.create({ data: { actorId, storeId, action: `BILLING_${action}`, reason, before: current as unknown as Prisma.InputJsonValue, after: result as unknown as Prisma.InputJsonValue, ipAddress } });
       return result;
     });
+    return updated;
+  }
+
+  async updateStoreSubscription(storeId: string, dto: UpdateStoreSubscriptionDto) {
+    const existing = await this.prisma.storeSubscription.findUnique({ where: { storeId } });
+    if (!existing) throw new NotFoundException('Assinatura da loja não encontrada');
+
+    const status = dto.status ?? existing.status;
+    const isActive = status === BillingStatus.ACTIVE || status === BillingStatus.TRIALING;
+
+    const dataToUpdate: any = {
+      status,
+      monthlyFee: dto.monthlyFee !== undefined ? dto.monthlyFee : existing.monthlyFee,
+      planId: dto.planId !== undefined ? (dto.planId || null) : existing.planId,
+      paymentMethod: dto.paymentMethod ?? existing.paymentMethod,
+      supportSelected: dto.supportSelected !== undefined ? dto.supportSelected : existing.supportSelected,
+    };
+
+    if (dto.trialEndsAt !== undefined) {
+      dataToUpdate.trialEndsAt = dto.trialEndsAt ? new Date(dto.trialEndsAt) : null;
+    }
+
+    if (dto.currentPeriodEndsAt !== undefined) {
+      dataToUpdate.currentPeriodEndsAt = dto.currentPeriodEndsAt ? new Date(dto.currentPeriodEndsAt) : null;
+    }
+
+    if (status === BillingStatus.ACTIVE) {
+      dataToUpdate.suspendedAt = null;
+      dataToUpdate.canceledAt = null;
+      dataToUpdate.overdueSince = null;
+      dataToUpdate.gracePeriodEndsAt = null;
+    } else if (status === BillingStatus.SUSPENDED) {
+      dataToUpdate.suspendedAt = new Date();
+    } else if (status === BillingStatus.CANCELED) {
+      dataToUpdate.canceledAt = new Date();
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.storeSubscription.update({
+        where: { storeId },
+        data: dataToUpdate,
+      });
+      await tx.store.update({
+        where: { id: storeId },
+        data: { isActive },
+      });
+      return res;
+    });
+
     return updated;
   }
 

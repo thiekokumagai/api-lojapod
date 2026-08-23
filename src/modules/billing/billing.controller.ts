@@ -8,6 +8,7 @@ import { BillingService } from './billing.service';
 import { AdminBillingActionDto } from './infrastructure/dtos/admin-billing-action.dto';
 import { CreatePlanDto } from './infrastructure/dtos/create-plan.dto';
 import { UpdatePlanDto } from './infrastructure/dtos/update-plan.dto';
+import { UpdateStoreSubscriptionDto } from './infrastructure/dtos/update-store-subscription.dto';
 import { SuperAdminGuard } from './infrastructure/guards/super-admin.guard';
 
 @ApiTags('Billing')
@@ -107,5 +108,13 @@ export class BillingController {
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   action(@Param('storeId') storeId: string, @Body() dto: AdminBillingActionDto, @Req() req: Request & { user: { sub: string } }, @Ip() ip: string) {
     return this.billing.adminAction(storeId, dto.action, dto.reason, req.user.sub, ip);
+  }
+
+  @Put('admin/stores/:storeId/subscription')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @ApiOperation({ summary: 'Editar dados da assinatura de uma loja (Super Admin)' })
+  updateSubscription(@Param('storeId') storeId: string, @Body() dto: UpdateStoreSubscriptionDto) {
+    return this.billing.updateStoreSubscription(storeId, dto);
   }
 }
