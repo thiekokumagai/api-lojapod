@@ -774,23 +774,45 @@ export class BillingService {
     });
 
     for (const trial of expiredTrials) {
-      const gracePeriodEndsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       await this.prisma.storeSubscription.update({
         where: { id: trial.id },
         data: {
           status: BillingStatus.PAST_DUE,
           overdueSince: now,
-          gracePeriodEndsAt
+          gracePeriodEndsAt: now, // Transiciona para PAST_DUE
         }
       });
     }
 
-    // 2. Suspender assinaturas com carência vencida
-    const expiredGrace = await this.prisma.storeSubscription.findMany({ 
-      where: { status: BillingStatus.PAST_DUE, gracePeriodEndsAt: { lte: now } }, 
+    // 2. Verificar assinaturas ativas com período vencido (currentPeriodEndsAt <= now)
+    const expiredActive = await this.prisma.storeSubscription.findMany({
+      where: { status: BillingStatus.ACTIVE, currentPeriodEndsAt: { lte: now } },
+      select: { id: true }
+    });
+
+    for (const active of expiredActive) {
+      await this.prisma.storeSubscription.update({
+        where: { id: active.id },
+        data: {
+          status: BillingStatus.PAST_DUE,
+          overdueSince: now,
+        }
+      });
+    }
+
+    // 3. Suspender lojas com status PAST_DUE (ou com trial/período vencido)
+    const toSuspend = await this.prisma.storeSubscription.findMany({ 
+      where: {
+        OR: [
+          { status: BillingStatus.PAST_DUE, gracePeriodEndsAt: { lte: now } },
+          { status: BillingStatus.PAST_DUE, currentPeriodEndsAt: { lte: now } },
+          { status: BillingStatus.TRIALING, trialEndsAt: { lte: now } },
+        ]
+      }, 
       select: { id: true, storeId: true } 
     });
-    for (const item of expiredGrace) {
+
+    for (const item of toSuspend) {
       await this.prisma.$transaction([
         this.prisma.storeSubscription.update({ where: { id: item.id }, data: { status: BillingStatus.SUSPENDED, suspendedAt: now } }),
         this.prisma.store.update({ where: { id: item.storeId }, data: { isActive: false } }),
