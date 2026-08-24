@@ -71,94 +71,124 @@ export class BillingService {
     }
 
     try {
-      const [productsRes, offersRes] = await Promise.allSettled([
-        this.cakto.listProducts(),
-        this.cakto.listOffers(),
-      ]);
+      // 1. Buscar produtos com status=active
+      const rawProducts = await this.cakto.listProducts({ status: 'active' }).catch(() => []);
+      const productsList = Array.isArray(rawProducts)
+        ? rawProducts
+        : (rawProducts?.results || rawProducts?.data || rawProducts?.items || []);
 
-      const rawProducts = productsRes.status === 'fulfilled' ? productsRes.value : [];
-      const rawOffers = offersRes.status === 'fulfilled' ? offersRes.value : [];
-
-      const productsList = Array.isArray(rawProducts) ? rawProducts : (rawProducts?.results || rawProducts?.data || rawProducts?.items || []);
-      const offersList = Array.isArray(rawOffers) ? rawOffers : (rawOffers?.results || rawOffers?.data || rawOffers?.items || []);
-
-      const combined = [...productsList, ...offersList];
       const importedPlans: any[] = [];
+      let totalOffersCount = 0;
 
-      for (const item of combined) {
-        const providerProductId = String(item.id || item.product_id || item.offer_id || item.code || '');
-        if (!providerProductId) continue;
+      for (const product of productsList) {
+        const productId = String(product.id || product.product_id || product.code || '');
+        if (!productId) continue;
 
-        // Filtrar apenas produtos com status "active" na Cakto
-        const itemStatus = item.status !== undefined
-          ? String(item.status).toLowerCase()
-          : (item.active !== undefined ? (item.active ? 'active' : 'inactive') : 'active');
+        // Verificar status do produto
+        const productStatus = product.status !== undefined
+          ? String(product.status).toLowerCase()
+          : (product.active !== undefined ? (product.active ? 'active' : 'inactive') : 'active');
 
-        if (itemStatus !== 'active' && itemStatus !== 'ativo' && itemStatus !== 'true') {
+        if (productStatus !== 'active' && productStatus !== 'ativo' && productStatus !== 'true') {
           continue;
         }
 
-        const name = String(item.name || item.title || item.offer_name || (item.product && item.product.name) || `Produto Cakto ${providerProductId}`);
-        const description = String(
-          item.description ||
-          item.details ||
-          item.about ||
-          item.summary ||
-          item.product_description ||
-          item.offer_description ||
-          (item.product && typeof item.product === 'object' ? (item.product.description || item.product.details || item.product.about) : '') ||
-          (Array.isArray(item.offers) && item.offers[0] ? (item.offers[0].description || item.offers[0].details) : '') ||
-          ''
+        const productName = String(product.name || product.title || `Produto Cakto ${productId}`);
+        const productDescription = String(
+          product.description || product.details || product.about || product.summary || ''
         ).trim() || null;
 
-        const rawVal = Number(item.price || item.amount || item.value || item.price_cents || (item.product && item.product.price) || 0);
-        let price = rawVal;
-        if (rawVal >= 1000 && Number.isInteger(rawVal)) {
-          price = rawVal / 100;
-        } else if (rawVal <= 0) {
-          price = 150;
+        const productTypeStr = String(product.type || product.billing_type || product.payment_type || '').toLowerCase();
+        let productCheckoutType: BillingPlanCheckoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
+        if (['subscription', 'recurring', 'recorrente', 'signature'].includes(productTypeStr) || productName.toLowerCase().includes('assinatura') || productName.toLowerCase().includes('mensal')) {
+          productCheckoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
+        } else if (['unique', 'single', 'one_time', 'avulso', 'unico'].includes(productTypeStr)) {
+          productCheckoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
         }
 
-        const typeStr = String(item.type || item.billing_type || item.payment_type || '').toLowerCase();
-        let checkoutType: BillingPlanCheckoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
+        const productPriceRaw = Number(product.price || product.amount || product.value || product.price_cents || 0);
+        let productPrice = productPriceRaw >= 1000 && Number.isInteger(productPriceRaw) ? productPriceRaw / 100 : productPriceRaw;
 
-        if (['subscription', 'recurring', 'recorrente', 'signature'].includes(typeStr)) {
-          checkoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
-        } else if (['unique', 'single', 'one_time', 'avulso', 'unico'].includes(typeStr)) {
-          checkoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
-        } else if (name.toLowerCase().includes('assinatura') || name.toLowerCase().includes('mensal')) {
-          checkoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
-        }
+        // 2. Buscar ofertas com status=active para este produto
+        const rawOffers = await this.cakto.listOffers({ status: 'active', product: productId }).catch(() => []);
+        const offersList = Array.isArray(rawOffers)
+          ? rawOffers
+          : (rawOffers?.results || rawOffers?.data || rawOffers?.items || []);
 
-        const existing = await this.prisma.billingPlan.findFirst({
-          where: { providerProductId },
+        // Filtrar ofertas pertencentes a este produto (caso a API retorne todas)
+        const matchedOffers = offersList.filter((offer: any) => {
+          const offerStatus = offer.status !== undefined
+            ? String(offer.status).toLowerCase()
+            : (offer.active !== undefined ? (offer.active ? 'active' : 'inactive') : 'active');
+          if (offerStatus !== 'active' && offerStatus !== 'ativo' && offerStatus !== 'true') return false;
+
+          const offerProductId = String(offer.product_id || offer.product?.id || offer.productId || '');
+          return !offerProductId || offerProductId === productId;
         });
 
-        if (existing) {
-          const updated = await this.prisma.billingPlan.update({
-            where: { id: existing.id },
-            data: {
-              name,
-              description: description || existing.description || null,
-              price,
-              checkoutType,
-              providerProductId,
-            },
+        const itemsToProcess = matchedOffers.length > 0 ? matchedOffers : [null]; // Se tiver ofertas, usa cada oferta. Se não, usa o próprio produto.
+
+        for (const offer of itemsToProcess) {
+          totalOffersCount++;
+          // A ID do providerProductId será o ID da Oferta (se existir) ou o ID do Produto
+          const providerProductId = offer ? String(offer.id || offer.offer_id || offer.code || '') : productId;
+          if (!providerProductId) continue;
+
+          const name = offer
+            ? String(offer.name || offer.title || offer.offer_name || `${productName} - ${providerProductId}`)
+            : productName;
+
+          const description = offer
+            ? String(offer.description || offer.details || productDescription || '').trim() || null
+            : productDescription;
+
+          const priceRaw = offer
+            ? Number(offer.price || offer.amount || offer.value || offer.price_cents || productPrice || 0)
+            : productPrice;
+
+          let price = priceRaw >= 1000 && Number.isInteger(priceRaw) ? priceRaw / 100 : priceRaw;
+          if (price <= 0) price = 150;
+
+          const offerTypeStr = offer ? String(offer.type || offer.billing_type || offer.payment_type || '').toLowerCase() : '';
+          let checkoutType = productCheckoutType;
+          if (offerTypeStr) {
+            if (['subscription', 'recurring', 'recorrente', 'signature'].includes(offerTypeStr)) {
+              checkoutType = BillingPlanCheckoutType.RECURRING_SUBSCRIPTION;
+            } else if (['unique', 'single', 'one_time', 'avulso', 'unico'].includes(offerTypeStr)) {
+              checkoutType = BillingPlanCheckoutType.SINGLE_PRODUCT;
+            }
+          }
+
+          const existing = await this.prisma.billingPlan.findFirst({
+            where: { providerProductId },
           });
-          importedPlans.push(updated);
-        } else {
-          const created = await this.prisma.billingPlan.create({
-            data: {
-              name,
-              description,
-              price,
-              providerProductId,
-              checkoutType,
-              isActive: true,
-              isPublic: true,
-            },
-          });
-          importedPlans.push(created);
+
+          if (existing) {
+            const updated = await this.prisma.billingPlan.update({
+              where: { id: existing.id },
+              data: {
+                name,
+                description: description || existing.description || null,
+                price,
+                checkoutType,
+                providerProductId,
+              },
+            });
+            importedPlans.push(updated);
+          } else {
+            const created = await this.prisma.billingPlan.create({
+              data: {
+                name,
+                description,
+                price,
+                providerProductId,
+                checkoutType,
+                isActive: true,
+                isPublic: true,
+              },
+            });
+            importedPlans.push(created);
+          }
         }
       }
 
@@ -175,10 +205,10 @@ export class BillingService {
 
       return {
         message: importedPlans.length > 0
-          ? `${importedPlans.length} plano(s) sincronizados com a Cakto com os preços e links reais da sua conta!`
+          ? `${importedPlans.length} plano(s)/oferta(s) sincronizados com a Cakto com os preços e ofertas reais da sua conta!`
           : 'Nenhum produto novo encontrado na API da Cakto.',
         plans: importedPlans,
-        rawProductsCount: combined.length,
+        rawProductsCount: productsList.length,
       };
     } catch (error: any) {
       throw new BadRequestException(`Erro ao consultar a API da Cakto: ${error.message || 'Verifique suas credenciais no .env.'}`);

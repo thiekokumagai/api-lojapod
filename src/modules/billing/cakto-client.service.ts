@@ -54,13 +54,19 @@ export class CaktoClientService {
     }
   }
 
-  private async request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
+  private async request<T>(
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    url: string,
+    data?: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
     const token = await this.getAccessToken();
     try {
       const response = await this.http.request<T>({
         method,
         url,
         data,
+        params,
         headers: { Authorization: `Bearer ${token}` },
       });
       return response.data;
@@ -88,12 +94,12 @@ export class CaktoClientService {
     return this.request('GET', `/public_api/orders/${encodeURIComponent(id)}/`);
   }
 
-  listProducts(): Promise<any> {
-    return this.request('GET', '/public_api/products/');
+  listProducts(params?: Record<string, unknown>): Promise<any> {
+    return this.request('GET', '/public_api/products/', undefined, params);
   }
 
-  listOffers(): Promise<any> {
-    return this.request('GET', '/public_api/offers/');
+  listOffers(params?: Record<string, unknown>): Promise<any> {
+    return this.request('GET', '/public_api/offers/', undefined, params);
   }
 
   listSubscriptions(): Promise<any> {
