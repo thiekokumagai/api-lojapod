@@ -1,29 +1,45 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 interface AnalyzePurchaseRequest {
   meses?: number;
   categoria?: string;
   dias_cobertura?: number;
   valor?: number;
+  storeId?: string;
 }
 
 @Injectable()
 export class AnalyzePurchaseUseCase {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly tenantContextService?: TenantContextService,
+  ) {}
 
   async execute(params: AnalyzePurchaseRequest) {
     const meses = params.meses && params.meses > 0 ? Number(params.meses) : 3;
     const diasCobertura = params.dias_cobertura && params.dias_cobertura > 0 ? Number(params.dias_cobertura) : 30;
 
+    const targetStoreId = params.storeId || this.tenantContextService?.getStoreId();
+    if (targetStoreId && this.tenantContextService) {
+      this.tenantContextService.setStoreId(targetStoreId);
+    }
+
     // 1. Calculate budget (orçamento)
     const entryTransactions = await this.prisma.investmentTransaction.aggregate({
       _sum: { amount: true },
-      where: { type: 'ENTRY' },
+      where: {
+        type: 'ENTRY',
+        ...(targetStoreId ? { storeId: targetStoreId } : {}),
+      },
     });
     const outflowTransactions = await this.prisma.investmentTransaction.aggregate({
       _sum: { amount: true },
-      where: { type: 'OUTFLOW' },
+      where: {
+        type: 'OUTFLOW',
+        ...(targetStoreId ? { storeId: targetStoreId } : {}),
+      },
     });
 
     const entryTotal = Number(entryTransactions._sum.amount || 0);
@@ -66,6 +82,7 @@ export class AnalyzePurchaseUseCase {
         order: {
           createdAt: { gte: dataInicio },
           status: { not: 'CANCELLED' },
+          ...(targetStoreId ? { storeId: targetStoreId } : {}),
         },
         productId: { not: null },
       },
@@ -81,6 +98,7 @@ export class AnalyzePurchaseUseCase {
         order: {
           createdAt: { gte: dataTendencia },
           status: { not: 'CANCELLED' },
+          ...(targetStoreId ? { storeId: targetStoreId } : {}),
         },
         productId: { not: null },
       },
@@ -90,7 +108,10 @@ export class AnalyzePurchaseUseCase {
     const productIds = Array.from(new Set(groupedOrderItems.map(g => g.productId as string)));
     
     const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
+      where: {
+        id: { in: productIds },
+        ...(targetStoreId ? { storeId: targetStoreId } : {}),
+      },
       include: {
         category: true,
         items: true,
