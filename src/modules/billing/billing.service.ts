@@ -564,6 +564,9 @@ export class BillingService {
       defaultNextMonth.setMonth(defaultNextMonth.getMonth() + 1);
 
       const periodEnd = periodEndPayload || defaultNextMonth;
+      // Garantir o final do dia UTC (23:59:59) para evitar que o fuso do Brasil (UTC-3) recue 1 dia na exibição
+      periodEnd.setUTCHours(23, 59, 59, 999);
+
       const finalAmount = payloadAmount > 0 ? payloadAmount : (matchedPlan ? Number(matchedPlan.price) : (isSetupProduct ? 300 : 150));
 
       await this.prisma.$transaction([
