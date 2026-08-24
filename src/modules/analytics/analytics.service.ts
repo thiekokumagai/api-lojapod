@@ -1,16 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContextService: TenantContextService
+  ) {}
 
   async trackSession(sessionId: string) {
     const now = new Date();
+    const storeId = this.tenantContextService.getStoreId();
+    
     const session = await this.prisma.storeSession.upsert({
       where: { sessionId },
-      create: { sessionId, startedAt: now, lastHeartbeatAt: now },
-      update: { lastHeartbeatAt: now }
+      create: { sessionId, startedAt: now, lastHeartbeatAt: now, storeId },
+      update: { lastHeartbeatAt: now, ...(storeId && { storeId }) }
     });
 
     const diffSeconds = Math.floor((now.getTime() - session.startedAt.getTime()) / 1000);

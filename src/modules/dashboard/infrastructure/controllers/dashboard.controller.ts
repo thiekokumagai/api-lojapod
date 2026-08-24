@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -26,11 +27,13 @@ export class DashboardController {
     description: 'Estatísticas obtidas com sucesso',
   })
   async getStats(
+    @Req() req: Request & { user: { storeId?: string } },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
   ) {
     return this.getDashboardStatsUseCase.execute({
+      storeId: req.user?.storeId,
       startDate,
       endDate,
       categoryId,

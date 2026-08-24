@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
 export interface DashboardStatsFilters {
+  storeId?: string;
   startDate?: string;
   endDate?: string;
   categoryId?: string;
@@ -44,6 +45,7 @@ export class GetDashboardStatsUseCase {
     // 1. Fetch Orders within range that are not CANCELLED
     const orders = await this.prisma.order.findMany({
       where: {
+        ...(filters.storeId && { storeId: filters.storeId }),
         createdAt: {
           gte: start,
           lte: end,
@@ -74,7 +76,11 @@ export class GetDashboardStatsUseCase {
     const ticketMedio = totalPedidos > 0 ? totalVendas / totalPedidos : 0;
 
     // 2.5 Count Active and Inactive Products
-    const baseProductWhere = filters.categoryId ? { categoryId: filters.categoryId, deletedAt: null } : { deletedAt: null };
+    const baseProductWhere = {
+      ...(filters.storeId && { storeId: filters.storeId }),
+      ...(filters.categoryId && { categoryId: filters.categoryId }),
+      deletedAt: null
+    };
     
     const produtosAtivos = await this.prisma.product.count({
       where: { ...baseProductWhere, isVisible: true },
@@ -87,6 +93,7 @@ export class GetDashboardStatsUseCase {
     // 2.6 Fetch Analytics (Behavior)
     const sessions = await this.prisma.storeSession.findMany({
       where: {
+        ...(filters.storeId && { storeId: filters.storeId }),
         createdAt: {
           gte: start,
           lte: end,
