@@ -1,12 +1,16 @@
-import { Injectable, ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { CreateStoreDto } from '../../infrastructure/dtos/create-store.dto';
+import { MinioService } from '../../../../minio/minio.service';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StoresService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly minioService?: MinioService,
+  ) {}
 
   async createStore(dto: CreateStoreDto) {
     let subdomainBase = dto.subdomain ? dto.subdomain.trim().toLowerCase() : '';
@@ -311,6 +315,13 @@ export class StoresService {
 
     if (!store) {
       throw new NotFoundException('Loja não encontrada');
+    }
+
+    // Limpa todos os arquivos da loja no MinIO (logos, favicons, banners, imagens de produtos/categorias)
+    if (this.minioService) {
+      await this.minioService.deleteFolder(id).catch((err) => {
+        console.error(`[StoresService] Erro ao deletar arquivos da loja ${id} no MinIO:`, err);
+      });
     }
 
     await this.prisma.store.delete({

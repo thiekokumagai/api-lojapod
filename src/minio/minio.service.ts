@@ -98,6 +98,27 @@ export class MinioService implements OnModuleInit {
     await this.client.removeObject(this.bucket, fileName);
   }
 
+  async deleteFolder(prefix: string) {
+    if (!prefix) return;
+
+    try {
+      const objectsStream = this.client.listObjectsV2(this.bucket, prefix, true);
+      const objectsToDelete: string[] = [];
+
+      for await (const item of objectsStream) {
+        if (item && item.name) {
+          objectsToDelete.push(item.name);
+        }
+      }
+
+      if (objectsToDelete.length > 0) {
+        await this.client.removeObjects(this.bucket, objectsToDelete);
+      }
+    } catch (error: any) {
+      console.error(`[MinioService] Erro ao deletar pasta com prefixo "${prefix}":`, error?.message || error);
+    }
+  }
+
   async fileExists(fileName: string): Promise<boolean> {
     try {
       await this.client.statObject(this.bucket, fileName);
