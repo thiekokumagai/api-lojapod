@@ -512,17 +512,19 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
 
       if (customerIdToLink) {
-        try {
-          await tx.customer.update({
-            where: { id: customerIdToLink },
-            data: {
-              ...(order.customerName ? { name: order.customerName } : {}),
-              ...(order.customerPhone ? { phone: order.customerPhone } : {}),
-            },
-          });
-        } catch (err) {
-          console.warn('Erro ao atualizar cadastro do cliente ao criar pedido:', err);
+        if (order.customerPhone) {
+          const existingWithPhone = await tx.customer.findFirst({ where: { phone: order.customerPhone, storeId: order.storeId || null } });
+          if (existingWithPhone && existingWithPhone.id !== customerIdToLink) {
+            throw new Error('Este telefone já está cadastrado para outro cliente.');
+          }
         }
+        await tx.customer.update({
+          where: { id: customerIdToLink },
+          data: {
+            ...(order.customerName ? { name: order.customerName } : {}),
+            ...(order.customerPhone ? { phone: order.customerPhone } : {}),
+          },
+        });
       }
 
       // Validação para cadastrar endereço novo por CEP e número
@@ -749,20 +751,22 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
 
       // 4. Atualizar o pedido e criar os novos itens
-      const customerIdToLink = existingOrder.customerId || order.customerId;
+      const customerIdToLink = order.customerId;
 
       if (customerIdToLink) {
-        try {
-          await tx.customer.update({
-            where: { id: customerIdToLink },
-            data: {
-              ...(order.customerName ? { name: order.customerName } : {}),
-              ...(order.customerPhone ? { phone: order.customerPhone } : {}),
-            },
-          });
-        } catch (err) {
-          console.warn('Erro ao atualizar cadastro do cliente ao editar pedido:', err);
+        if (order.customerPhone) {
+          const existingWithPhone = await tx.customer.findFirst({ where: { phone: order.customerPhone, storeId: order.storeId || null } });
+          if (existingWithPhone && existingWithPhone.id !== customerIdToLink) {
+            throw new Error('Este telefone já está cadastrado para outro cliente.');
+          }
         }
+        await tx.customer.update({
+          where: { id: customerIdToLink },
+          data: {
+            ...(order.customerName ? { name: order.customerName } : {}),
+            ...(order.customerPhone ? { phone: order.customerPhone } : {}),
+          },
+        });
       }
       const payload = {
         storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
