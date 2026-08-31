@@ -178,16 +178,25 @@ export class SettingsController {
         .toBuffer(),
     ]);
 
+    const timestamp = Date.now();
+    const name192 = `pwa-icon-192-${timestamp}.png`;
+    const name512 = `pwa-icon-512-${timestamp}.png`;
+
     const oldSettings = await this.getSettingsUseCase.execute();
     if (oldSettings?.faviconUrl) {
       const lastSlash = oldSettings.faviconUrl.lastIndexOf('/');
       const directory =
         lastSlash >= 0 ? oldSettings.faviconUrl.slice(0, lastSlash) : '';
+      const old512 = oldSettings.faviconUrl.includes('192')
+        ? oldSettings.faviconUrl.replace('192', '512')
+        : '';
+
       const oldFiles = new Set([
         oldSettings.faviconUrl,
+        old512,
         `${directory ? `${directory}/` : ''}pwa-icon-192.png`,
         `${directory ? `${directory}/` : ''}pwa-icon-512.png`,
-      ]);
+      ].filter(Boolean));
 
       await Promise.all(
         [...oldFiles].map((path) =>
@@ -199,8 +208,8 @@ export class SettingsController {
     const [upload192, upload512] = await Promise.all([
       this.minioService.uploadFile(
         {
-          originalname: 'pwa-icon-192.png',
-          customName: 'pwa-icon-192.png',
+          originalname: name192,
+          customName: name192,
           buffer: icon192,
           size: icon192.length,
           mimetype: 'image/png',
@@ -209,8 +218,8 @@ export class SettingsController {
       ),
       this.minioService.uploadFile(
         {
-          originalname: 'pwa-icon-512.png',
-          customName: 'pwa-icon-512.png',
+          originalname: name512,
+          customName: name512,
           buffer: icon512,
           size: icon512.length,
           mimetype: 'image/png',

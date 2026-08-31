@@ -97,19 +97,15 @@ export class StoreSettingsController {
       : '/favicon-512x512.png';
 
     if (settings.faviconUrl) {
-      const faviconDirectory = settings.faviconUrl.includes('/')
-        ? settings.faviconUrl.slice(0, settings.faviconUrl.lastIndexOf('/'))
-        : '';
-
       if (settings.faviconUrl.startsWith('http')) {
         icon192Src = settings.faviconUrl;
         icon512Src = settings.faviconUrl;
-      } else if (faviconDirectory) {
-        icon192Src = buildImg(`${faviconDirectory}/pwa-icon-192.png`);
-        icon512Src = buildImg(`${faviconDirectory}/pwa-icon-512.png`);
       } else {
         icon192Src = buildImg(settings.faviconUrl);
-        icon512Src = buildImg(settings.faviconUrl);
+        const icon512Path = settings.faviconUrl.includes('192')
+          ? settings.faviconUrl.replace('192', '512')
+          : settings.faviconUrl;
+        icon512Src = buildImg(icon512Path);
       }
     }
 
