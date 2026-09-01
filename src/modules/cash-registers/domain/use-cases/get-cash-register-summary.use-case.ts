@@ -3,6 +3,8 @@ import { ICashRegistersRepository } from '../repositories/icash-registers.reposi
 import { IOrdersRepository } from '../../../orders/domain/repositories/iorders.repository';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
+import { getZonedStartAndEndDates } from '../../../../common/utils/date.utils';
+
 @Injectable()
 export class GetCashRegisterSummaryUseCase {
   constructor(
@@ -17,11 +19,10 @@ export class GetCashRegisterSummaryUseCase {
       throw new NotFoundException(`CashRegister with ID ${id} not found`);
     }
 
-    const startOfDay = new Date(register.startDate);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(register.endDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getZonedStartAndEndDates(
+      register.startDate,
+      register.endDate,
+    );
 
     const orders = await this.ordersRepo.findPaidOrdersByPaymentDateRange(
       startOfDay,

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
+import { getZonedStartAndEndDates } from '../../../../common/utils/date.utils';
+
 export interface DashboardStatsFilters {
   storeId?: string;
   startDate?: string;
@@ -17,29 +19,16 @@ export class GetDashboardStatsUseCase {
     let end: Date;
 
     if (filters.startDate && filters.endDate) {
-      start = new Date(filters.startDate);
-      end = new Date(filters.endDate);
+      const dates = getZonedStartAndEndDates(filters.startDate, filters.endDate);
+      start = dates.startOfDay;
+      end = dates.endOfDay;
     } else {
-      // Default to "Hoje" (Today) in local/server time
-      const today = new Date();
-      start = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        0,
-        0,
-        0,
-        0,
-      );
-      end = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        23,
-        59,
-        59,
-        999,
-      );
+      const todayStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Campo_Grande',
+      }).format(new Date());
+      const dates = getZonedStartAndEndDates(todayStr, todayStr);
+      start = dates.startOfDay;
+      end = dates.endOfDay;
     }
 
     // 1. Fetch Orders within range that are not CANCELLED
