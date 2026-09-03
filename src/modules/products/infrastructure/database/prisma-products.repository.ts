@@ -82,10 +82,11 @@ export class PrismaProductsRepository implements IProductsRepository {
         ...(searchWords && searchWords.length > 0
           ? {
               AND: searchWords.map((word) => ({
-                title: {
-                  contains: word,
-                  mode: 'insensitive',
-                },
+                OR: [
+                  { title: { contains: word, mode: 'insensitive' } },
+                  { description: { contains: word, mode: 'insensitive' } },
+                  { category: { title: { contains: word, mode: 'insensitive' } } },
+                ],
               })),
             }
           : {}),
@@ -139,10 +140,11 @@ export class PrismaProductsRepository implements IProductsRepository {
         ...(searchWords && searchWords.length > 0
           ? {
               AND: searchWords.map((word) => ({
-                title: {
-                  contains: word,
-                  mode: 'insensitive',
-                },
+                OR: [
+                  { title: { contains: word, mode: 'insensitive' } },
+                  { description: { contains: word, mode: 'insensitive' } },
+                  { category: { title: { contains: word, mode: 'insensitive' } } },
+                ],
               })),
             }
           : {}),
