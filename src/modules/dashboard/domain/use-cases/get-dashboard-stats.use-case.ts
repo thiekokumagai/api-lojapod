@@ -71,9 +71,32 @@ export class GetDashboardStatsUseCase {
       deletedAt: null
     };
     
-    const produtosAtivos = await this.prisma.product.count({
+    const allActiveProducts = await this.prisma.product.findMany({
       where: { ...baseProductWhere, isVisible: true },
+      include: {
+        items: true
+      }
     });
+
+    const produtosAtivos = allActiveProducts.length;
+
+    let qtdTotalEstoque = 0;
+    let custoProdAtivos = 0;
+    let vendaTotalEstoque = 0;
+
+    for (const prod of allActiveProducts) {
+      const price = Number(prod.price || 0);
+      const cost = Number(prod.costPrice || 0);
+      
+      let prodTotalStock = 0;
+      if (prod.items && prod.items.length > 0) {
+        prodTotalStock = prod.items.reduce((sum, item) => sum + (item.stock || 0), 0);
+      }
+      
+      qtdTotalEstoque += prodTotalStock;
+      custoProdAtivos += (cost * prodTotalStock);
+      vendaTotalEstoque += (price * prodTotalStock);
+    }
     
     const produtosInativos = await this.prisma.product.count({
       where: { ...baseProductWhere, isVisible: false },
@@ -328,6 +351,9 @@ export class GetDashboardStatsUseCase {
         totalProdutosVendidos,
         produtosAtivos,
         produtosInativos,
+        qtdTotalEstoque,
+        custoProdAtivos,
+        vendaTotalEstoque,
         visitas,
         conversao,
         tempoMedio,
