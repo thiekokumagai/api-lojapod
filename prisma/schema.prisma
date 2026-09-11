@@ -375,6 +375,10 @@ model StoreSettings {
   installmentRules     Json?
   businessHours        Json?
 
+  // Suspensão temporária manual da loja
+  isTemporarilyClosed  Boolean @default(false)
+  closedNoticeMessage  String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

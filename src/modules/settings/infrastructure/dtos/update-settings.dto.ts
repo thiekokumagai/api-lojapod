@@ -127,6 +127,16 @@ export class UpdateSettingsDto {
   @IsArray()
   businessHours?: any;
 
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  isTemporarilyClosed?: boolean;
+
+  @ApiProperty({ example: 'Loja pausada temporariamente para balanço.', required: false })
+  @IsString()
+  @IsOptional()
+  closedNoticeMessage?: string | null;
+
   // Pagamentos
   @ApiProperty({ example: true, required: false })
   @IsBoolean()

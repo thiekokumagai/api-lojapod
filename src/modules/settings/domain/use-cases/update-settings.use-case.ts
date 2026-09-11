@@ -26,6 +26,8 @@ export interface UpdateSettingsInput {
   deliveryRanges?: any;
   installmentRules?: any;
   businessHours?: any;
+  isTemporarilyClosed?: boolean;
+  closedNoticeMessage?: string | null;
   pixEnabled?: boolean;
   pixKeyType?: string | null;
   pixKey?: string | null;
@@ -67,6 +69,8 @@ export class UpdateSettingsUseCase {
       deliveryRanges: [],
       installmentRules: [],
       businessHours: [],
+      isTemporarilyClosed: false,
+      closedNoticeMessage: null,
       pixEnabled: false,
       pixKeyType: null,
       pixKey: null,
@@ -153,6 +157,14 @@ export class UpdateSettingsUseCase {
         input.businessHours !== undefined
           ? input.businessHours
           : base.businessHours,
+      isTemporarilyClosed:
+        input.isTemporarilyClosed !== undefined
+          ? input.isTemporarilyClosed
+          : base.isTemporarilyClosed,
+      closedNoticeMessage:
+        input.closedNoticeMessage !== undefined
+          ? input.closedNoticeMessage
+          : base.closedNoticeMessage,
     });
   }
 }

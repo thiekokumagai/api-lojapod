@@ -34,6 +34,8 @@ export interface StoreSettings {
   deliveryRanges: any;
   installmentRules: any;
   businessHours: any;
+  isTemporarilyClosed: boolean;
+  closedNoticeMessage: string | null;
 
   // Pagamentos
   pixEnabled: boolean;
