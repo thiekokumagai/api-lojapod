@@ -103,6 +103,15 @@ export class GetCashRegisterSummaryUseCase {
     totalInvestment = Math.round(totalInvestment * 100) / 100;
     totalProductCost = Math.round(totalProductCost * 100) / 100;
 
+    // Regra de investimento para Lucro Líquido:
+    // Se investimento > custo de produto, a diferença (investimento - custoProduto) é tirada do lucro.
+    // Se investimento <= custo de produto, dedução de investimento no lucro é 0.
+    const investmentDeduction = totalInvestment > totalProductCost ? totalInvestment - totalProductCost : 0;
+
+    // Lucro Líquido = Faturamento Bruto - Taxas Cartão - Custo de Produto - Saídas Gerais - Motoboy - Marketing - Sócios - Dedução de Investimento Excedente
+    const totalNetProfit =
+      Math.round((totalGross - totalCardFees - totalProductCost - totalOutflows - motoboyOutflows - marketingOutflows - partnersOutflows - investmentDeduction) * 100) / 100;
+
     return {
       cashRegister: register,
       summary: {
@@ -115,6 +124,7 @@ export class GetCashRegisterSummaryUseCase {
         partnersOutflows,
         marketingOutflows,
         totalNet,
+        totalNetProfit,
         totalInvestment,
         totalProductCost,
         totalsByMethod,

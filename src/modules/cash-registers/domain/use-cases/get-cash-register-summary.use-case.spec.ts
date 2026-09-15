@@ -90,6 +90,7 @@ describe('GetCashRegisterSummaryUseCase', () => {
       totalInvestment: 0,
       totalProductCost: 0,
       totalNet: 145,
+      totalNetProfit: 145,
       orderCount: 2,
       totalsByMethod: {
         'Cartão de Crédito': 100,
@@ -121,5 +122,39 @@ describe('GetCashRegisterSummaryUseCase', () => {
     expect(result.summary.marketingOutflows).toBe(40);
     expect(result.summary.partnersOutflows).toBe(200);
     expect(result.summary.totalNet).toBe(-420);
+    expect(result.summary.totalNetProfit).toBe(-420);
+  });
+
+  it('should calculate totalNetProfit according to investment vs product cost rules', async () => {
+    mockCashRepo.findById.mockResolvedValue(mockRegister);
+    // Order with 100 received, 0 card fee, product cost = 8
+    mockOrdersRepo.findPaidOrdersByPaymentDateRange.mockResolvedValue([
+      new Order({
+        id: 'order-1',
+        totalReceived: 100,
+        cardFee: 0,
+        items: [{ costPrice: 8, quantity: 1 } as any],
+      }),
+    ]);
+
+    // Case A: Investment = 8 (Equal to product cost 8) -> deduction = 0 -> Net Profit = 100 - 8 = 92
+    mockPrisma.cashTransaction.findMany.mockResolvedValue([
+      { type: 'OUTFLOW', category: 'INVESTMENT', amount: 8, description: 'Investimento Estoque' },
+    ]);
+
+    let result = await useCase.execute('register-1');
+    expect(result.summary.totalProductCost).toBe(8);
+    expect(result.summary.totalInvestment).toBe(8);
+    expect(result.summary.totalNetProfit).toBe(92);
+
+    // Case B: Investment = 10 (> product cost 8) -> deduction = 10 - 8 = 2 -> Net Profit = 100 - 8 - 2 = 90
+    mockPrisma.cashTransaction.findMany.mockResolvedValue([
+      { type: 'OUTFLOW', category: 'INVESTMENT', amount: 10, description: 'Investimento Estoque' },
+    ]);
+
+    result = await useCase.execute('register-1');
+    expect(result.summary.totalProductCost).toBe(8);
+    expect(result.summary.totalInvestment).toBe(10);
+    expect(result.summary.totalNetProfit).toBe(90);
   });
 });
