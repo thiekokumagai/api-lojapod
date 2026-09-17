@@ -28,6 +28,8 @@ export interface UpdateSettingsInput {
   businessHours?: any;
   isTemporarilyClosed?: boolean;
   closedNoticeMessage?: string | null;
+  enableExchangePolicy?: boolean;
+  exchangePolicy?: string | null;
   pixEnabled?: boolean;
   pixKeyType?: string | null;
   pixKey?: string | null;
@@ -71,6 +73,8 @@ export class UpdateSettingsUseCase {
       businessHours: [],
       isTemporarilyClosed: false,
       closedNoticeMessage: null,
+      enableExchangePolicy: false,
+      exchangePolicy: null,
       pixEnabled: false,
       pixKeyType: null,
       pixKey: null,
@@ -165,6 +169,14 @@ export class UpdateSettingsUseCase {
         input.closedNoticeMessage !== undefined
           ? input.closedNoticeMessage
           : base.closedNoticeMessage,
+      enableExchangePolicy:
+        input.enableExchangePolicy !== undefined
+          ? input.enableExchangePolicy
+          : base.enableExchangePolicy,
+      exchangePolicy:
+        input.exchangePolicy !== undefined
+          ? input.exchangePolicy
+          : base.exchangePolicy,
     });
   }
 }

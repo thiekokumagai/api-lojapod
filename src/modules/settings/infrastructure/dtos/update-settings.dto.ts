@@ -143,6 +143,16 @@ export class UpdateSettingsDto {
   @IsOptional()
   pixEnabled?: boolean;
 
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  enableExchangePolicy?: boolean;
+
+  @ApiProperty({ example: 'Política de trocas da loja...', required: false })
+  @IsString()
+  @IsOptional()
+  exchangePolicy?: string | null;
+
   @ApiProperty({ example: 'EMAIL', required: false })
   @IsString()
   @IsOptional()

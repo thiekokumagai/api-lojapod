@@ -78,6 +78,8 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       businessHours: settings.businessHours ?? null,
       isTemporarilyClosed: settings.isTemporarilyClosed ?? false,
       closedNoticeMessage: settings.closedNoticeMessage ?? null,
+      enableExchangePolicy: settings.enableExchangePolicy ?? false,
+      exchangePolicy: settings.exchangePolicy ?? null,
       pixEnabled: settings.pixEnabled,
       pixKeyType: settings.pixKeyType,
       pixKey: settings.pixKey,

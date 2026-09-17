@@ -380,6 +380,8 @@ model StoreSettings {
   closedNoticeMessage  String? @db.Text
 
   createdAt DateTime @default(now())
+  enableExchangePolicy Boolean @default(false)
+  exchangePolicy String? @db.Text
   updatedAt DateTime @updatedAt
 
   store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
