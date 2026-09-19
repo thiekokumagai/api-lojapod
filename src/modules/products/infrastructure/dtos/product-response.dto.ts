@@ -102,6 +102,27 @@ export class ProductResponseDto {
   @ApiProperty({ required: false, nullable: true })
   isVisible?: boolean;
 
+  @ApiProperty({ required: false, default: 5 })
+  minStock?: number;
+
+  @ApiProperty({ required: false, default: 0 })
+  dailyRunRate?: number;
+
+  @ApiProperty({ required: false, nullable: true })
+  coverageDays?: number;
+
+  @ApiProperty({ required: false, default: 0 })
+  daysWithoutSales?: number;
+
+  @ApiProperty({ required: false, default: 0 })
+  growthPercentage?: number;
+
+  @ApiProperty({ required: false, default: 'OK' })
+  stockAlertState?: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  lastStockAlertAt?: Date;
+
   @ApiProperty()
   createdAt: Date;
 

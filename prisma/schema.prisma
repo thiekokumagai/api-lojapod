@@ -274,6 +274,14 @@ model Product {
   orderItems          OrderItem[]
   stockMovements      StockMovement[]
 
+  minStock            Int                @default(5)
+  dailyRunRate        Float?             @default(0)
+  coverageDays        Int?
+  daysWithoutSales    Int?               @default(0)
+  growthPercentage    Float?             @default(0)
+  stockAlertState     String             @default("OK")
+  lastStockAlertAt    DateTime?
+
   @@map("products")
 }
 

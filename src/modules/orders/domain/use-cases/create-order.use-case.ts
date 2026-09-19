@@ -9,6 +9,7 @@ import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
+import { PrismaService } from '../../../../../prisma/prisma.service';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -23,6 +24,7 @@ export class CreateOrderUseCase {
     private readonly eventsGateway: EventsGateway,
     private readonly tenantContextService: TenantContextService,
     private readonly settingsRepository: ISettingsRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   async execute(
@@ -153,6 +155,86 @@ export class CreateOrderUseCase {
         }
       } catch (err) {
         console.error('Erro ao buscar tokens para notificação', err);
+      }
+
+      // Avaliação de Transição de Estado de Estoque (Máquina de Estados Anti-Spam)
+      try {
+        const rawProductIds = (savedOrder.items || []).map((i) => i.productId);
+        const uniqueProductIds = Array.from(new Set(rawProductIds.filter(Boolean))) as string[];
+
+        for (const prodId of uniqueProductIds) {
+          const product = await this.prisma.product.findUnique({
+            where: { id: prodId },
+            include: { items: true },
+          });
+
+          if (!product) continue;
+
+          const totalStock = product.items.reduce((acc, item) => acc + item.stock, 0);
+          const minStock = product.minStock ?? 5;
+          const previousState = product.stockAlertState || 'OK';
+
+          let newState = 'OK';
+          if (totalStock === 0) {
+            newState = 'OUT_OF_STOCK';
+          } else if (
+            totalStock <= minStock ||
+            (product.dailyRunRate && product.coverageDays !== null && product.coverageDays <= 3)
+          ) {
+            newState = 'CRITICAL';
+          }
+
+          // Só notifica se HOUVE TRANSIÇÃO DE ESTADO
+          if (newState !== previousState && newState !== 'OK') {
+            const isOutOfStock = newState === 'OUT_OF_STOCK';
+            const alertTitle = isOutOfStock
+              ? `🔴 Esgotou: ${product.title}`
+              : `⚠️ Estoque Crítico: ${product.title}`;
+            const alertBody = isOutOfStock
+              ? 'O estoque deste produto acabou de zerar.'
+              : `Restam apenas ${totalStock} un (mínimo: ${minStock}). Cobertura estimada: ${product.coverageDays ?? 1} dias.`;
+
+            const admins = await this.usersRepository.findAll();
+            const alertTokens: string[] = [];
+            const alertWebSubs: unknown[] = [];
+            admins.forEach((u) => {
+              if (u.expoPushToken) alertTokens.push(...u.expoPushToken.split(',').filter(Boolean));
+              if (u.webPushSubscription) {
+                if (Array.isArray(u.webPushSubscription)) alertWebSubs.push(...u.webPushSubscription);
+                else alertWebSubs.push(u.webPushSubscription);
+              }
+            });
+
+            if (alertTokens.length > 0 || alertWebSubs.length > 0) {
+              this.pushNotificationService
+                .sendNotifications(
+                  alertTokens,
+                  alertTitle,
+                  alertBody,
+                  { screen: 'ProductDetails', productId: product.id },
+                  alertWebSubs,
+                )
+                .catch((e) => console.error('[StockAlert Push] Erro ao enviar:', e));
+            }
+
+            await this.prisma.product.update({
+              where: { id: product.id },
+              data: {
+                stockAlertState: newState,
+                lastStockAlertAt: new Date(),
+              },
+            });
+          } else if (newState === 'OK' && previousState !== 'OK') {
+            await this.prisma.product.update({
+              where: { id: product.id },
+              data: {
+                stockAlertState: 'OK',
+              },
+            });
+          }
+        }
+      } catch (stockAlertErr) {
+        console.error('[StockAlert StateMachine] Erro ao verificar estado de estoque:', stockAlertErr);
       }
 
       // Disparar WebSocket para impressão

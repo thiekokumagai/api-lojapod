@@ -20,9 +20,13 @@ import { DeleteProductVariationUseCase } from './domain/use-cases/delete-product
 import { DeleteProductVariationOptionUseCase } from './domain/use-cases/delete-product-variation-option.use-case';
 import { DuplicateProductUseCase } from './domain/use-cases/duplicate-product.use-case';
 import { ProductsRankingCronService } from './infrastructure/cron/products-ranking.cron.service';
+import { ComputeStockIntelligenceUseCase } from './domain/use-cases/compute-stock-intelligence.use-case';
+import { StockIntelligenceCronService } from './infrastructure/cron/stock-intelligence.cron.service';
+import { PushNotificationService } from '../../shared/services/push-notification.service';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [MinioModule],
+  imports: [MinioModule, SettingsModule],
   controllers: [ProductsController, StoreProductsController],
   providers: [
     ListProductsUseCase,
@@ -40,11 +44,14 @@ import { ProductsRankingCronService } from './infrastructure/cron/products-ranki
     DeleteProductVariationOptionUseCase,
     DuplicateProductUseCase,
     ProductsRankingCronService,
+    ComputeStockIntelligenceUseCase,
+    StockIntelligenceCronService,
+    PushNotificationService,
     {
       provide: IProductsRepository,
       useClass: PrismaProductsRepository,
     },
   ],
-  exports: [IProductsRepository],
+  exports: [IProductsRepository, ComputeStockIntelligenceUseCase],
 })
 export class ProductsModule {}

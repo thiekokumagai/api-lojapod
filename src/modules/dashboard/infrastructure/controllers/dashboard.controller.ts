@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { GetDashboardStatsUseCase } from '../../domain/use-cases/get-dashboard-stats.use-case';
+import { GetStockOpportunitiesUseCase } from '../../domain/use-cases/get-stock-opportunities.use-case';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth('access-token')
@@ -16,6 +17,7 @@ import { GetDashboardStatsUseCase } from '../../domain/use-cases/get-dashboard-s
 export class DashboardController {
   constructor(
     private readonly getDashboardStatsUseCase: GetDashboardStatsUseCase,
+    private readonly getStockOpportunitiesUseCase: GetStockOpportunitiesUseCase,
   ) {}
 
   @Get('stats')
@@ -37,6 +39,20 @@ export class DashboardController {
       startDate,
       endDate,
       categoryId,
+    });
+  }
+
+  @Get('opportunities')
+  @ApiOperation({
+    summary: 'Obter análise de oportunidades, riscos de estoque e capital parado',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Oportunidades e indicadores de estoque obtidos com sucesso',
+  })
+  async getOpportunities(@Req() req: Request & { user: { storeId?: string } }) {
+    return this.getStockOpportunitiesUseCase.execute({
+      storeId: req.user?.storeId,
     });
   }
 }
