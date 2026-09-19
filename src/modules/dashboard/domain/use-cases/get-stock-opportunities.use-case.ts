@@ -129,8 +129,7 @@ export class GetStockOpportunitiesUseCase {
       const stock = prod.items.reduce((acc, item) => acc + item.stock, 0);
       const minStock = prod.minStock ?? 5;
       const cost = Number(prod.costPrice || 0);
-      const promoPrice = Number(prod.promotionalPrice ?? 0);
-      const price = promoPrice > 0 ? promoPrice : Number(prod.price || 0);
+      const price = Number(prod.price || 0);
       const categoryName = prod.category?.title || 'Geral';
       const daysWithoutSales = prod.daysWithoutSales ?? 0;
       const dailyRunRate = prod.dailyRunRate ?? 0;
