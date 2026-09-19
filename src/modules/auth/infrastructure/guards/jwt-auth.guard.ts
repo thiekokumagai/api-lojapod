@@ -15,6 +15,29 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   ) {
     super();
   }
+  private static storeCache = new Map<string, { store: { id: string; isActive: boolean; subdomain: string }; expiresAt: number }>();
+
+  private async getStoreCached(storeId: string) {
+    const now = Date.now();
+    const cached = JwtAuthGuard.storeCache.get(storeId);
+    if (cached && cached.expiresAt > now) {
+      return cached.store;
+    }
+
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      select: { id: true, isActive: true, subdomain: true },
+    });
+
+    if (store) {
+      JwtAuthGuard.storeCache.set(storeId, {
+        store,
+        expiresAt: now + 30000, // 30s TTL
+      });
+    }
+
+    return store;
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -29,10 +52,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         try {
           const authenticated = await super.canActivate(context);
           if (authenticated && req.user?.storeId) {
-            const store = await this.prisma.store.findUnique({
-              where: { id: req.user.storeId },
-              select: { id: true, isActive: true, subdomain: true },
-            });
+            const store = await this.getStoreCached(req.user.storeId);
             if (store) {
               this.tenantContextService.setTenantContext({
                 storeId: store.id,
@@ -60,10 +80,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const user = req.user;
 
     if (user && user.storeId) {
-      const store = await this.prisma.store.findUnique({
-        where: { id: user.storeId },
-        select: { id: true, isActive: true, subdomain: true },
-      });
+      const store = await this.getStoreCached(user.storeId);
 
       if (store) {
         this.tenantContextService.setTenantContext({

@@ -8,6 +8,7 @@ import { IUsersRepository } from '../../../users/domain/repositories/iusers.repo
 import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
+import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -21,6 +22,7 @@ export class CreateOrderUseCase {
     private readonly printGateway: PrintGateway,
     private readonly eventsGateway: EventsGateway,
     private readonly tenantContextService: TenantContextService,
+    private readonly settingsRepository: ISettingsRepository,
   ) {}
 
   async execute(
@@ -32,6 +34,18 @@ export class CreateOrderUseCase {
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
       const storeId = data.storeId || this.tenantContextService.getStoreId() || undefined;
+      // Se a loja tem regra de isenção de taxa (frete grátis) a partir de um valor
+      try {
+        const settings = await this.settingsRepository.get();
+        if (settings?.freeShippingEnabled && settings?.freeShippingMinValue) {
+          const minVal = Number(settings.freeShippingMinValue);
+          if (!isNaN(minVal) && minVal > 0 && (Number(data.itemsTotal) || 0) >= minVal) {
+            data.freight = 0;
+          }
+        }
+      } catch (err) {
+        // Ignora erro ao buscar settings
+      }
 
       if (data.couponTitle) {
         let nonPromoTotal = (data as any).nonPromoItemsTotal !== undefined 
@@ -55,7 +69,7 @@ export class CreateOrderUseCase {
 
         couponId = coupon.id;
         if (coupon.type === 'FREE_SHIPPING') {
-          couponFreightDiscountValue = Number(data.freight) || 0;
+          couponFreightDiscountValue = Number(data.freight) > 0 ? Number(data.freight) : 0;
         } else {
           couponDiscountValue = discountAmount;
         }
@@ -73,7 +87,7 @@ export class CreateOrderUseCase {
 
       // Recalcular o totalOrder para garantir a precisão no backend
       const itemsTotal = Number(order.itemsTotal) || 0;
-      const freight = Number(order.freight) || 0;
+      const freight = Number(order.freight) > 0 ? Number(order.freight) : 0;
       const installmentSurcharge = Number(order.installmentSurcharge) || 0;
       const receiptSurcharge = Number(order.receiptSurcharge) || 0;
       const paymentDiscount = Number(order.paymentDiscount) || 0;

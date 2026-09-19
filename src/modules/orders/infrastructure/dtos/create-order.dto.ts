@@ -43,7 +43,7 @@ export class CreateOrderDto {
 
   @ApiProperty({ example: 15.0, description: 'Valor do frete' })
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @Min(-1)
   freight: number;
 
   @ApiPropertyOptional({
@@ -139,37 +139,45 @@ export class CreateOrderDto {
   @IsOptional()
   pixKey?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    example: 'DELIVERY',
+    description: 'Modalidade de entrega: DELIVERY ou STORE_PICKUP',
+  })
+  @IsString()
+  @IsOptional()
+  deliveryModality?: string;
+
+  @ApiPropertyOptional({
     example: 'Rua das Flores',
     description: 'Endereço de entrega',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   street: string;
 
   @ApiProperty({ example: '123', description: 'Número do endereço de entrega' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   number: string;
 
   @ApiProperty({ example: 'Centro', description: 'Bairro de entrega' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   neighborhood: string;
 
   @ApiProperty({ example: 'São Paulo', description: 'Cidade de entrega' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   city: string;
 
   @ApiProperty({ example: 'SP', description: 'Estado de entrega' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   state: string;
 
   @ApiProperty({ example: '01001000', description: 'CEP de entrega' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   cep: string;
 
   @ApiPropertyOptional({

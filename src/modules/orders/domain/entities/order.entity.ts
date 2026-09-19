@@ -54,6 +54,7 @@ export class Order {
   paymentType: string;
   paymentMethod: string;
   pixKey: string | null;
+  deliveryModality?: string;
 
   street: string;
   number: string;

@@ -38,6 +38,11 @@ export interface UpdateSettingsInput {
   payOnDeliveryCardDebit?: boolean;
   payOnDeliveryCardCredit?: boolean;
   paymentRules?: any;
+  freeShippingEnabled?: boolean;
+  freeShippingMinValue?: number | null;
+  storePickupEnabled?: boolean;
+  deliveryType?: string;
+  deliveryFixedFee?: number | null;
 }
 
 @Injectable()
@@ -177,6 +182,26 @@ export class UpdateSettingsUseCase {
         input.exchangePolicy !== undefined
           ? input.exchangePolicy
           : base.exchangePolicy,
+      freeShippingEnabled:
+        input.freeShippingEnabled !== undefined
+          ? input.freeShippingEnabled
+          : (base as any).freeShippingEnabled,
+      freeShippingMinValue:
+        input.freeShippingMinValue !== undefined
+          ? input.freeShippingMinValue
+          : (base as any).freeShippingMinValue,
+      storePickupEnabled:
+        input.storePickupEnabled !== undefined
+          ? input.storePickupEnabled
+          : (base as any).storePickupEnabled,
+      deliveryType:
+        input.deliveryType !== undefined
+          ? input.deliveryType
+          : (base as any).deliveryType,
+      deliveryFixedFee:
+        input.deliveryFixedFee !== undefined
+          ? input.deliveryFixedFee
+          : (base as any).deliveryFixedFee,
     });
   }
 }

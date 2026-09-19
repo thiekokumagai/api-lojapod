@@ -117,6 +117,28 @@ export class UpdateSettingsDto {
   @IsOptional()
   deliveryRanges?: any;
 
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  freeShippingEnabled?: boolean;
+
+  @ApiProperty({ example: 150.00, required: false })
+  @IsOptional()
+  freeShippingMinValue?: number | null;
+
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  storePickupEnabled?: boolean;
+
+  @ApiProperty({ example: 'DISTANCE', required: false })
+  @IsString()
+  @IsOptional()
+  deliveryType?: string;
+
+  @ApiProperty({ example: 10.00, required: false })
+  @IsOptional()
+  deliveryFixedFee?: number | null;
   @ApiProperty({ example: [], required: false })
   @IsOptional()
   @IsArray()

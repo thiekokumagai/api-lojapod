@@ -46,7 +46,7 @@ export class UpdateOrderUseCase {
 
         couponId = coupon.id;
         if (coupon.type === 'FREE_SHIPPING') {
-          couponFreightDiscountValue = Number(data.freight) || 0;
+          couponFreightDiscountValue = Number(data.freight) > 0 ? Number(data.freight) : 0;
         } else {
           couponDiscountValue = discountAmount;
         }
@@ -62,7 +62,7 @@ export class UpdateOrderUseCase {
       });
 
       const itemsTotal = Number(orderToUpdate.itemsTotal) || 0;
-      const freight = Number(orderToUpdate.freight) || 0;
+      const freight = Number(orderToUpdate.freight) > 0 ? Number(orderToUpdate.freight) : 0;
       const installmentSurcharge = Number(orderToUpdate.installmentSurcharge) || 0;
       const receiptSurcharge = Number(orderToUpdate.receiptSurcharge) || 0;
       const paymentDiscount = Number(orderToUpdate.paymentDiscount) || 0;

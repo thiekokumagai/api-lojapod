@@ -379,6 +379,15 @@ model StoreSettings {
   isTemporarilyClosed  Boolean @default(false)
   closedNoticeMessage  String? @db.Text
 
+  // Frete e Retirada
+  freeShippingEnabled  Boolean @default(false)
+  freeShippingMinValue Decimal? @db.Decimal(10, 2)
+  storePickupEnabled   Boolean @default(false)
+  
+  // Tipos de entrega
+  deliveryType         String  @default("DISTANCE") // "NO_FEE", "FIXED_FEE", "TO_COMBINE", "DISTANCE"
+  deliveryFixedFee     Decimal? @db.Decimal(10, 2)
+
   createdAt DateTime @default(now())
   enableExchangePolicy Boolean @default(false)
   exchangePolicy String? @db.Text
@@ -506,6 +515,9 @@ model Order {
   paymentType   String // Ex: "Online", "Presencial"
   paymentMethod String // Ex: "PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro"
   pixKey        String?
+
+  // Modalidade de Entrega
+  deliveryModality String @default("DELIVERY") // "DELIVERY", "STORE_PICKUP"
 
   // Endereço de Entrega
   street       String

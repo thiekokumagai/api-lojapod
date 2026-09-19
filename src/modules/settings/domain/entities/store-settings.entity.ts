@@ -51,6 +51,13 @@ export interface StoreSettings {
 
   paymentRules: any; // Mapeado para Array de PaymentRule ou nulo
 
+  // Frete e Retirada
+  freeShippingEnabled?: boolean;
+  freeShippingMinValue?: number | null;
+  storePickupEnabled?: boolean;
+  deliveryType?: string;
+  deliveryFixedFee?: number | null;
+
   createdAt: Date;
   updatedAt: Date;
 }

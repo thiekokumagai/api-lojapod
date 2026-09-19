@@ -88,6 +88,11 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       payOnDeliveryCardDebit: settings.payOnDeliveryCardDebit,
       payOnDeliveryCardCredit: settings.payOnDeliveryCardCredit,
       paymentRules: settings.paymentRules ?? [],
+      freeShippingEnabled: settings.freeShippingEnabled ?? false,
+      freeShippingMinValue: settings.freeShippingMinValue ?? null,
+      storePickupEnabled: settings.storePickupEnabled ?? false,
+      deliveryType: settings.deliveryType ?? 'DISTANCE',
+      deliveryFixedFee: settings.deliveryFixedFee ?? null,
     };
 
     const result = await this.prisma.storeSettings.upsert({
