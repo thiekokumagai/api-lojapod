@@ -58,6 +58,9 @@ export interface StoreSettings {
   deliveryType?: string;
   deliveryFixedFee?: number | null;
 
+  vendizapAuthId?: string | null;
+  vendizapAuthSecret?: string | null;
+
   createdAt: Date;
   updatedAt: Date;
 }

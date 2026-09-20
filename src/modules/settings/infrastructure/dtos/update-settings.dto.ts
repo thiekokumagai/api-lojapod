@@ -209,4 +209,14 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsArray()
   paymentRules?: any;
+
+  @ApiProperty({ example: '906795', required: false })
+  @IsString()
+  @IsOptional()
+  vendizapAuthId?: string | null;
+
+  @ApiProperty({ example: 'GHMla7Nebr#uITLn0jA9tCy?FJx%UBh1', required: false })
+  @IsString()
+  @IsOptional()
+  vendizapAuthSecret?: string | null;
 }

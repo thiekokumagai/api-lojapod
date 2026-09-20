@@ -64,6 +64,7 @@ model Store {
   subscription           StoreSubscription?
   billingPayments        BillingPayment[]
   adminAuditLogs         AdminAuditLog[]
+  importJobs             ImportJob[]
 
   isActive Boolean @default(true)
 
@@ -286,10 +287,11 @@ model Product {
 }
 
 model ProductImage {
-  id        String   @id @default(uuid())
-  url       String
-  productId String
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  externalId String?
+  url        String
+  productId  String
+  createdAt  DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -386,6 +388,9 @@ model StoreSettings {
   // Suspensão temporária manual da loja
   isTemporarilyClosed  Boolean @default(false)
   closedNoticeMessage  String? @db.Text
+
+  vendizapAuthId       String?
+  vendizapAuthSecret   String?
 
   // Frete e Retirada
   freeShippingEnabled  Boolean @default(false)
@@ -737,3 +742,19 @@ model CartDraft {
 
   @@map("cart_drafts")
 }
+
+model ImportJob {
+  id           String   @id @default(uuid())
+  storeId      String?
+  type         String   // "PRODUCTS", "CATEGORIES", "ORDERS", "PRODUCT_IMAGES", "PRODUCT_VARIATIONS"
+  status       String   // "RUNNING", "COMPLETED", "FAILED"
+  lastSkip     Int      @default(0)
+  totalFetched Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store        Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("import_jobs")
+}
+

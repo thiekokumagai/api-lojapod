@@ -93,6 +93,8 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       storePickupEnabled: settings.storePickupEnabled ?? false,
       deliveryType: settings.deliveryType ?? 'DISTANCE',
       deliveryFixedFee: settings.deliveryFixedFee ?? null,
+      vendizapAuthId: settings.vendizapAuthId ?? null,
+      vendizapAuthSecret: settings.vendizapAuthSecret ?? null,
     };
 
     const result = await this.prisma.storeSettings.upsert({

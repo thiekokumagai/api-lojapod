@@ -43,6 +43,8 @@ export interface UpdateSettingsInput {
   storePickupEnabled?: boolean;
   deliveryType?: string;
   deliveryFixedFee?: number | null;
+  vendizapAuthId?: string | null;
+  vendizapAuthSecret?: string | null;
 }
 
 @Injectable()
@@ -202,6 +204,14 @@ export class UpdateSettingsUseCase {
         input.deliveryFixedFee !== undefined
           ? input.deliveryFixedFee
           : (base as any).deliveryFixedFee,
+      vendizapAuthId:
+        input.vendizapAuthId !== undefined
+          ? input.vendizapAuthId
+          : (base as any).vendizapAuthId,
+      vendizapAuthSecret:
+        input.vendizapAuthSecret !== undefined
+          ? input.vendizapAuthSecret
+          : (base as any).vendizapAuthSecret,
     });
   }
 }
