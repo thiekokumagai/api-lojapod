@@ -156,6 +156,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
     if (filters.paymentStatus) {
       where.paymentStatus = filters.paymentStatus;
+      if (filters.paymentStatus === 'PENDING' && !where.status) {
+        where.status = { not: 'CANCELLED' };
+      }
     }
 
     if (filters.startDate || filters.endDate) {
