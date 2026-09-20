@@ -127,13 +127,14 @@ export class GetStockOpportunitiesUseCase {
 
     for (const prod of products) {
       const stock = prod.items.reduce((acc, item) => acc + item.stock, 0);
-      const minStock = prod.minStock ?? 5;
+      // Estoque mínimo: 7 dias de cobertura baseado na taxa de venda real (mínimo 3 unidades)      
       const cost = Number(prod.costPrice || 0);
       const price = Number(prod.price || 0);
       const categoryName = prod.category?.title || 'Geral';
       const daysWithoutSales = prod.daysWithoutSales ?? 0;
       const dailyRunRate = prod.dailyRunRate ?? 0;
       const coverageDays = prod.coverageDays ?? null;
+      const minStock = prod.minStock ?? Math.max(3, Math.ceil(dailyRunRate * 7));
       const growth = prod.growthPercentage ?? 0;
 
       if (prod.isVisible) {
@@ -141,8 +142,12 @@ export class GetStockOpportunitiesUseCase {
         totalStockCost += cost * stock;
       }
 
+      // Crítico = vai acabar em até 3 dias (cobertura crítica)
       const isCritical =
-        stock > 0 && (stock <= minStock || (coverageDays !== null && coverageDays <= 3));
+        stock > 0 && coverageDays !== null && coverageDays <= 3;
+
+      // Abaixo do mínimo = estoque abaixo do mínimo configurado (mas NÃO criticamente baixo)
+      const isBelowMinStock = stock > 0 && stock <= minStock && !isCritical;
 
       if (stock === 0) {
         outOfStockCount++;
@@ -161,7 +166,7 @@ export class GetStockOpportunitiesUseCase {
         });
       }
 
-      if (stock > 0 && stock <= minStock) {
+      if (isBelowMinStock) {
         lowStockCount++;
       }
 

@@ -171,17 +171,19 @@ export class CreateOrderUseCase {
           if (!product) continue;
 
           const totalStock = product.items.reduce((acc, item) => acc + item.stock, 0);
-          const minStock = product.minStock ?? 5;
+          // Estoque mínimo: 7 dias de cobertura (mínimo 3 unidades)
+          const minStock = product.minStock ?? Math.max(3, Math.ceil((product.dailyRunRate ?? 0) * 7));
           const previousState = product.stockAlertState || 'OK';
 
           let newState = 'OK';
           if (totalStock === 0) {
             newState = 'OUT_OF_STOCK';
           } else if (
-            totalStock <= minStock ||
-            (product.dailyRunRate && product.coverageDays !== null && product.coverageDays <= 3)
+            product.coverageDays !== null && product.coverageDays <= 3
           ) {
             newState = 'CRITICAL';
+          } else if (totalStock <= minStock) {
+            newState = 'LOW_STOCK';
           }
 
           // Só notifica se HOUVE TRANSIÇÃO DE ESTADO

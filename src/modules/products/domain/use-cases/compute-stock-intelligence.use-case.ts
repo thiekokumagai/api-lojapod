@@ -138,15 +138,18 @@ export class ComputeStockIntelligenceUseCase {
             growthPercentage = 100;
           }
 
-          const minStock = prod.minStock ?? 5;
+          // Estoque mínimo: 7 dias de cobertura baseado na taxa de venda real (mínimo 3 unidades)
+          const minStock = prod.minStock ?? Math.max(3, Math.ceil(dailyRunRate * 7));
           let stockAlertState = 'OK';
 
           if (totalStock === 0) {
             stockAlertState = 'OUT_OF_STOCK';
             outOfStockCount++;
-          } else if (totalStock <= minStock || (dailyRunRate > 0 && coverageDays !== null && coverageDays <= 3)) {
+          } else if (coverageDays !== null && coverageDays <= 3) {
             stockAlertState = 'CRITICAL';
             criticalCount++;
+          } else if (totalStock <= minStock) {
+            stockAlertState = 'LOW_STOCK';
           }
 
           if (daysWithoutSales >= 45 && totalStock > 0) {
