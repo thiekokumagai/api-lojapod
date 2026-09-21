@@ -62,23 +62,23 @@ export class ImportProductsUseCase {
           break;
         }
 
+        // Buscar as categorias do Vendizap apenas 1 vez para mapear o indiceCategoria
+        let vendizapCatsArray: any[] = [];
+        try {
+          const vCats = await this.vendizapService.getCategories(storeId);
+          vendizapCatsArray = Array.isArray(vCats) ? vCats : vCats.data || [];
+        } catch (e) {
+          this.logger.warn('Não foi possível buscar as categorias do Vendizap para mapeamento.');
+        }
+
         for (const item of products) {
           try {
             // Find mapping category
             let categoryId = defaultCategory.id;
             
-            // A API de listagem do Vendizap não retorna as categorias.
-            // Precisamos buscar os detalhes do produto para mapear a categoria corretamente.
-            let detailedItem;
-            try {
-              detailedItem = await this.vendizapService.getProductById(item.id, storeId);
-            } catch (err) {
-              this.logger.warn(`Could not fetch details for product ${item.id}, using default category`);
-            }
-            
             let externalCatId;
-            if (detailedItem) {
-              externalCatId = detailedItem.id_categoria || detailedItem.category_id || detailedItem.categoria_id || (detailedItem.categorias && detailedItem.categorias.length > 0 ? detailedItem.categorias[0].id : undefined);
+            if (item.indiceCategoria !== undefined && vendizapCatsArray[item.indiceCategoria]) {
+              externalCatId = vendizapCatsArray[item.indiceCategoria].id;
             } else {
               externalCatId = item.id_categoria || item.category_id || item.categoria_id || (item.categorias && item.categorias.length > 0 ? item.categorias[0].id : undefined);
             }
@@ -92,8 +92,8 @@ export class ImportProductsUseCase {
               }
             }
             
-            if (categoryId === defaultCategory.id && detailedItem?.categorias_old && detailedItem.categorias_old.length > 0) {
-              const categoryName = detailedItem.categorias_old[0];
+            if (categoryId === defaultCategory.id && item.categorias_old && item.categorias_old.length > 0) {
+              const categoryName = item.categorias_old[0];
               const mappedCat = await this.prisma.category.findFirst({
                 where: { storeId, title: categoryName },
               });
