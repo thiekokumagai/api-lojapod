@@ -70,12 +70,20 @@ export class StoresController {
   @Put(':id')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Atualiza título, subdomínio, e-mail admin e senha da loja' })
+  @ApiOperation({ summary: 'Atualiza título, subdomínio, domínio próprio, e-mail admin e senha da loja' })
   async updateStore(
     @Param('id') id: string,
-    @Body() body: { title?: string; subdomain?: string; adminEmail?: string; password?: string; subscriptionExpiresAt?: string; monthlyFee?: number },
+    @Body() body: { title?: string; subdomain?: string; customDomain?: string | null; adminEmail?: string; password?: string; subscriptionExpiresAt?: string; monthlyFee?: number },
   ) {
     return this.storesService.updateStore(id, body);
+  }
+
+  @Post(':id/verify-dns')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Testa e verifica se o DNS do domínio próprio da loja está apontando corretamente' })
+  async verifyDns(@Param('id') id: string) {
+    return this.storesService.verifyDomainDns(id);
   }
 
   @Get()
