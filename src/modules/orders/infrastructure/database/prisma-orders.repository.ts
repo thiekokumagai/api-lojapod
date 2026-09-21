@@ -95,6 +95,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             variation: item.variation || null,
             imageUrl,
             costPrice: item.product?.costPrice ? Number(item.product.costPrice) : 0,
+            categoryName: item.product?.category?.title || null,
           };
         }) ?? [],
     });
@@ -192,6 +193,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             product: {
               include: {
                 images: true,
+                category: true,
               },
             },
           },
@@ -258,6 +260,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             product: {
               include: {
                 images: true,
+                category: true,
               },
             },
           },
@@ -327,6 +330,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               product: {
                 include: {
                   images: true,
+                  category: true,
                 },
               },
             },
@@ -355,6 +359,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               product: {
                 include: {
                   images: true,
+                  category: true,
                 },
               },
             },
@@ -641,7 +646,15 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           },
         } as any,
         include: {
-          items: true,
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: true,
+                },
+              },
+            },
+          },
         },
       });
 
