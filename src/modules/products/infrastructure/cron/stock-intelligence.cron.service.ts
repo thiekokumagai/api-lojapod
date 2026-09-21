@@ -15,7 +15,7 @@ export class StockIntelligenceCronService {
     private readonly pushNotificationService: PushNotificationService,
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { timeZone: 'America/Sao_Paulo' })
   async handleNightlyComputation() {
     this.logger.log('Disparando cron de inteligência de estoque (04:00)...');
     try {
@@ -25,7 +25,7 @@ export class StockIntelligenceCronService {
     }
   }
 
-  @Cron('0 30 8 * * *')
+  @Cron('0 0 10 * * *', { timeZone: 'America/Sao_Paulo' })
   async handleMorningDigest() {
     const today = new Date().toISOString().slice(0, 10);
     if (this.lastDigestDate === today) {
@@ -33,7 +33,7 @@ export class StockIntelligenceCronService {
       return;
     }
 
-    this.logger.log('Preparando Radar de Oportunidades matinal (08:30)...');
+    this.logger.log('Preparando Radar de Oportunidades matinal (09:00)...');
 
     try {
       const stats = await this.computeStockIntelligenceUseCase.execute();
