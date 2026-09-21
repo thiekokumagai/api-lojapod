@@ -36,13 +36,14 @@ enum BillingPaymentStatus {
 }
 
 model Store {
-  id         String   @id @default(uuid())
-  subdomain  String   @unique
-  title      String
-  adminEmail String
-  printToken String?  @unique @default(uuid())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String   @id @default(uuid())
+  subdomain    String   @unique
+  customDomain String?  @unique
+  title        String
+  adminEmail   String
+  printToken   String?  @unique @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   users                  User[]
   categories             Category[]
