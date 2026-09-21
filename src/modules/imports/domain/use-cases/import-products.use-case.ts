@@ -142,7 +142,7 @@ export class ImportProductsUseCase {
                 if (!imgUrl) continue;
 
                 const hash = crypto.createHash('md5').update(imgUrl).digest('hex');
-                const expectedFileName = `products/${hash}.webp`;
+                const expectedFileName = `${storeId}/products/${hash}.webp`;
 
                 const existing = await this.prisma.productImage.findFirst({
                   where: { url: expectedFileName, productId: product.id }
@@ -154,7 +154,8 @@ export class ImportProductsUseCase {
 
                 const migratedUrl = await this.imageMigrationService.migrateImage(
                   imgUrl,
-                  `stores/${storeId}/products`,
+                  'products',
+                  storeId,
                 );
                 if (migratedUrl) {
                   await this.prisma.productImage.create({

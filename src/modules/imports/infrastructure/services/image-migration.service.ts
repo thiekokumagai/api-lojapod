@@ -13,6 +13,7 @@ export class ImageMigrationService {
   async migrateImage(
     imageUrl: string,
     folder: string = 'vendizap-imports',
+    storeId?: string,
   ): Promise<string | null> {
     if (!imageUrl) return null;
 
@@ -50,6 +51,7 @@ export class ImageMigrationService {
           mimetype: 'image/webp',
         } as any,
         folder,
+        storeId,
       );
 
       // Process thumbnail image (450x450 webp)
@@ -66,6 +68,7 @@ export class ImageMigrationService {
           mimetype: 'image/webp',
         } as any,
         folder,
+        storeId,
       );
 
       return mainUpload.fileName;

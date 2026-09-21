@@ -78,7 +78,7 @@ export class ImportProductImagesUseCase {
 
                 const crypto = require('crypto');
                 const hash = crypto.createHash('md5').update(imgUrl).digest('hex');
-                const expectedFileName = `products/${hash}.webp`;
+                const expectedFileName = `${storeId}/products/${hash}.webp`;
 
                 // Check if image already exists for this product in DB before migrating
                 const existing = await this.prisma.productImage.findFirst({
@@ -92,7 +92,8 @@ export class ImportProductImagesUseCase {
                 const migratedUrl =
                   await this.imageMigrationService.migrateImage(
                     imgUrl,
-                    `stores/${storeId}/products`,
+                    'products',
+                    storeId,
                   );
 
                 if (migratedUrl) {
