@@ -12,6 +12,16 @@ export class ClearDatabaseUseCase {
     this.logger.log(`Iniciando limpeza de dados importados para reimportação... (storeId: ${storeId})`);
 
     try {
+      this.logger.log(`Removendo endereços de clientes da loja ${storeId}...`);
+      await this.prisma.customerAddress.deleteMany({
+        where: { storeId },
+      });
+
+      this.logger.log(`Removendo clientes da loja ${storeId}...`);
+      await this.prisma.customer.deleteMany({
+        where: { storeId },
+      });
+
       this.logger.log(`Removendo pedidos importados da loja ${storeId}...`);
       await this.prisma.order.deleteMany({
         where: { storeId, externalId: { not: null } },
