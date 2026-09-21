@@ -67,7 +67,21 @@ export class ImportProductsUseCase {
             // Find mapping category
             let categoryId = defaultCategory.id;
             
-            const externalCatId = item.id_categoria || item.category_id || item.categoria_id || (item.categorias && item.categorias.length > 0 ? item.categorias[0].id : undefined);
+            // A API de listagem do Vendizap não retorna as categorias.
+            // Precisamos buscar os detalhes do produto para mapear a categoria corretamente.
+            let detailedItem;
+            try {
+              detailedItem = await this.vendizapService.getProductById(item.id, storeId);
+            } catch (err) {
+              this.logger.warn(`Could not fetch details for product ${item.id}, using default category`);
+            }
+            
+            let externalCatId;
+            if (detailedItem) {
+              externalCatId = detailedItem.id_categoria || detailedItem.category_id || detailedItem.categoria_id || (detailedItem.categorias && detailedItem.categorias.length > 0 ? detailedItem.categorias[0].id : undefined);
+            } else {
+              externalCatId = item.id_categoria || item.category_id || item.categoria_id || (item.categorias && item.categorias.length > 0 ? item.categorias[0].id : undefined);
+            }
             
             if (externalCatId) {
               const mappedCat = await this.prisma.category.findUnique({
@@ -78,8 +92,8 @@ export class ImportProductsUseCase {
               }
             }
             
-            if (categoryId === defaultCategory.id && item.categorias_old && item.categorias_old.length > 0) {
-              const categoryName = item.categorias_old[0];
+            if (categoryId === defaultCategory.id && detailedItem?.categorias_old && detailedItem.categorias_old.length > 0) {
+              const categoryName = detailedItem.categorias_old[0];
               const mappedCat = await this.prisma.category.findFirst({
                 where: { storeId, title: categoryName },
               });
