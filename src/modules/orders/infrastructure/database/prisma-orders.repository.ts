@@ -234,7 +234,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       include: {
         items: {
           include: {
-            product: true,
+            product: {
+              include: {
+                category: true,
+              },
+            },
           }
         },
       },
