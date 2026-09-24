@@ -2,6 +2,7 @@ import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 
 export interface OrderFilters {
   search?: string;
+  orderNumber?: number;
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
   startDate?: string;

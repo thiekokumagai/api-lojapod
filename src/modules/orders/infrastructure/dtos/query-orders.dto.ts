@@ -8,6 +8,10 @@ export class QueryOrdersDto {
   @IsOptional()
   search?: string;
 
+  @ApiProperty({ example: 105, required: false })
+  @IsOptional()
+  orderNumber?: number;
+
   @ApiProperty({ example: 'PENDING', enum: OrderStatus, required: false })
   @IsEnum(OrderStatus)
   @IsOptional()

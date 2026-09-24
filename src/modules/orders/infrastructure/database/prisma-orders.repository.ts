@@ -108,6 +108,13 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       where.storeId = tenantStoreId;
     }
 
+    if (filters.orderNumber) {
+      const num = Number(filters.orderNumber);
+      if (!isNaN(num) && num > 0 && num <= 2147483647) {
+        where.orderNumber = num;
+      }
+    }
+
     if (filters.search) {
       where.OR = [
         { customerName: { contains: filters.search, mode: 'insensitive' } },
@@ -144,9 +151,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         }
       }
 
-      // Check if filters.search looks like an order number
+      // Check if filters.search looks like an order number (safe 32-bit signed int limit check)
       const numSearch = Number(cleanSearch);
-      if (!isNaN(numSearch) && numSearch > 0) {
+      if (!isNaN(numSearch) && numSearch > 0 && numSearch <= 2147483647) {
         where.OR.push({ orderNumber: numSearch });
       }
     }
