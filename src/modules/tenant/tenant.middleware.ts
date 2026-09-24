@@ -13,10 +13,17 @@ export class TenantMiddleware implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction) {
     let rawIdentifier: string | undefined;
 
-    // 1. Verificar cabeçalho X-Store-Domain ou X-Store-Subdomain
-    const headerDomain = req.headers['x-store-domain'] || req.headers['x-store-subdomain'];
+    // 1. Verificar cabeçalhos X-Forwarded-Host, X-Custom-Domain, X-Store-Domain ou X-Store-Subdomain
+    const headerDomain =
+      req.headers['x-forwarded-host'] ||
+      req.headers['x-custom-domain'] ||
+      req.headers['x-store-domain'] ||
+      req.headers['x-store-subdomain'];
     if (typeof headerDomain === 'string' && headerDomain.trim()) {
-      rawIdentifier = headerDomain.trim().toLowerCase();
+      // Caso venha uma lista de hosts separados por vírgula no X-Forwarded-Host
+      const firstHost = headerDomain.split(',')[0].trim().toLowerCase();
+      // Remove porta se houver (ex: minhaloja.com.br:443)
+      rawIdentifier = firstHost.split(':')[0];
     }
 
     // 2. Verificar query parameter ?subdomain= ou ?domain=

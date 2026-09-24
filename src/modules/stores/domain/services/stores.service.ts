@@ -175,41 +175,80 @@ export class StoresService {
         throw new Error('Cloudflare não retornou os Name Servers necessários.');
       }
 
-      // 2. Criar registros DNS na Cloudflare para a zona recém-criada
+      // 2. Criar ou atualizar registros DNS na Cloudflare para a zona recém-criada
       const fallbackTarget = process.env.STORE_CNAME || 'fallback.lojapod.com';
       const headers = {
         Authorization: `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
       };
 
-      // CNAME @ -> fallbackTarget (Proxied: true)
+      // 2.1 Buscar registros DNS existentes (que a Cloudflare pode ter escaneado/criado automaticamente)
+      try {
+        const existingRecordsRes = await axios.get(
+          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+          { headers },
+        );
+        const existingRecords: Array<{ id: string; name: string; type: string }> = existingRecordsRes.data?.result || [];
+
+        // Apagar qualquer A, AAAA ou CNAME que conflite com @ ou www
+        for (const rec of existingRecords) {
+          const recName = rec.name.toLowerCase();
+          const isAtRecord = recName === hostname.toLowerCase();
+          const isWwwRecord = recName === `www.${hostname.toLowerCase()}`;
+
+          if (isAtRecord || isWwwRecord) {
+            await axios.delete(
+              `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${rec.id}`,
+              { headers },
+            ).catch(() => {});
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Cloudflare DNS] Não foi possível listar registros existentes:', err.message);
+      }
+
+      // 2.2 Registro AAAA Dummy (100::) com Proxy Ativado (🟧) para interceptação via Worker
+      // @ -> 100:: (Proxied: true)
       await axios.post(
         `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
         {
-          type: 'CNAME',
+          type: 'AAAA',
           name: '@',
-          content: fallbackTarget,
+          content: '100::',
           proxied: true,
           ttl: 1,
         },
         { headers },
       ).catch((err) => {
-        console.error('[Cloudflare DNS] Erro ao criar CNAME @:', err.response?.data || err.message);
+        console.error('[Cloudflare DNS] Erro ao criar AAAA @ (100::):', err.response?.data || err.message);
       });
 
-      // CNAME www -> hostname (Proxied: true)
+      // www -> 100:: (Proxied: true)
       await axios.post(
         `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
         {
-          type: 'CNAME',
+          type: 'AAAA',
           name: 'www',
-          content: hostname,
+          content: '100::',
           proxied: true,
           ttl: 1,
         },
         { headers },
       ).catch((err) => {
-        console.error('[Cloudflare DNS] Erro ao criar CNAME www:', err.response?.data || err.message);
+        console.error('[Cloudflare DNS] Erro ao criar AAAA www (100::):', err.response?.data || err.message);
+      });
+
+      // 2.5. Associar Rota do Cloudflare Worker (*.dominio.com/*) ao Worker "lojapod-proxy"
+      const workerName = process.env.CLOUDFLARE_WORKER_NAME || 'lojapod-proxy';
+      await axios.post(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes`,
+        {
+          pattern: `*${hostname}/*`,
+          script: workerName,
+        },
+        { headers },
+      ).catch((err) => {
+        console.error('[Cloudflare Worker Route] Erro ao associar rota do Worker:', err.response?.data || err.message);
       });
 
       // 3. Salvar no banco com status inicial
