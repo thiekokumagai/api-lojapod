@@ -53,12 +53,17 @@ export class TenantMiddleware implements NestMiddleware {
       const parts = cleanIdentifier.split('.');
       const firstPart = parts[0];
 
+      // Se for um subdomínio lojapod.com (ex: sopod.lojapod.com), o subdomínio real no banco é 'sopod'
+      const isLojapodSubdomain = cleanIdentifier.endsWith('.lojapod.com');
+      const targetSubdomain = isLojapodSubdomain ? firstPart : cleanIdentifier;
+
       const store = await this.prisma.store.findFirst({
         where: {
           OR: [
             { customDomain: cleanIdentifier },
             { customDomain: `www.${cleanIdentifier}` },
             { customDomain: rawIdentifier },
+            { subdomain: targetSubdomain },
             { subdomain: cleanIdentifier },
             { subdomain: firstPart },
           ],
