@@ -175,8 +175,7 @@ export class StoresService {
         throw new Error('Cloudflare não retornou os Name Servers necessários.');
       }
 
-      // 2. Criar ou atualizar registros DNS na Cloudflare para a zona recém-criada
-      const fallbackTarget = process.env.STORE_CNAME || 'fallback.lojapod.com';
+      
       const headers = {
         Authorization: `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
