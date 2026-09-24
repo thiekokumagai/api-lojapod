@@ -13,17 +13,23 @@ export class TenantMiddleware implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction) {
     let rawIdentifier: string | undefined;
 
-    // 1. Verificar cabeçalhos X-Forwarded-Host, X-Custom-Domain, X-Store-Domain ou X-Store-Subdomain
-    const headerDomain =
-      req.headers['x-forwarded-host'] ||
-      req.headers['x-custom-domain'] ||
-      req.headers['x-store-domain'] ||
-      req.headers['x-store-subdomain'];
-    if (typeof headerDomain === 'string' && headerDomain.trim()) {
-      // Caso venha uma lista de hosts separados por vírgula no X-Forwarded-Host
-      const firstHost = headerDomain.split(',')[0].trim().toLowerCase();
-      // Remove porta se houver (ex: minhaloja.com.br:443)
-      rawIdentifier = firstHost.split(':')[0];
+    // 1. Prioridade para cabeçalhos explícitos da loja (X-Store-Domain ou X-Store-Subdomain)
+    const clientHeader = req.headers['x-store-domain'] || req.headers['x-store-subdomain'] || req.headers['x-custom-domain'];
+    
+    if (typeof clientHeader === 'string' && clientHeader.trim()) {
+      rawIdentifier = clientHeader.trim().toLowerCase();
+    }
+
+    // 2. Se não houver cabeçalho explícito, verificar X-Forwarded-Host (desde que não seja a URL da Railway)
+    if (!rawIdentifier) {
+      const fwdHost = req.headers['x-forwarded-host'];
+      if (typeof fwdHost === 'string' && fwdHost.trim()) {
+        const firstHost = fwdHost.split(',')[0].trim().toLowerCase().split(':')[0];
+        // Ignora domínios internos da Railway para não sobrepor o subdomínio da loja
+        if (!firstHost.includes('.up.railway.app') && !firstHost.includes('railway.app')) {
+          rawIdentifier = firstHost;
+        }
+      }
     }
 
     // 2. Verificar query parameter ?subdomain= ou ?domain=
