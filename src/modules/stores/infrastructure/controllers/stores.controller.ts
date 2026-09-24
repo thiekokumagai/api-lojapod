@@ -78,12 +78,36 @@ export class StoresController {
     return this.storesService.updateStore(id, body);
   }
 
+  @Post(':id/domain')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cadastra o domínio próprio da loja e provisiona zona na Cloudflare' })
+  async connectDomain(@Param('id') id: string, @Body() body: { domain: string }) {
+    return this.storesService.connectDomain(id, body.domain);
+  }
+
+  @Get(':id/domain/status')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtém o status da zona Cloudflare e os Name Servers da loja' })
+  async getDomainStatus(@Param('id') id: string) {
+    return this.storesService.getDomainStatus(id);
+  }
+
+  @Delete(':id/domain')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Remove o domínio próprio e a zona Cloudflare da loja' })
+  async removeDomain(@Param('id') id: string) {
+    return this.storesService.removeDomain(id);
+  }
+
   @Post(':id/verify-dns')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Testa e verifica se o DNS do domínio próprio da loja está apontando corretamente' })
   async verifyDns(@Param('id') id: string) {
-    return this.storesService.verifyDomainDns(id);
+    return this.storesService.getDomainStatus(id);
   }
 
   @Get()

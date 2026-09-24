@@ -67,9 +67,27 @@ model Store {
   adminAuditLogs         AdminAuditLog[]
   importJobs             ImportJob[]
 
+  storeDomain            StoreDomain?
+
   isActive Boolean @default(true)
 
   @@map("stores")
+}
+
+model StoreDomain {
+  id               String   @id @default(uuid())
+  storeId          String   @unique
+  hostname         String   @unique
+  cloudflareZoneId String   @unique
+  nameserver1      String
+  nameserver2      String
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("store_domains")
 }
 
 model User {

@@ -98,47 +98,249 @@ export class StoresService {
     return store;
   }
 
-  async syncCloudflareDomain(domain: string, action: 'create' | 'delete') {
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-    const zoneId = process.env.CLOUDFLARE_ZONE_ID;
+  private normalizeDomain(domain: string): string {
+    return domain
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/^www\./, '');
+  }
 
-    if (!apiToken || !zoneId) {
-      console.log(`[Cloudflare SSL for SaaS] Tokens não configurados em .env. Ignorando sincronização para ${domain}.`);
-      return null;
+  async connectDomain(storeId: string, rawDomain: string) {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) {
+      throw new NotFoundException('Loja não encontrada.');
+    }
+
+    const hostname = this.normalizeDomain(rawDomain);
+    if (!hostname || hostname.includes(' ')) {
+      throw new ConflictException('Formato de domínio inválido. Exemplo correto: minhaloja.com.br');
+    }
+
+    // Verificar se domínio já está cadastrado em outra loja
+    const existing = await this.prisma.storeDomain.findFirst({
+      where: { hostname, NOT: { storeId } },
+    });
+    if (existing) {
+      throw new ConflictException(`O domínio "${hostname}" já está cadastrado em outra loja.`);
+    }
+
+    // Se a loja já possui um StoreDomain cadastrado (diferente ou igual)
+    const currentDomain = await this.prisma.storeDomain.findUnique({ where: { storeId } });
+    if (currentDomain) {
+      if (currentDomain.hostname === hostname) {
+        // Retornar os dados já salvos
+        return {
+          id: currentDomain.id,
+          domain: currentDomain.hostname,
+          status: currentDomain.status,
+          nameserver1: currentDomain.nameserver1,
+          nameserver2: currentDomain.nameserver2,
+        };
+      }
+      // Se for trocar de domínio, remove a zona anterior
+      await this.removeDomain(storeId);
+    }
+
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+
+    if (!apiToken || !accountId) {
+      throw new ConflictException('Integração com Cloudflare não configurada no servidor (CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID ausente).');
     }
 
     try {
-      const url = `https://api.cloudflare.com/client/v4/zones/${zoneId}/custom_hostnames`;
+      // 1. Criar Zona Cloudflare via API (Full setup)
+      const zoneRes = await axios.post(
+        'https://api.cloudflare.com/client/v4/zones',
+        {
+          account: { id: accountId },
+          name: hostname,
+          type: 'full',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const zoneData = zoneRes.data?.result;
+      const zoneId = zoneData?.id;
+      const nameServers: string[] = zoneData?.name_servers || [];
+
+      if (!zoneId || nameServers.length < 2) {
+        throw new Error('Cloudflare não retornou os Name Servers necessários.');
+      }
+
+      // 2. Criar registros DNS na Cloudflare para a zona recém-criada
+      const fallbackTarget = process.env.STORE_CNAME || 'fallback.lojapod.com';
       const headers = {
         Authorization: `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
       };
 
-      if (action === 'create') {
-        const response = await axios.post(
-          url,
-          {
-            hostname: domain,
-            ssl: {
-              method: 'http',
-              type: 'dv',
-            },
-          },
-          { headers },
-        );
-        return response.data;
-      } else if (action === 'delete') {
-        // Buscar o hostname_id antes de deletar
-        const listRes = await axios.get(`${url}?hostname=${domain}`, { headers });
-        const hostnames = listRes.data?.result;
-        if (hostnames && hostnames.length > 0) {
-          const hostnameId = hostnames[0].id;
-          await axios.delete(`${url}/${hostnameId}`, { headers });
-        }
+      // CNAME @ -> fallbackTarget (Proxied: true)
+      await axios.post(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+        {
+          type: 'CNAME',
+          name: '@',
+          content: fallbackTarget,
+          proxied: true,
+          ttl: 1,
+        },
+        { headers },
+      ).catch((err) => {
+        console.error('[Cloudflare DNS] Erro ao criar CNAME @:', err.response?.data || err.message);
+      });
+
+      // CNAME www -> hostname (Proxied: true)
+      await axios.post(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+        {
+          type: 'CNAME',
+          name: 'www',
+          content: hostname,
+          proxied: true,
+          ttl: 1,
+        },
+        { headers },
+      ).catch((err) => {
+        console.error('[Cloudflare DNS] Erro ao criar CNAME www:', err.response?.data || err.message);
+      });
+
+      // 3. Salvar no banco com status inicial
+      const storeDomain = await this.prisma.storeDomain.create({
+        data: {
+          storeId,
+          hostname,
+          cloudflareZoneId: zoneId,
+          nameserver1: nameServers[0],
+          nameserver2: nameServers[1],
+          status: zoneData.status || 'pending',
+        },
+      });
+
+      // Se a Cloudflare já retornar a zona como ativa no ato da criação (raro), atualiza customDomain
+      if (storeDomain.status === 'active') {
+        await this.prisma.store.update({
+          where: { id: storeId },
+          data: { customDomain: hostname },
+        });
       }
+
+      return {
+        id: storeDomain.id,
+        domain: storeDomain.hostname,
+        status: storeDomain.status,
+        nameserver1: storeDomain.nameserver1,
+        nameserver2: storeDomain.nameserver2,
+      };
     } catch (err: any) {
-      console.error(`[Cloudflare SSL for SaaS] Erro ao sincronizar ${domain}:`, err.response?.data || err.message);
+      console.error('[Cloudflare createZone] Erro:', err.response?.data || err.message);
+      const errMsg = err.response?.data?.errors?.[0]?.message || err.message || 'Erro ao comunicar com Cloudflare';
+      throw new ConflictException(`Erro ao criar zona Cloudflare: ${errMsg}`);
     }
+  }
+
+  async getDomainStatus(storeId: string) {
+    const storeDomain = await this.prisma.storeDomain.findUnique({
+      where: { storeId },
+    });
+
+    if (!storeDomain) {
+      return {
+        hasDomain: false,
+        status: null,
+      };
+    }
+
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (apiToken && storeDomain.cloudflareZoneId) {
+      try {
+        const zoneRes = await axios.get(
+          `https://api.cloudflare.com/client/v4/zones/${storeDomain.cloudflareZoneId}`,
+          {
+            headers: { Authorization: `Bearer ${apiToken}` },
+          },
+        );
+        const cfStatus = zoneRes.data?.result?.status;
+        if (cfStatus && cfStatus !== storeDomain.status) {
+          await this.prisma.storeDomain.update({
+            where: { id: storeDomain.id },
+            data: { status: cfStatus },
+          });
+          storeDomain.status = cfStatus;
+        }
+
+        // Se o status for 'active', atualiza customDomain na tabela Store para ser usado nos links e roteamento.
+        // Se ainda for 'pending', garante que customDomain da Store permanece null (mantendo a URL do subdomínio lojapod).
+        if (storeDomain.status === 'active') {
+          await this.prisma.store.update({
+            where: { id: storeId },
+            data: { customDomain: storeDomain.hostname },
+          });
+        } else {
+          await this.prisma.store.update({
+            where: { id: storeId },
+            data: { customDomain: null },
+          });
+        }
+      } catch (err: any) {
+        console.error('[Cloudflare getZoneStatus] Erro ao consultar Cloudflare:', err.response?.data || err.message);
+      }
+    }
+
+    return {
+      hasDomain: true,
+      id: storeDomain.id,
+      domain: storeDomain.hostname,
+      status: storeDomain.status,
+      nameserver1: storeDomain.nameserver1,
+      nameserver2: storeDomain.nameserver2,
+    };
+  }
+
+  async removeDomain(storeId: string) {
+    const storeDomain = await this.prisma.storeDomain.findUnique({
+      where: { storeId },
+    });
+
+    if (!storeDomain) {
+      await this.prisma.store.update({
+        where: { id: storeId },
+        data: { customDomain: null },
+      }).catch(() => {});
+      return { success: true, message: 'Nenhum domínio configurado para remover.' };
+    }
+
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (apiToken && storeDomain.cloudflareZoneId) {
+      try {
+        await axios.delete(
+          `https://api.cloudflare.com/client/v4/zones/${storeDomain.cloudflareZoneId}`,
+          {
+            headers: { Authorization: `Bearer ${apiToken}` },
+          },
+        );
+      } catch (err: any) {
+        console.error('[Cloudflare deleteZone] Erro ao deletar zona:', err.response?.data || err.message);
+      }
+    }
+
+    await this.prisma.storeDomain.delete({
+      where: { id: storeDomain.id },
+    });
+
+    await this.prisma.store.update({
+      where: { id: storeId },
+      data: { customDomain: null },
+    });
+
+    return { success: true, message: 'Domínio removido com sucesso.' };
   }
 
   async updateStore(id: string, dto: { title?: string; subdomain?: string; customDomain?: string | null; adminEmail?: string; password?: string }) {
@@ -175,51 +377,6 @@ export class StoresService {
       }
     }
 
-    // Tratamento do Domínio Próprio (Custom Domain)
-    if (dto.customDomain !== undefined) {
-      if (dto.customDomain === null || dto.customDomain.trim() === '') {
-        if (store.customDomain) {
-          await this.syncCloudflareDomain(store.customDomain, 'delete');
-        }
-        updateData.customDomain = null;
-      } else {
-        const cleanDomain = dto.customDomain
-          .trim()
-          .toLowerCase()
-          .replace(/^https?:\/\//, '')
-          .replace(/\/.*$/, '')
-          .replace(/^www\./, '');
-
-        if (!cleanDomain || cleanDomain.includes(' ')) {
-          throw new ConflictException('Formato de domínio inválido. Insira apenas o domínio (ex: minhaloja.com.br)');
-        }
-
-        if (cleanDomain !== store.customDomain) {
-          const existingDomain = await this.prisma.store.findFirst({
-            where: {
-              OR: [
-                { customDomain: cleanDomain },
-                { customDomain: `www.${cleanDomain}` },
-                { subdomain: cleanDomain },
-              ],
-              NOT: { id },
-            },
-          });
-
-          if (existingDomain) {
-            throw new ConflictException(`O domínio "${cleanDomain}" já está em uso por outra loja.`);
-          }
-
-          if (store.customDomain) {
-            await this.syncCloudflareDomain(store.customDomain, 'delete');
-          }
-
-          updateData.customDomain = cleanDomain;
-          await this.syncCloudflareDomain(cleanDomain, 'create');
-        }
-      }
-    }
-
     if (dto.adminEmail && dto.adminEmail.trim()) {
       updateData.adminEmail = dto.adminEmail.trim().toLowerCase();
     }
@@ -229,7 +386,6 @@ export class StoresService {
       data: updateData,
     });
 
-    // 1. Atualizar StoreSettings storeName se o título mudou
     if (updateData.title) {
       await this.prisma.storeSettings.updateMany({
         where: { storeId: id },
@@ -237,7 +393,6 @@ export class StoresService {
       });
     }
 
-    // 2. Sincronizar usuário Admin da loja se e-mail ou senha foram alterados
     const adminUser = (await this.prisma.user.findFirst({
       where: { storeId: id, role: 'ADMIN' },
     })) || (await this.prisma.user.findFirst({
@@ -309,60 +464,6 @@ export class StoresService {
     }
 
     return store;
-  }
-
-  async verifyDomainDns(id: string) {
-    const store = await this.prisma.store.findUnique({ where: { id } });
-    if (!store || !store.customDomain) {
-      return {
-        hasDomain: false,
-        isConfigured: false,
-        message: 'Nenhum domínio próprio cadastrado para esta loja.',
-      };
-    }
-
-    const domain = store.customDomain;
-    let isConfigured = false;
-    let records: string[] = [];
-    let recordType = 'DESCONHECIDO';
-
-    try {
-      try {
-        const cnames = await dns.resolveCname(domain);
-        if (cnames && cnames.length > 0) {
-          records = cnames;
-          recordType = 'CNAME';
-          isConfigured = true;
-        }
-      } catch (e) {
-        const ips = await dns.resolve4(domain);
-        if (ips && ips.length > 0) {
-          records = ips;
-          recordType = 'A';
-          isConfigured = true;
-        }
-      }
-
-      return {
-        hasDomain: true,
-        domain,
-        isConfigured,
-        recordType,
-        records,
-        message: isConfigured
-          ? `O DNS do domínio ${domain} foi verificado e encontrado registros (${recordType}: ${records.join(', ')}).`
-          : `O DNS de ${domain} ainda não foi detectado apontando para o servidor. Pode levar alguns minutos para a propagação.`,
-      };
-    } catch (err: any) {
-      return {
-        hasDomain: true,
-        domain,
-        isConfigured: false,
-        recordType: 'ERRO',
-        records: [],
-        message: `Não foi possível resolver o DNS para ${domain}. Verifique se o registro CNAME ou A foi criado no seu provedor de domínio (Registro.br, Cloudflare, etc).`,
-      };
-    }
   }
 
   async getStoreById(id: string) {
