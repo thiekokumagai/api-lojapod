@@ -58,6 +58,13 @@ export class VariationsController {
     return this.listVariationsUseCase.execute();
   }
 
+  @Patch('batch/order')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reordenar variações' })
+  async updateBatchOrder(@Body() body: UpdateOrderDto) {
+    return this.updateBatchOrderUseCase.execute(body.items);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Buscar variação por id' })
   findOne(@Param('id') id: string) {
@@ -75,12 +82,5 @@ export class VariationsController {
   @ApiOperation({ summary: 'Deletar variação' })
   delete(@Param('id') id: string) {
     return this.deleteVariationUseCase.execute(id);
-  }
-
-  @Patch('batch/order')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reordenar variações' })
-  async updateBatchOrder(@Body() body: UpdateOrderDto) {
-    return this.updateBatchOrderUseCase.execute(body.items);
   }
 }
