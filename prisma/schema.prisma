@@ -372,8 +372,11 @@ model StoreSettings {
   bannerUrls     String[]
   phone          String   @default("")
   instagram      String?
-  pixelId        String?
-  marketingLinks Json?
+  pixelId                    String?
+  facebookPixelEnabled       Boolean @default(false)
+  facebookConversionsToken   String?
+  facebookConversionsApiEnabled Boolean @default(false)
+  marketingLinks             Json?
 
   // Endereço
   cep          String  @default("")

@@ -17,6 +17,9 @@ export interface StoreSettings {
   phone: string;
   instagram: string | null;
   pixelId: string | null;
+  facebookPixelEnabled: boolean;
+  facebookConversionsToken: string | null;
+  facebookConversionsApiEnabled: boolean;
   marketingLinks: any;
 
   // Endereço

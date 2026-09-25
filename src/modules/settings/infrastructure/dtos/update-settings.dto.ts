@@ -57,6 +57,21 @@ export class UpdateSettingsDto {
   @IsOptional()
   pixelId?: string | null;
 
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  facebookPixelEnabled?: boolean;
+
+  @ApiProperty({ example: 'EAATEOiZAha9oBSePnQ4SvWNxL4ZAlsvS8zoGkX', required: false })
+  @IsString()
+  @IsOptional()
+  facebookConversionsToken?: string | null;
+
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  facebookConversionsApiEnabled?: boolean;
+
   @ApiProperty({ example: [], required: false })
   @IsOptional()
   @IsArray()

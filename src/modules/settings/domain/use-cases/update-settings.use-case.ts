@@ -12,6 +12,9 @@ export interface UpdateSettingsInput {
   phone?: string;
   instagram?: string | null;
   pixelId?: string | null;
+  facebookPixelEnabled?: boolean;
+  facebookConversionsToken?: string | null;
+  facebookConversionsApiEnabled?: boolean;
   marketingLinks?: any;
   cep?: string;
   street?: string;
@@ -110,6 +113,12 @@ export class UpdateSettingsUseCase {
         input.instagram !== undefined ? input.instagram : base.instagram,
       pixelId:
         input.pixelId !== undefined ? input.pixelId : (base as any).pixelId,
+      facebookPixelEnabled:
+        input.facebookPixelEnabled !== undefined ? input.facebookPixelEnabled : (base as any).facebookPixelEnabled ?? false,
+      facebookConversionsToken:
+        input.facebookConversionsToken !== undefined ? input.facebookConversionsToken : (base as any).facebookConversionsToken,
+      facebookConversionsApiEnabled:
+        input.facebookConversionsApiEnabled !== undefined ? input.facebookConversionsApiEnabled : (base as any).facebookConversionsApiEnabled ?? false,
       marketingLinks:
         input.marketingLinks !== undefined ? input.marketingLinks : (base as any).marketingLinks,
       cep: input.cep !== undefined ? input.cep : base.cep,
