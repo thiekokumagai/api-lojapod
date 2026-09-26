@@ -54,4 +54,8 @@ export class CreateProductDto {
   @ApiPropertyOptional({ example: true })
   @IsOptional()
   isVisible?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  isFeatured?: boolean;
 }

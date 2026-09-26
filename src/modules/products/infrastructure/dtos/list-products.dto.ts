@@ -24,4 +24,9 @@ export class ListProductsDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  isFeatured?: boolean;
 }

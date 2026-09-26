@@ -20,6 +20,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     costPrice?: any;
     createdAt?: Date | string;
     isVisible?: boolean;
+    isFeatured?: boolean;
   }): Promise<Product> {
     return this.prisma.product.create({
       data: {
@@ -31,6 +32,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         promotionalPrice: data.promotionalPrice,
         costPrice: data.costPrice,
         isVisible: data.isVisible,
+        isFeatured: data.isFeatured,
         ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
       },
     });
@@ -47,6 +49,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       promotionalPrice?: any;
       costPrice?: any;
       isVisible?: boolean;
+      isFeatured?: boolean;
     },
   ): Promise<Product> {
     return this.prisma.product.update({
@@ -60,6 +63,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         promotionalPrice: data.promotionalPrice,
         costPrice: data.costPrice,
         isVisible: data.isVisible !== undefined ? data.isVisible : undefined,
+        isFeatured: data.isFeatured !== undefined ? data.isFeatured : undefined,
       },
     });
   }
@@ -70,6 +74,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     search?: string;
     categoryId?: string;
     isVisible?: boolean;
+    isFeatured?: boolean;
   }): Promise<ProductWithDetails[]> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
 
@@ -79,6 +84,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       where: {
         deletedAt: null,
         ...(params.isVisible !== undefined ? { isVisible: params.isVisible } : {}),
+        ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
               AND: searchWords.map((word) => ({
@@ -130,6 +136,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     search?: string;
     categoryId?: string;
     isVisible?: boolean;
+    isFeatured?: boolean;
   }): Promise<number> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
 
@@ -137,6 +144,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       where: {
         deletedAt: null,
         ...(params.isVisible !== undefined ? { isVisible: params.isVisible } : {}),
+        ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
               AND: searchWords.map((word) => ({

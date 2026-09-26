@@ -25,6 +25,7 @@ export class UpdateProductUseCase {
       promotionalPrice?: any;
       costPrice?: any;
       isVisible?: boolean;
+      isFeatured?: boolean;
     },
   ) {
     const existing = await this.productsRepository.findById(id);
@@ -50,6 +51,7 @@ export class UpdateProductUseCase {
       promotionalPrice: dto.promotionalPrice,
       costPrice: dto.costPrice,
       isVisible: dto.isVisible,
+      isFeatured: dto.isFeatured,
     });
 
     const updatedProduct = await this.productsRepository.findById(id);

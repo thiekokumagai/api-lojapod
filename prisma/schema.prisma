@@ -280,6 +280,7 @@ model Product {
   updatedAt    DateTime  @default(now()) @updatedAt
   isVisible    Boolean   @default(true)
   isBestSeller Boolean   @default(false)
+  isFeatured   Boolean   @default(false)
 
   store               Store?             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   category            Category           @relation(fields: [categoryId], references: [id])
