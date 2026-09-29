@@ -12,6 +12,7 @@ export interface StoreSettings {
   templateId?: string;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  priceColor?: string | null;
   logoUrl: string | null;
   whiteLogoUrl: string | null;
   faviconUrl: string | null;

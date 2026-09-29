@@ -49,6 +49,7 @@ export interface UpdateSettingsInput {
   templateId?: string;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  priceColor?: string | null;
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
 }
@@ -228,6 +229,10 @@ export class UpdateSettingsUseCase {
         input.secondaryColor !== undefined
           ? input.secondaryColor
           : (base as any).secondaryColor,
+      priceColor:
+        input.priceColor !== undefined
+          ? input.priceColor
+          : (base as any).priceColor,
       vendizapAuthId:
         input.vendizapAuthId !== undefined
           ? input.vendizapAuthId

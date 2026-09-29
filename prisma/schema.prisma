@@ -402,6 +402,7 @@ model StoreSettings {
   templateId           String  @default("classic")
   primaryColor         String? @default("#dc2626")
   secondaryColor       String? @default("#18181b")
+  priceColor           String? @default("#16a34a")
 
   // Descontos/Taxas adicionais salvos como JSON para flexibilidade
   paymentRules Json?

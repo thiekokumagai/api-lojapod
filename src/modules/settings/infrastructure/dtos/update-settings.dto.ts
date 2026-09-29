@@ -22,6 +22,11 @@ export class UpdateSettingsDto {
   @IsOptional()
   secondaryColor?: string | null;
 
+  @ApiProperty({ example: '#16a34a', required: false })
+  @IsString()
+  @IsOptional()
+  priceColor?: string | null;
+
   @ApiProperty({ example: 'https://cdn.example.com/logo.png', required: false })
   @IsString()
   @IsOptional()
