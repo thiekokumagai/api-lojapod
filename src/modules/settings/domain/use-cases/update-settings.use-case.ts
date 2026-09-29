@@ -46,6 +46,9 @@ export interface UpdateSettingsInput {
   storePickupEnabled?: boolean;
   deliveryType?: string;
   deliveryFixedFee?: number | null;
+  templateId?: string;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
 }
@@ -213,6 +216,18 @@ export class UpdateSettingsUseCase {
         input.deliveryFixedFee !== undefined
           ? input.deliveryFixedFee
           : (base as any).deliveryFixedFee,
+      templateId:
+        input.templateId !== undefined
+          ? input.templateId
+          : (base as any).templateId,
+      primaryColor:
+        input.primaryColor !== undefined
+          ? input.primaryColor
+          : (base as any).primaryColor,
+      secondaryColor:
+        input.secondaryColor !== undefined
+          ? input.secondaryColor
+          : (base as any).secondaryColor,
       vendizapAuthId:
         input.vendizapAuthId !== undefined
           ? input.vendizapAuthId

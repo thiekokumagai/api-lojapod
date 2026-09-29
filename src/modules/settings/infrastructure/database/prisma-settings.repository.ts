@@ -54,6 +54,9 @@ export class PrismaSettingsRepository implements ISettingsRepository {
     const dataPayload = {
       storeId,
       storeName: settings.storeName,
+      templateId: settings.templateId ?? 'classic',
+      primaryColor: settings.primaryColor ?? '#dc2626',
+      secondaryColor: settings.secondaryColor ?? '#18181b',
       logoUrl: settings.logoUrl,
       whiteLogoUrl: settings.whiteLogoUrl,
       faviconUrl: settings.faviconUrl,

@@ -9,6 +9,9 @@ export interface PaymentRule {
 export interface StoreSettings {
   id: string;
   storeName: string;
+  templateId?: string;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
   logoUrl: string | null;
   whiteLogoUrl: string | null;
   faviconUrl: string | null;

@@ -7,6 +7,21 @@ export class UpdateSettingsDto {
   @IsOptional()
   storeName?: string;
 
+  @ApiProperty({ example: 'classic', required: false })
+  @IsString()
+  @IsOptional()
+  templateId?: string;
+
+  @ApiProperty({ example: '#dc2626', required: false })
+  @IsString()
+  @IsOptional()
+  primaryColor?: string | null;
+
+  @ApiProperty({ example: '#18181b', required: false })
+  @IsString()
+  @IsOptional()
+  secondaryColor?: string | null;
+
   @ApiProperty({ example: 'https://cdn.example.com/logo.png', required: false })
   @IsString()
   @IsOptional()
