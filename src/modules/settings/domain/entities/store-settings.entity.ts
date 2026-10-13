@@ -13,6 +13,7 @@ export interface StoreSettings {
   primaryColor?: string | null;
   secondaryColor?: string | null;
   priceColor?: string | null;
+  defaultProductSort?: string | null;
   logoUrl: string | null;
   whiteLogoUrl: string | null;
   faviconUrl: string | null;

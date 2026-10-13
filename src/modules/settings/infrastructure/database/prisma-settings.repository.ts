@@ -58,6 +58,7 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       primaryColor: settings.primaryColor ?? '#dc2626',
       secondaryColor: settings.secondaryColor ?? '#18181b',
       priceColor: settings.priceColor ?? '#16a34a',
+      defaultProductSort: settings.defaultProductSort ?? 'newest',
       logoUrl: settings.logoUrl,
       whiteLogoUrl: settings.whiteLogoUrl,
       faviconUrl: settings.faviconUrl,

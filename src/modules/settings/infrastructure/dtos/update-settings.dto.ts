@@ -27,6 +27,11 @@ export class UpdateSettingsDto {
   @IsOptional()
   priceColor?: string | null;
 
+  @ApiProperty({ example: 'newest', required: false })
+  @IsString()
+  @IsOptional()
+  defaultProductSort?: string | null;
+
   @ApiProperty({ example: 'https://cdn.example.com/logo.png', required: false })
   @IsString()
   @IsOptional()
