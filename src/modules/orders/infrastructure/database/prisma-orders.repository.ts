@@ -489,16 +489,28 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           });
           createdStockMovementIds.push(sm.id);
 
-          // Check if total stock for this product is 0 or less, if so disable it
+          // Check if total stock for this product is 0 or less, if so check storeSettings before disabling
           const allItems = await tx.productItem.findMany({
             where: { productId: item.productId },
           });
           const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
           if (totalStock <= 0) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { isVisible: false },
-            });
+            let autoHide = true;
+            if (order.storeId) {
+              const settings = await tx.storeSettings.findFirst({
+                where: { storeId: order.storeId },
+                select: { autoHideOutOfStock: true },
+              });
+              if (settings && settings.autoHideOutOfStock === false) {
+                autoHide = false;
+              }
+            }
+            if (autoHide) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { isVisible: false },
+              });
+            }
           }
 
           item.productItemId = productItem.id;
@@ -770,10 +782,23 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           const allItems = await tx.productItem.findMany({ where: { productId: item.productId } });
           const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
           if (totalStock <= 0) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { isVisible: false },
-            });
+            let autoHide = true;
+            const targetStoreId = existingOrder.storeId || order.storeId;
+            if (targetStoreId) {
+              const settings = await tx.storeSettings.findFirst({
+                where: { storeId: targetStoreId },
+                select: { autoHideOutOfStock: true },
+              });
+              if (settings && settings.autoHideOutOfStock === false) {
+                autoHide = false;
+              }
+            }
+            if (autoHide) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { isVisible: false },
+              });
+            }
           }
 
           item.productItemId = productItem.id;
@@ -1050,10 +1075,22 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             const updatedAllItems = await tx.productItem.findMany({ where: { productId: item.productId } });
             const currentTotalStock = updatedAllItems.reduce((acc, curr) => acc + curr.stock, 0);
             if (currentTotalStock <= 0) {
-              await tx.product.update({
-                where: { id: item.productId },
-                data: { isVisible: false },
-              });
+              let autoHide = true;
+              if (orderRecord.storeId) {
+                const settings = await tx.storeSettings.findFirst({
+                  where: { storeId: orderRecord.storeId },
+                  select: { autoHideOutOfStock: true },
+                });
+                if (settings && settings.autoHideOutOfStock === false) {
+                  autoHide = false;
+                }
+              }
+              if (autoHide) {
+                await tx.product.update({
+                  where: { id: item.productId },
+                  data: { isVisible: false },
+                });
+              }
             } else {
               // Optionally set visible to true if we just recovered it and it had stock
               await tx.product.update({

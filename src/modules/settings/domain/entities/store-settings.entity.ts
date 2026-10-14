@@ -69,6 +69,10 @@ export interface StoreSettings {
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
 
+  // Estoque e Disponibilidade
+  autoHideOutOfStock?: boolean;
+  enableStockAlertNotification?: boolean;
+
   createdAt: Date;
   updatedAt: Date;
 }

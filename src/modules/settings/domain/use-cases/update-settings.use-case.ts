@@ -53,6 +53,8 @@ export interface UpdateSettingsInput {
   defaultProductSort?: string | null;
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
+  autoHideOutOfStock?: boolean;
+  enableStockAlertNotification?: boolean;
 }
 
 @Injectable()
@@ -246,6 +248,14 @@ export class UpdateSettingsUseCase {
         input.vendizapAuthSecret !== undefined
           ? input.vendizapAuthSecret
           : (base as any).vendizapAuthSecret,
+      autoHideOutOfStock:
+        input.autoHideOutOfStock !== undefined
+          ? input.autoHideOutOfStock
+          : (base as any).autoHideOutOfStock,
+      enableStockAlertNotification:
+        input.enableStockAlertNotification !== undefined
+          ? input.enableStockAlertNotification
+          : (base as any).enableStockAlertNotification,
     });
   }
 }

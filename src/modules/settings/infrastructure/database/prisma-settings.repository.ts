@@ -103,6 +103,8 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       deliveryFixedFee: settings.deliveryFixedFee ?? null,
       vendizapAuthId: settings.vendizapAuthId ?? null,
       vendizapAuthSecret: settings.vendizapAuthSecret ?? null,
+      autoHideOutOfStock: settings.autoHideOutOfStock ?? true,
+      enableStockAlertNotification: settings.enableStockAlertNotification ?? true,
     };
 
     const result = await this.prisma.storeSettings.upsert({

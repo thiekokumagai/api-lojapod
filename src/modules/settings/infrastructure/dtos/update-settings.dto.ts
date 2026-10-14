@@ -259,4 +259,14 @@ export class UpdateSettingsDto {
   @IsString()
   @IsOptional()
   vendizapAuthSecret?: string | null;
+
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  autoHideOutOfStock?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  enableStockAlertNotification?: boolean;
 }

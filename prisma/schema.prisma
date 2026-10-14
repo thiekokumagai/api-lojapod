@@ -66,6 +66,7 @@ model Store {
   billingPayments        BillingPayment[]
   adminAuditLogs         AdminAuditLog[]
   importJobs             ImportJob[]
+  stockNotificationRequests StockNotificationRequest[]
 
   storeDomain            StoreDomain?
 
@@ -294,6 +295,7 @@ model Product {
   descriptionFormated String?            @db.Text
   orderItems          OrderItem[]
   stockMovements      StockMovement[]
+  stockNotificationRequests StockNotificationRequest[]
 
   minStock            Int                @default(5)
   dailyRunRate        Float?             @default(0)
@@ -344,6 +346,7 @@ model ProductItem {
   options        ProductItemOption[]
   orderItems     OrderItem[]
   stockMovements StockMovement[]
+  stockNotificationRequests StockNotificationRequest[]
 
   @@unique([productId, hash])
   @@index([productId])
@@ -429,6 +432,10 @@ model StoreSettings {
   // Tipos de entrega
   deliveryType         String  @default("DISTANCE") // "NO_FEE", "FIXED_FEE", "TO_COMBINE", "DISTANCE"
   deliveryFixedFee     Decimal? @db.Decimal(10, 2)
+
+  // Estoque e Disponibilidade
+  autoHideOutOfStock          Boolean @default(true)
+  enableStockAlertNotification Boolean @default(true)
 
   createdAt DateTime @default(now())
   enableExchangePolicy Boolean @default(false)
@@ -786,4 +793,25 @@ model ImportJob {
 
   @@map("import_jobs")
 }
+
+model StockNotificationRequest {
+  id            String       @id @default(uuid())
+  storeId       String?
+  productId     String
+  productItemId String?
+  customerName  String
+  customerPhone String
+  status        String       @default("PENDING") // "PENDING", "NOTIFIED"
+  notifiedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  store         Store?       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productItem   ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, productId, status])
+  @@map("stock_notification_requests")
+}
+
 
