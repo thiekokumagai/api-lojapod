@@ -7,6 +7,7 @@ import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { EventsGateway } from '../../../events/events.gateway';
+import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 
 @Injectable()
 export class ReceiveOrderUseCase {
@@ -14,6 +15,7 @@ export class ReceiveOrderUseCase {
     private readonly ordersRepository: IOrdersRepository,
     private readonly settingsRepository: ISettingsRepository,
     private readonly eventsGateway: EventsGateway,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async execute(
@@ -144,6 +146,18 @@ export class ReceiveOrderUseCase {
 
     const savedOrder = await this.ordersRepository.save(order);
     this.eventsGateway.notifyOrderUpdated(savedOrder);
+
+    // Atribuição de pontos/cashback/selos quando o pedido for recebido/pago
+    this.loyaltyService.processOrderCompleted({
+      id: savedOrder.id,
+      storeId: savedOrder.storeId,
+      customerPhone: savedOrder.customerPhone,
+      customerName: savedOrder.customerName,
+      totalOrder: savedOrder.totalOrder,
+    }).catch((err) => {
+      console.error('[Loyalty] Erro ao processar fidelidade no recebimento:', err);
+    });
+
     return savedOrder;
   }
 }

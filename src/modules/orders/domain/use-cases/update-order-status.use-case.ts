@@ -7,6 +7,7 @@ import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { EventsGateway } from '../../../events/events.gateway';
+import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 
 @Injectable()
 export class UpdateOrderStatusUseCase {
@@ -14,6 +15,7 @@ export class UpdateOrderStatusUseCase {
     private readonly ordersRepository: IOrdersRepository,
     private readonly settingsRepository: ISettingsRepository,
     private readonly eventsGateway: EventsGateway,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async execute(
@@ -271,6 +273,27 @@ export class UpdateOrderStatusUseCase {
       const savedOrder = await this.ordersRepository.save(order);
       this.eventsGateway.notifyOrderUpdated(savedOrder);
       this.eventsGateway.server.emit('products.refresh'); // Update stock info if any
+
+      // Atribuição de selos de fidelidade quando o pedido for concluído ou pago
+      if (savedOrder.status === OrderStatus.COMPLETED || savedOrder.paymentStatus === PaymentStatus.PAID) {
+        this.loyaltyService.processOrderCompleted({
+          id: savedOrder.id,
+          storeId: savedOrder.storeId,
+          customerPhone: savedOrder.customerPhone,
+          customerName: savedOrder.customerName,
+          totalOrder: savedOrder.totalOrder,
+        }).catch((err) => {
+          console.error('[Loyalty] Erro ao processar selo de fidelidade:', err);
+        });
+      }
+
+      // Se o pedido foi concluído/entregue, marcar qualquer brinde resgatado como entregue
+      if (savedOrder.status === OrderStatus.COMPLETED) {
+        this.loyaltyService.markRedemptionDeliveredByOrderId(savedOrder.id).catch((err) => {
+          console.error('[Loyalty] Erro ao marcar brinde como entregue:', err);
+        });
+      }
+
       return savedOrder;
     } catch (error: any) {
       throw new BadRequestException(error.message);

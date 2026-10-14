@@ -87,6 +87,13 @@ export class Order {
     name: string;
   } | null;
 
+  loyaltyRedemption?: {
+    id: string;
+    rewardTitle: string;
+    rewardType: string;
+    status: string;
+  } | null;
+
   items?: OrderItem[];
 
   constructor(data: Partial<Order>) {

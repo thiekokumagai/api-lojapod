@@ -68,6 +68,14 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             name: record.courierTransaction.courier.name,
           }
         : null,
+      loyaltyRedemption: record.loyaltyRedemption
+        ? {
+            id: record.loyaltyRedemption.id,
+            rewardTitle: record.loyaltyRedemption.rewardTitle,
+            rewardType: record.loyaltyRedemption.rewardType,
+            status: record.loyaltyRedemption.status,
+          }
+        : null,
       status: record.status as OrderStatus,
       paymentStatus: record.paymentStatus as PaymentStatus,
       installments: record.installments,
@@ -190,6 +198,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       where,
       include: {
         coupon: true,
+        loyaltyRedemption: true,
         courierTransaction: {
           include: {
             courier: true,
@@ -261,6 +270,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       where: { id },
       include: {
         coupon: true,
+        loyaltyRedemption: true,
         courierTransaction: {
           include: {
             courier: true,

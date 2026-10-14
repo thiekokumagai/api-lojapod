@@ -124,6 +124,29 @@ export class CreateOrderUseCase {
         }
       }
 
+      // Vincula recompensa/brinde/desconto de fidelidade resgatado recentemente ao pedido (se houver)
+      try {
+        const cleanPhone = (savedOrder.customerPhone || '').replace(/\D/g, '');
+        if (cleanPhone) {
+          const recentRedemption = await this.prisma.loyaltyRewardRedemption.findFirst({
+            where: {
+              customerPhone: { contains: cleanPhone.slice(-8) },
+              orderId: null,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (recentRedemption) {
+            await this.prisma.loyaltyRewardRedemption.update({
+              where: { id: recentRedemption.id },
+              data: { orderId: savedOrder.id },
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[Loyalty] Erro ao vincular resgate ao pedido:', err);
+      }
+
       // Disparar Notificação Push
       try {
         const admins = await this.usersRepository.findAll();

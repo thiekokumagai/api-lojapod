@@ -19,9 +19,10 @@ import { CouponsModule } from '../coupons/coupons.module';
 import { UsersModule } from '../users/users.module';
 import { PrintModule } from '../print/print.module';
 import { PushNotificationService } from '../../shared/services/push-notification.service';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
-  imports: [SettingsModule, CouponsModule, UsersModule, PrintModule],
+  imports: [SettingsModule, CouponsModule, UsersModule, PrintModule, LoyaltyModule],
   controllers: [OrdersController, StoreOrdersController],
   providers: [
     PushNotificationService,

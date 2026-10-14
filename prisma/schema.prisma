@@ -67,6 +67,10 @@ model Store {
   adminAuditLogs         AdminAuditLog[]
   importJobs             ImportJob[]
   stockNotificationRequests StockNotificationRequest[]
+  loyaltyProgram         LoyaltyProgram?
+  loyaltyCards           LoyaltyCard[]
+  loyaltyTransactions    LoyaltyTransaction[]
+  loyaltyRedemptions     LoyaltyRewardRedemption[]
 
   storeDomain            StoreDomain?
 
@@ -488,6 +492,7 @@ model Customer {
   store     Store?            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   addresses CustomerAddress[]
   orders    Order[]
+  loyaltyCards LoyaltyCard[]
 
   @@unique([storeId, phone])
   @@map("customers")
@@ -594,6 +599,8 @@ model Order {
 
   courierTransactionId String?
   courierTransaction   CourierTransaction? @relation(fields: [courierTransactionId], references: [id], onDelete: SetNull)
+
+  loyaltyRedemption    LoyaltyRewardRedemption?
 
   items OrderItem[]
 
@@ -812,6 +819,100 @@ model StockNotificationRequest {
 
   @@index([storeId, productId, status])
   @@map("stock_notification_requests")
+}
+
+model LoyaltyProgram {
+  id                    String   @id @default(uuid())
+  storeId               String   @unique
+  isActive              Boolean  @default(false)
+  type                  String   @default("FREE_PRODUCT") // "FREE_PRODUCT", "POINTS_DISCOUNT", "CASHBACK", "PROGRESSIVE_DISCOUNT", "HYBRID"
+  stampsRequired        Int      @default(10)
+  minOrderValue         Decimal  @default(0.00) @db.Decimal(10, 2)
+  validityDays          Int      @default(30)
+  rewardText            String   @default("Ganhe 1 Produto ou Desconto Especial")
+  rewardCouponCode      String?
+  rewardDiscount        Decimal? @db.Decimal(10, 2)
+  
+  // Parâmetros dos novos modos
+  pointsPerReal         Decimal  @default(1.00) @db.Decimal(10, 2) // R$ 1 gasto = X pontos
+  pointsRedemptionValue Decimal  @default(0.05) @db.Decimal(10, 2) // Cada 1 ponto vale X reais de desconto
+  cashbackPercent       Decimal  @default(5.00) @db.Decimal(10, 2) // % de cashback
+  progressiveTiers      Json?                                    // Escadinha de descontos progressivos
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("loyalty_programs")
+}
+
+model LoyaltyCard {
+  id             String               @id @default(uuid())
+  storeId        String
+  customerId     String?
+  customerPhone  String
+  customerName   String?
+  currentStamps  Int                  @default(0)
+  pointsBalance  Decimal              @default(0.00) @db.Decimal(10, 2)
+  cashbackBalance Decimal             @default(0.00) @db.Decimal(10, 2)
+  totalCompleted Int                  @default(0)
+  startedAt      DateTime?
+  expiresAt      DateTime?
+  status         String               @default("ACTIVE") // "ACTIVE", "COMPLETED", "EXPIRED", "REDEEMED"
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  store          Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer       Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  transactions   LoyaltyTransaction[]
+  redemptions    LoyaltyRewardRedemption[]
+
+  @@unique([storeId, customerPhone])
+  @@index([storeId, customerPhone, status])
+  @@map("loyalty_cards")
+}
+
+model LoyaltyTransaction {
+  id             String       @id @default(uuid())
+  storeId        String
+  loyaltyCardId  String
+  orderId        String?
+  type           String       // "EARN_STAMP", "EARN_POINTS", "EARN_CASHBACK", "USE_POINTS", "USE_CASHBACK", "RESET_CYCLE", "MANUAL_ADJUST", "EXPIRED", "REDEEM_REWARD"
+  stampsCount    Int          @default(0)
+  pointsAmount   Decimal?     @db.Decimal(10, 2)
+  cashbackAmount Decimal?     @db.Decimal(10, 2)
+  description    String?
+  createdAt      DateTime     @default(now())
+
+  store          Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  loyaltyCard    LoyaltyCard  @relation(fields: [loyaltyCardId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, loyaltyCardId])
+  @@map("loyalty_transactions")
+}
+
+model LoyaltyRewardRedemption {
+  id            String       @id @default(uuid())
+  storeId       String
+  loyaltyCardId String
+  orderId       String?      @unique
+  customerPhone String
+  customerName  String?
+  rewardType    String       // "FREE_PRODUCT", "DISCOUNT_COUPON", "POINTS_EXCHANGE", "CASHBACK_USED"
+  rewardTitle   String
+  status        String       @default("PENDING_DELIVERY") // "PENDING_DELIVERY", "DELIVERED", "CANCELLED"
+  deliveredAt   DateTime?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  loyaltyCard   LoyaltyCard  @relation(fields: [loyaltyCardId], references: [id], onDelete: Cascade)
+  order         Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, status])
+  @@map("loyalty_reward_redemptions")
 }
 
 
