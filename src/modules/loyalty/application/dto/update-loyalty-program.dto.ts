@@ -46,6 +46,10 @@ export class UpdateLoyaltyProgramDto {
 
   @IsOptional()
   @IsNumber()
+  minPointsToRedeem?: number;
+
+  @IsOptional()
+  @IsNumber()
   cashbackPercent?: number;
 
   @IsOptional()

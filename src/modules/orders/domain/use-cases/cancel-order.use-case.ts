@@ -7,6 +7,7 @@ import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order } from '../entities/order.entity';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { EventsGateway } from '../../../events/events.gateway';
+import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 
 @Injectable()
 export class CancelOrderUseCase {
@@ -14,6 +15,7 @@ export class CancelOrderUseCase {
     private readonly ordersRepository: IOrdersRepository,
     private readonly eventsGateway: EventsGateway,
     private readonly prisma: PrismaService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async execute(id: string): Promise<Order> {
@@ -24,6 +26,13 @@ export class CancelOrderUseCase {
 
     try {
       const canceledOrder = await this.ordersRepository.cancelAndRestoreStock(id);
+      
+      // Reverte resgates ou pontuações de fidelidade vinculadas ao pedido cancelado
+      try {
+        await this.loyaltyService.revertOrderLoyalty(id);
+      } catch (loyaltyErr) {
+        console.error('[CancelOrder] Erro ao reverter fidelidade do pedido:', loyaltyErr);
+      }
       
       // Notify client front to update catalog since stock changed
       this.eventsGateway.server.emit('products.refresh');

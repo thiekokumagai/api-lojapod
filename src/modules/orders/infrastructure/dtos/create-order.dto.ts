@@ -262,4 +262,14 @@ export class CreateOrderDto {
   @Min(0)
   @IsOptional()
   changeAmount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Recompensa de fidelidade selecionada para resgate no pedido',
+  })
+  @IsOptional()
+  redeemedReward?: {
+    rewardType: string;
+    rewardTitle: string;
+    discountValue?: number;
+  };
 }

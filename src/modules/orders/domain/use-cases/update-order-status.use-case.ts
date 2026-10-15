@@ -27,9 +27,20 @@ export class UpdateOrderStatusUseCase {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
+    const previousStatus = order.status;
+    const previousPaymentStatus = order.paymentStatus;
+
     try {
       if (payload.status === 'CANCELLED' && order.status !== 'CANCELLED') {
         const canceledOrder = await this.ordersRepository.cancelAndRestoreStock(id);
+        
+        // Reverte resgates ou pontuações de fidelidade vinculadas ao pedido cancelado
+        try {
+          await this.loyaltyService.revertOrderLoyalty(id);
+        } catch (loyaltyErr) {
+          console.error('[UpdateOrderStatus] Erro ao reverter fidelidade do pedido cancelado:', loyaltyErr);
+        }
+
         this.eventsGateway.server.emit('products.refresh');
         this.eventsGateway.notifyOrderUpdated(canceledOrder);
         
@@ -267,6 +278,17 @@ export class UpdateOrderStatusUseCase {
           order.paymentDate = null as any; // Prisma requires null or undefined based on schema
           order.totalReceived = 0;
           order.cardFee = 0;
+        }
+      }
+
+      // Se o pedido estava pago ou concluído e agora NÃO está mais pago NEM concluído (ex: voltou para Pendente), estorna os pontos/selos concedidos
+      const wasEarned = previousPaymentStatus === PaymentStatus.PAID || previousStatus === OrderStatus.COMPLETED;
+      const isNowEarned = order.paymentStatus === PaymentStatus.PAID || order.status === OrderStatus.COMPLETED;
+      if (wasEarned && !isNowEarned) {
+        try {
+          await this.loyaltyService.revertOrderLoyalty(id);
+        } catch (loyaltyErr) {
+          console.error('[UpdateOrderStatus] Erro ao estornar fidelidade ao voltar pedido para Pendente:', loyaltyErr);
         }
       }
 

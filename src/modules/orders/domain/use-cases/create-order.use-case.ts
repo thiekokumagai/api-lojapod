@@ -124,10 +124,134 @@ export class CreateOrderUseCase {
         }
       }
 
-      // Vincula recompensa/brinde/desconto de fidelidade resgatado recentemente ao pedido (se houver)
+      // Processa ou vincula recompensa/brinde/desconto de fidelidade resgatado ao pedido
       try {
         const cleanPhone = (savedOrder.customerPhone || '').replace(/\D/g, '');
-        if (cleanPhone) {
+        const loyaltyReward = (data as any).redeemedReward;
+
+        if (loyaltyReward && loyaltyReward.rewardType && cleanPhone) {
+          // O cliente selecionou uma recompensa no carrinho: efetiva o resgate AGORA vinculado a este pedido!
+          const card = await this.prisma.loyaltyCard.findFirst({
+            where: {
+              storeId: savedOrder.storeId || storeId,
+              customerPhone: { contains: cleanPhone.slice(-8) },
+            },
+          });
+
+          if (card) {
+            const program = await this.prisma.loyaltyProgram.findUnique({
+              where: { storeId: savedOrder.storeId || storeId },
+            });
+
+            const rType = loyaltyReward.rewardType;
+            const rTitle = loyaltyReward.rewardTitle || program?.rewardText || 'Brinde Fidelidade';
+            const isPointsDiscount = rType === 'POINTS_DISCOUNT';
+            const isCashback = rType === 'CASHBACK';
+
+            // Cria o registro de redenção já com o orderId
+            await this.prisma.loyaltyRewardRedemption.create({
+              data: {
+                storeId: savedOrder.storeId || storeId || '',
+                loyaltyCardId: card.id,
+                orderId: savedOrder.id,
+                customerPhone: cleanPhone,
+                customerName: card.customerName || savedOrder.customerName,
+                rewardType: rType,
+                rewardTitle: rTitle,
+                status: (isPointsDiscount || isCashback) ? 'DELIVERED' : 'PENDING_DELIVERY',
+              },
+            });
+
+            // Ao resgatar benefícios descartáveis (produto grátis, desconto por pontos, cashback), zera tudo no cartão.
+            // Para PROGRESSIVE_DISCOUNT, é acumulativo: NÃO zera os pedidos do cliente!
+            let updatedCard = card;
+            if (rType !== 'PROGRESSIVE_DISCOUNT') {
+              updatedCard = await this.prisma.loyaltyCard.update({
+                where: { id: card.id },
+                data: {
+                  status: 'REDEEMED',
+                  currentStamps: 0,
+                  pointsBalance: 0,
+                  cashbackBalance: 0,
+                  totalCompleted: card.totalCompleted + 1,
+                  startedAt: null,
+                  expiresAt: null,
+                },
+              });
+            }
+
+            // Registra a transação detalhada correspondente
+            if (isPointsDiscount) {
+              await this.prisma.loyaltyTransaction.create({
+                data: {
+                  storeId: savedOrder.storeId || storeId || '',
+                  loyaltyCardId: card.id,
+                  orderId: savedOrder.id,
+                  type: 'USE_POINTS',
+                  pointsAmount: card.pointsBalance,
+                  stampsCount: card.currentStamps,
+                  description: `Desconto por pontos resgatado no Pedido #${savedOrder.id.slice(-6).toUpperCase()}: ${rTitle}`,
+                },
+              });
+            } else if (isCashback) {
+              await this.prisma.loyaltyTransaction.create({
+                data: {
+                  storeId: savedOrder.storeId || storeId || '',
+                  loyaltyCardId: card.id,
+                  orderId: savedOrder.id,
+                  type: 'USE_CASHBACK',
+                  cashbackAmount: card.cashbackBalance,
+                  description: `Saldo de cashback resgatado no Pedido #${savedOrder.id.slice(-6).toUpperCase()}: ${rTitle}`,
+                },
+              });
+            } else if (rType === 'PROGRESSIVE_DISCOUNT') {
+              await this.prisma.loyaltyTransaction.create({
+                data: {
+                  storeId: savedOrder.storeId || storeId || '',
+                  loyaltyCardId: card.id,
+                  orderId: savedOrder.id,
+                  type: 'USE_DISCOUNT',
+                  stampsCount: card.currentStamps,
+                  description: `Desconto progressivo aplicado no Pedido #${savedOrder.id.slice(-6).toUpperCase()}: ${rTitle}`,
+                },
+              });
+            } else {
+              // Brinde / Produto grátis
+              await this.prisma.loyaltyTransaction.create({
+                data: {
+                  storeId: savedOrder.storeId || storeId || '',
+                  loyaltyCardId: card.id,
+                  orderId: savedOrder.id,
+                  type: 'REDEEM_REWARD',
+                  stampsCount: card.currentStamps,
+                  description: `Recompensa resgatada no Pedido #${savedOrder.id.slice(-6).toUpperCase()}: ${rTitle}`,
+                },
+              });
+            }
+
+            // Notifica via socket
+            try {
+              this.eventsGateway.server.emit('loyalty.reward_redeemed', {
+                storeId: savedOrder.storeId || storeId,
+                customerName: card.customerName || savedOrder.customerName || 'Cliente',
+                customerPhone: cleanPhone,
+                rewardTitle: rTitle,
+                rewardType: rType,
+                orderId: savedOrder.id,
+                createdAt: new Date(),
+              });
+              this.eventsGateway.server.emit('loyalty.card_updated', {
+                storeId: savedOrder.storeId || storeId,
+                cardId: card.id,
+                customerPhone: cleanPhone,
+              });
+              this.eventsGateway.server.emit('loyalty.refresh', { storeId: savedOrder.storeId || storeId });
+            } catch (wsErr) {
+              console.error('[Loyalty] Erro ao emitir notificação de resgate:', wsErr);
+            }
+          }
+        } else if (cleanPhone) {
+          // Fallback para resgates que possam ter sido registrados anteriormente sem orderId
           const recentRedemption = await this.prisma.loyaltyRewardRedemption.findFirst({
             where: {
               customerPhone: { contains: cleanPhone.slice(-8) },
@@ -144,7 +268,7 @@ export class CreateOrderUseCase {
           }
         }
       } catch (err) {
-        console.error('[Loyalty] Erro ao vincular resgate ao pedido:', err);
+        console.error('[Loyalty] Erro ao processar resgate de fidelidade no pedido:', err);
       }
 
       // Disparar Notificação Push

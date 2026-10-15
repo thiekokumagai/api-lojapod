@@ -833,9 +833,9 @@ model LoyaltyProgram {
   rewardCouponCode      String?
   rewardDiscount        Decimal? @db.Decimal(10, 2)
   
-  // Parâmetros dos novos modos
   pointsPerReal         Decimal  @default(1.00) @db.Decimal(10, 2) // R$ 1 gasto = X pontos
   pointsRedemptionValue Decimal  @default(0.05) @db.Decimal(10, 2) // Cada 1 ponto vale X reais de desconto
+  minPointsToRedeem     Int      @default(0)                       // Pontos mínimos para permitir o resgate
   cashbackPercent       Decimal  @default(5.00) @db.Decimal(10, 2) // % de cashback
   progressiveTiers      Json?                                    // Escadinha de descontos progressivos
   
