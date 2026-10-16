@@ -224,13 +224,23 @@ export class StockNotificationsService {
       throw new NotFoundException('Solicitação não encontrada');
     }
 
-    return this.prisma.stockNotificationRequest.update({
+    const updated = await this.prisma.stockNotificationRequest.update({
       where: { id },
       data: {
         status: 'NOTIFIED',
         notifiedAt: new Date(),
       },
     });
+
+    try {
+      if (this.eventsGateway) {
+        this.eventsGateway.notifyStockNotificationUpdated(updated);
+      }
+    } catch (err) {
+      console.error('Erro ao emitir evento websocket de stock notification updated', err);
+    }
+
+    return updated;
   }
 
   async delete(id: string) {
@@ -247,8 +257,18 @@ export class StockNotificationsService {
       throw new NotFoundException('Solicitação não encontrada');
     }
 
-    return this.prisma.stockNotificationRequest.delete({
+    const deleted = await this.prisma.stockNotificationRequest.delete({
       where: { id },
     });
+
+    try {
+      if (this.eventsGateway) {
+        this.eventsGateway.notifyStockNotificationDeleted(id);
+      }
+    } catch (err) {
+      console.error('Erro ao emitir evento websocket de stock notification deleted', err);
+    }
+
+    return deleted;
   }
 }
