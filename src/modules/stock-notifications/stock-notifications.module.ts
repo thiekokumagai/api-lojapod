@@ -7,10 +7,11 @@ import { StockNotificationsController } from './infrastructure/controllers/stock
 
 import { UsersModule } from '../users/users.module';
 import { SettingsModule } from '../settings/settings.module';
+import { EventsModule } from '../events/events.module';
 import { PushNotificationService } from '../../shared/services/push-notification.service';
 
 @Module({
-  imports: [PrismaModule, TenantModule, UsersModule, SettingsModule],
+  imports: [PrismaModule, TenantModule, UsersModule, SettingsModule, EventsModule],
   controllers: [StoreStockNotificationsController, StockNotificationsController],
   providers: [StockNotificationsService, PushNotificationService],
   exports: [StockNotificationsService],

@@ -11,7 +11,7 @@ export class StockNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContextService: TenantContextService,
-    @Optional() private readonly eventsGateway?: EventsGateway,
+    private readonly eventsGateway: EventsGateway,
     @Optional() private readonly usersRepository?: IUsersRepository,
     @Optional() private readonly pushNotificationService?: PushNotificationService,
   ) {}
