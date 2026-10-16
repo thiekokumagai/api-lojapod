@@ -56,6 +56,8 @@ export class GetCashRegisterSummaryUseCase {
     let totalOutflows = 0;
     let motoboyOutflows = 0;
     let partnersOutflows = 0;
+    let thiekoOutflows = 0;
+    let muriloOutflows = 0;
     let marketingOutflows = 0;
     let totalInvestment = 0;
 
@@ -68,6 +70,8 @@ export class GetCashRegisterSummaryUseCase {
         const isMotoboy = tx.category === 'MOTOBOY';
         const isMarketing = tx.category === 'MARKETING' || descLower.includes('marketing');
         const isPartners = tx.category === 'PARTNERS' || descLower.includes('thieko') || descLower.includes('murilo') || descLower.includes('pró-labore') || descLower.includes('prolabore');
+        const isThieko = isPartners && (descLower.includes('thieko') || descLower.includes('tieko'));
+        const isMurilo = isPartners && descLower.includes('murilo');
 
         if (isInvestment) {
           totalInvestment += Number(tx.amount);
@@ -77,6 +81,11 @@ export class GetCashRegisterSummaryUseCase {
           marketingOutflows += Number(tx.amount);
         } else if (isPartners) {
           partnersOutflows += Number(tx.amount);
+          if (isThieko) {
+            thiekoOutflows += Number(tx.amount);
+          } else if (isMurilo) {
+            muriloOutflows += Number(tx.amount);
+          }
         } else {
           totalOutflows += Number(tx.amount);
         }
@@ -93,6 +102,8 @@ export class GetCashRegisterSummaryUseCase {
     totalOutflows = Math.round(totalOutflows * 100) / 100;
     motoboyOutflows = Math.round(motoboyOutflows * 100) / 100;
     partnersOutflows = Math.round(partnersOutflows * 100) / 100;
+    thiekoOutflows = Math.round(thiekoOutflows * 100) / 100;
+    muriloOutflows = Math.round(muriloOutflows * 100) / 100;
     marketingOutflows = Math.round(marketingOutflows * 100) / 100;
     totalGross = Math.round(totalGross * 100) / 100;
 
@@ -122,6 +133,8 @@ export class GetCashRegisterSummaryUseCase {
         totalOutflows,
         motoboyOutflows,
         partnersOutflows,
+        thiekoOutflows,
+        muriloOutflows,
         marketingOutflows,
         totalNet,
         totalNetProfit,
