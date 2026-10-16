@@ -1,13 +1,19 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { CreateStockNotificationDto } from '../infrastructure/dtos/create-stock-notification.dto';
+import { EventsGateway } from '../../events/events.gateway';
+import { IUsersRepository } from '../../users/domain/repositories/iusers.repository';
+import { PushNotificationService } from '../../../shared/services/push-notification.service';
 
 @Injectable()
 export class StockNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContextService: TenantContextService,
+    @Optional() private readonly eventsGateway?: EventsGateway,
+    @Optional() private readonly usersRepository?: IUsersRepository,
+    @Optional() private readonly pushNotificationService?: PushNotificationService,
   ) {}
 
   async createForStore(dto: CreateStockNotificationDto) {
@@ -63,6 +69,64 @@ export class StockNotificationsService {
         },
       },
     });
+
+    // 1. Notificação WebSocket para o Painel Admin em tempo real
+    try {
+      if (this.eventsGateway) {
+        this.eventsGateway.notifyStockNotificationRequest({
+          id: notification.id,
+          productTitle: notification.product.title,
+          customerName: notification.customerName,
+          customerPhone: notification.customerPhone,
+          variationName:
+            notification.productItem?.options
+              ?.map((opt) => opt.option.value)
+              .join(' / ') || null,
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao emitir evento websocket de stock notification', err);
+    }
+
+    // 2. Notificação Push Instantânea (WebPush / PWA) para Administradores
+    try {
+      if (this.usersRepository && this.pushNotificationService) {
+        const admins = await this.usersRepository.findAll();
+        const tokens: string[] = [];
+        const webSubscriptions: any[] = [];
+
+        admins.forEach((u) => {
+          if (u.expoPushToken) {
+            tokens.push(...u.expoPushToken.split(',').filter(Boolean));
+          }
+          if (u.webPushSubscription) {
+            if (Array.isArray(u.webPushSubscription)) {
+              webSubscriptions.push(...u.webPushSubscription);
+            } else {
+              webSubscriptions.push(u.webPushSubscription as any);
+            }
+          }
+        });
+
+        if (tokens.length > 0 || webSubscriptions.length > 0) {
+          const varText = notification.productItem?.options
+            ? ` (${notification.productItem.options.map((opt) => opt.option.value).join(' / ')})`
+            : '';
+
+          this.pushNotificationService
+            .sendNotifications(
+              tokens,
+              '🔔 Novo "Avise-me quando chegar"!',
+              `${notification.customerName} quer saber quando "${notification.product.title}${varText}" chegar.`,
+              { screen: 'StockNotifications', notificationId: notification.id },
+              webSubscriptions,
+            )
+            .catch((e) => console.error('[Push Notification Avise-me] Erro:', e));
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao disparar push notification de avise-me', err);
+    }
 
     return notification;
   }
