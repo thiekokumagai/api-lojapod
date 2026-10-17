@@ -6,16 +6,17 @@ import {
   Min,
   IsOptional,
   IsUUID,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateOrderItemDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    description: 'ID do produto',
+    description: 'ID do produto (obrigatório se não for combo)',
   })
   @IsUUID()
-  @IsNotEmpty()
-  productId: string;
+  @IsOptional()
+  productId?: string;
 
   @ApiPropertyOptional({
     example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
@@ -27,7 +28,7 @@ export class CreateOrderItemDto {
 
   @ApiProperty({
     example: 'BLVK Spearmint 35mg',
-    description: 'Nome do produto',
+    description: 'Nome do produto ou combo',
   })
   @IsString()
   @IsNotEmpty()
@@ -35,7 +36,7 @@ export class CreateOrderItemDto {
 
   @ApiProperty({
     example: 75.0,
-    description: 'Preço unitário do produto',
+    description: 'Preço unitário do produto ou combo',
   })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
@@ -50,4 +51,15 @@ export class CreateOrderItemDto {
   @IsString()
   @IsOptional()
   variation?: string;
+
+  @ApiPropertyOptional({ description: 'ID do combo se este item for um combo' })
+  @IsUUID()
+  @IsOptional()
+  comboId?: string;
+
+  @ApiPropertyOptional({ description: 'Indica se este item é um combo', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isCombo?: boolean;
 }
+

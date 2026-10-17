@@ -104,6 +104,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             imageUrl,
             costPrice: item.product?.costPrice ? Number(item.product.costPrice) : 0,
             categoryName: item.product?.category?.title || null,
+            comboId: item.comboId || null,
+            isCombo: item.isCombo || false,
+            comboSnapshot: item.comboSnapshot || null,
           };
         }) ?? [],
     });
@@ -371,6 +374,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 price: item.price,
                 quantity: item.quantity,
                 variation: item.variation,
+                comboId: item.comboId || null,
+                isCombo: item.isCombo || false,
+                comboSnapshot: item.comboSnapshot || undefined,
               })) ?? [],
           },
         } as any,
@@ -451,79 +457,156 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       const createdStockMovementIds: string[] = [];
       if (order.items && order.items.length > 0) {
         for (const item of order.items) {
-          if (!item.productId) {
-            throw new Error(
-              `Item productName ${item.productName} must be linked to a productId`,
-            );
-          }
-
-          const productItem = await this.findProductItem(
-            tx,
-            item.productId,
-            item.productItemId,
-            item.variation,
-            item.quantity,
-          );
-
-          if (!productItem) {
-            throw new Error(
-              `Estoque do produto ou variação de "${item.productName}" não cadastrado.`,
-            );
-          }
-
-          if (productItem.stock < item.quantity) {
-            throw new Error(
-              `Estoque insuficiente para o item "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
-            );
-          }
-
-          await tx.productItem.update({
-            where: { id: productItem.id },
-            data: {
-              stock: {
-                decrement: item.quantity,
+          if (item.isCombo || item.comboId) {
+            // Lógica para item de COMBO
+            const comboId = item.comboId || item.productId;
+            const comboRecord = await tx.combo.findUnique({
+              where: { id: comboId! },
+              include: {
+                items: {
+                  include: {
+                    product: {
+                      include: { items: true },
+                    },
+                    productItem: true,
+                  },
+                },
               },
-            },
-          });
+            });
 
-          const sm = await tx.stockMovement.create({
-            data: {
-              type: 'SUBTRACT',
-              quantity: item.quantity,
-              previousStock: productItem.stock,
-              newStock: productItem.stock - item.quantity,
-              observation: `Venda via pedido`,
-              productId: item.productId,
-              productItemId: productItem.id,
-            },
-          });
-          createdStockMovementIds.push(sm.id);
+            if (!comboRecord) {
+              throw new Error(`Combo "${item.productName}" não encontrado para baixa de estoque.`);
+            }
 
-          // Check if total stock for this product is 0 or less, if so check storeSettings before disabling
-          const allItems = await tx.productItem.findMany({
-            where: { productId: item.productId },
-          });
-          const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
-          if (totalStock <= 0) {
-            let autoHide = true;
-            if (order.storeId) {
-              const settings = await tx.storeSettings.findFirst({
-                where: { storeId: order.storeId },
-                select: { autoHideOutOfStock: true },
+            // Para cada componente do combo, valida e decrementa estoque
+            for (const component of comboRecord.items) {
+              const requiredQuantity = component.quantity * item.quantity;
+              const productItem = await this.findProductItem(
+                tx,
+                component.productId,
+                component.productItemId,
+                component.variation,
+                requiredQuantity,
+              );
+
+              if (!productItem) {
+                throw new Error(
+                  `Componente "${component.product?.title}" do combo não possui estoque/variação cadastrada.`,
+                );
+              }
+
+              if (productItem.stock < requiredQuantity) {
+                throw new Error(
+                  `Estoque insuficiente para o componente "${component.product?.title}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                );
+              }
+
+              await tx.productItem.update({
+                where: { id: productItem.id },
+                data: {
+                  stock: {
+                    decrement: requiredQuantity,
+                  },
+                },
               });
-              if (settings && settings.autoHideOutOfStock === false) {
-                autoHide = false;
+
+              const sm = await tx.stockMovement.create({
+                data: {
+                  type: 'SUBTRACT',
+                  quantity: requiredQuantity,
+                  previousStock: productItem.stock,
+                  newStock: productItem.stock - requiredQuantity,
+                  observation: `Venda via combo "${comboRecord.name}" no pedido`,
+                  productId: component.productId,
+                  productItemId: productItem.id,
+                },
+              });
+              createdStockMovementIds.push(sm.id);
+            }
+
+            // Incrementa totalSold no combo
+            await tx.combo.update({
+              where: { id: comboRecord.id },
+              data: {
+                totalSold: { increment: item.quantity },
+              },
+            });
+          } else {
+            // Lógica padrão para produtos convencionais
+            if (!item.productId) {
+              throw new Error(
+                `Item productName ${item.productName} must be linked to a productId`,
+              );
+            }
+
+            const productItem = await this.findProductItem(
+              tx,
+              item.productId,
+              item.productItemId,
+              item.variation,
+              item.quantity,
+            );
+
+            if (!productItem) {
+              throw new Error(
+                `Estoque do produto ou variação de "${item.productName}" não cadastrado.`,
+              );
+            }
+
+            if (productItem.stock < item.quantity) {
+              throw new Error(
+                `Estoque insuficiente para o item "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
+              );
+            }
+
+            await tx.productItem.update({
+              where: { id: productItem.id },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+
+            const sm = await tx.stockMovement.create({
+              data: {
+                type: 'SUBTRACT',
+                quantity: item.quantity,
+                previousStock: productItem.stock,
+                newStock: productItem.stock - item.quantity,
+                observation: `Venda via pedido`,
+                productId: item.productId,
+                productItemId: productItem.id,
+              },
+            });
+            createdStockMovementIds.push(sm.id);
+
+            // Check if total stock for this product is 0 or less, if so check storeSettings before disabling
+            const allItems = await tx.productItem.findMany({
+              where: { productId: item.productId },
+            });
+            const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
+            if (totalStock <= 0) {
+              let autoHide = true;
+              if (order.storeId) {
+                const settings = await tx.storeSettings.findFirst({
+                  where: { storeId: order.storeId },
+                  select: { autoHideOutOfStock: true },
+                });
+                if (settings && settings.autoHideOutOfStock === false) {
+                  autoHide = false;
+                }
+              }
+              if (autoHide) {
+                await tx.product.update({
+                  where: { id: item.productId },
+                  data: { isVisible: false },
+                });
               }
             }
-            if (autoHide) {
-              await tx.product.update({
-                where: { id: item.productId },
-                data: { isVisible: false },
-              });
-            }
-          }
 
-          item.productItemId = productItem.id;
+            item.productItemId = productItem.id;
+          }
         }
       }
 
@@ -675,6 +758,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 price: item.price,
                 quantity: item.quantity,
                 variation: item.variation,
+                comboId: item.comboId || null,
+                isCombo: item.isCombo || false,
+                comboSnapshot: item.comboSnapshot || undefined,
               })) ?? [],
           },
         } as any,
@@ -967,7 +1053,61 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
 
       for (const item of orderRecord.items) {
-        if (item.productId) {
+        if (item.isCombo || item.comboId || item.comboSnapshot) {
+          // Devolução de estoque dos componentes do combo
+          const snapshot = item.comboSnapshot as any;
+          const components = snapshot?.items || [];
+
+          for (const comp of components) {
+            const returnQuantity = (comp.quantity || 1) * item.quantity;
+            let productItem: any;
+            if (comp.productItemId) {
+              productItem = await tx.productItem.findUnique({ where: { id: comp.productItemId } });
+            } else if (comp.productId) {
+              productItem = await tx.productItem.findFirst({ where: { productId: comp.productId } });
+            }
+
+            if (productItem) {
+              await tx.productItem.update({
+                where: { id: productItem.id },
+                data: {
+                  stock: { increment: returnQuantity },
+                },
+              });
+
+              await tx.stockMovement.create({
+                data: {
+                  type: 'ADD',
+                  quantity: returnQuantity,
+                  previousStock: productItem.stock,
+                  newStock: productItem.stock + returnQuantity,
+                  observation: `Cancelamento do pedido #${orderRecord.orderNumber} (Combo: ${item.productName})`,
+                  productId: comp.productId,
+                  productItemId: productItem.id,
+                },
+              });
+
+              if (comp.productId) {
+                await tx.product.update({
+                  where: { id: comp.productId },
+                  data: { isVisible: true },
+                });
+              }
+            }
+          }
+
+          // Decrementa totalSold do combo se ele ainda existir
+          if (item.comboId) {
+            try {
+              await tx.combo.update({
+                where: { id: item.comboId },
+                data: { totalSold: { decrement: item.quantity } },
+              });
+            } catch (err) {
+              // Ignora se o combo já tiver sido excluído
+            }
+          }
+        } else if (item.productId) {
           let productItem: any;
           if (item.productItemId) {
             productItem = await tx.productItem.findUnique({ where: { id: item.productItemId } });

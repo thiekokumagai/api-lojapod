@@ -71,6 +71,7 @@ model Store {
   loyaltyCards           LoyaltyCard[]
   loyaltyTransactions    LoyaltyTransaction[]
   loyaltyRedemptions     LoyaltyRewardRedemption[]
+  combos                 Combo[]
 
   storeDomain            StoreDomain?
 
@@ -242,6 +243,7 @@ model Category {
 
   store    Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   products Product[]
+  combos   Combo[]
 
   @@map("categories")
 }
@@ -298,6 +300,7 @@ model Product {
   description         String?            @db.Text
   descriptionFormated String?            @db.Text
   orderItems          OrderItem[]
+  comboItems          ComboItem[]
   stockMovements      StockMovement[]
   stockNotificationRequests StockNotificationRequest[]
 
@@ -349,6 +352,7 @@ model ProductItem {
   product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   options        ProductItemOption[]
   orderItems     OrderItem[]
+  comboItems     ComboItem[]
   stockMovements StockMovement[]
   stockNotificationRequests StockNotificationRequest[]
 
@@ -617,9 +621,13 @@ model OrderItem {
   quantity      Int
   variation     String? // Armazena a string descritiva da variação escolhida
 
-  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
-  productItem ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productItem   ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+  comboId       String?
+  combo         Combo?       @relation(fields: [comboId], references: [id], onDelete: SetNull)
+  isCombo       Boolean      @default(false)
+  comboSnapshot Json?
 
   @@map("order_items")
 }
@@ -913,6 +921,47 @@ model LoyaltyRewardRedemption {
 
   @@index([storeId, status])
   @@map("loyalty_reward_redemptions")
+}
+
+model Combo {
+  id            String      @id @default(uuid())
+  storeId       String
+  name          String
+  description   String?
+  imageUrl      String?
+  categoryId    String?
+  price         Decimal     @db.Decimal(10, 2)
+  isActive      Boolean     @default(true)
+  startDate     DateTime?
+  endDate       DateTime?
+  maxPerOrder   Int?
+  maxTotalSales Int?
+  totalSold     Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  store         Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items         ComboItem[]
+  orderItems    OrderItem[]
+
+  @@index([storeId, isActive])
+  @@map("combos")
+}
+
+model ComboItem {
+  id            String       @id @default(uuid())
+  comboId       String
+  productId     String
+  productItemId String?
+  quantity      Int          @default(1)
+  variation     String?
+
+  combo         Combo        @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productItem   ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+
+  @@map("combo_items")
 }
 
 

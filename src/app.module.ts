@@ -28,6 +28,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { ImportsModule } from './modules/imports/imports.module';
 import { StockNotificationsModule } from './modules/stock-notifications/stock-notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { CombosModule } from './modules/combos/combos.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
     CategoriesModule,
     VariationsModule,
     ProductsModule,
+    CombosModule,
     SettingsModule,
     OrdersModule,
     CashRegistersModule,

@@ -23,6 +23,9 @@ export interface OrderItem {
   imageUrl?: string;
   costPrice?: number;
   categoryName?: string | null;
+  comboId?: string | null;
+  isCombo?: boolean;
+  comboSnapshot?: any;
 }
 
 export class Order {

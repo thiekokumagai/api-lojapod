@@ -36,6 +36,92 @@ export class CreateOrderUseCase {
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
       const storeId = data.storeId || this.tenantContextService.getStoreId() || undefined;
+
+      // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
+      if (data.items && Array.isArray(data.items)) {
+        for (const item of data.items) {
+          if (item.isCombo || item.comboId) {
+            const comboId = item.comboId || item.productId;
+            if (!comboId) {
+              throw new BadRequestException('ID do combo não fornecido.');
+            }
+
+            const comboRecord = await this.prisma.combo.findUnique({
+              where: { id: comboId },
+              include: {
+                items: {
+                  include: {
+                    product: {
+                      include: {
+                        images: true,
+                        items: true,
+                      },
+                    },
+                    productItem: true,
+                  },
+                },
+              },
+            });
+
+            if (!comboRecord) {
+              throw new BadRequestException(`Combo "${item.productName}" não encontrado.`);
+            }
+
+            if (!comboRecord.isActive) {
+              throw new BadRequestException(`O combo "${comboRecord.name}" está inativo.`);
+            }
+
+            const now = new Date();
+            if (comboRecord.startDate && now < comboRecord.startDate) {
+              throw new BadRequestException(`O combo "${comboRecord.name}" ainda não está disponível.`);
+            }
+            if (comboRecord.endDate && now > comboRecord.endDate) {
+              throw new BadRequestException(`O combo "${comboRecord.name}" não está mais disponível.`);
+            }
+
+            if (comboRecord.maxPerOrder && item.quantity > comboRecord.maxPerOrder) {
+              throw new BadRequestException(
+                `Limite máximo de ${comboRecord.maxPerOrder} unidade(s) por pedido para o combo "${comboRecord.name}".`,
+              );
+            }
+
+            if (comboRecord.maxTotalSales !== null && comboRecord.maxTotalSales !== undefined) {
+              const remaining = comboRecord.maxTotalSales - comboRecord.totalSold;
+              if (item.quantity > remaining) {
+                throw new BadRequestException(
+                  `O combo "${comboRecord.name}" possui apenas ${Math.max(0, remaining)} unidade(s) disponíveis para venda.`,
+                );
+              }
+            }
+
+            // Fixa o preço oficial do backend
+            item.price = Number(comboRecord.price);
+            item.isCombo = true;
+            item.comboId = comboRecord.id;
+            item.productName = comboRecord.name;
+            if (!item.productId) {
+              item.productId = comboRecord.id; // Para retrocompatibilidade de campos obrigatórios
+            }
+
+            // Snapshot imutável dos componentes no momento exato da compra
+            item.comboSnapshot = {
+              comboId: comboRecord.id,
+              comboName: comboRecord.name,
+              comboPrice: Number(comboRecord.price),
+              quantity: item.quantity,
+              items: comboRecord.items.map((ci) => ({
+                productId: ci.productId,
+                productItemId: ci.productItemId,
+                quantity: ci.quantity,
+                variation: ci.variation,
+                productName: ci.product?.title || 'Produto',
+                productPrice: Number(ci.product?.promotionalPrice || ci.product?.price || 0),
+              })),
+            };
+          }
+        }
+      }
+
       // Se a loja tem regra de isenção de taxa (frete grátis) a partir de um valor
       try {
         const settings = await this.settingsRepository.get();
