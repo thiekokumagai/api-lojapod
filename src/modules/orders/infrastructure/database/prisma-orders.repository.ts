@@ -513,8 +513,13 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             }
 
             // Para cada componente do combo, valida e decrementa estoque
-            for (const component of comboRecord.items) {
-              const requiredQuantity = component.quantity * item.quantity;
+            const snapshotItems = (item.comboSnapshot as any)?.items;
+            const componentsToProcess = Array.isArray(snapshotItems) && snapshotItems.length > 0
+              ? snapshotItems
+              : comboRecord.items;
+
+            for (const component of componentsToProcess) {
+              const requiredQuantity = (component.quantity || 1) * item.quantity;
               const productItem = await this.findProductItem(
                 tx,
                 component.productId,
@@ -525,13 +530,13 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
               if (!productItem) {
                 throw new Error(
-                  `Componente "${component.product?.title}" do combo não possui estoque/variação cadastrada.`,
+                  `Componente "${component.productName || 'Componente'}" do combo não possui estoque/variação cadastrada.`,
                 );
               }
 
               if (productItem.stock < requiredQuantity) {
                 throw new Error(
-                  `Estoque insuficiente para o componente "${component.product?.title}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  `Estoque insuficiente para o componente "${component.productName || 'Componente'}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
                 );
               }
 
@@ -556,6 +561,30 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 },
               });
               createdStockMovementIds.push(sm.id);
+
+              // Verifica se o estoque do produto do componente zerou para aplicar autoHideOutOfStock
+              const allCompItems = await tx.productItem.findMany({
+                where: { productId: component.productId },
+              });
+              const totalCompStock = allCompItems.reduce((acc, curr) => acc + curr.stock, 0);
+              if (totalCompStock <= 0) {
+                let autoHide = true;
+                if (order.storeId) {
+                  const settings = await tx.storeSettings.findFirst({
+                    where: { storeId: order.storeId },
+                    select: { autoHideOutOfStock: true },
+                  });
+                  if (settings && settings.autoHideOutOfStock === false) {
+                    autoHide = false;
+                  }
+                }
+                if (autoHide) {
+                  await tx.product.update({
+                    where: { id: component.productId },
+                    data: { isVisible: false },
+                  });
+                }
+              }
             }
 
             // Incrementa totalSold no combo
@@ -1010,7 +1039,19 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             })) ?? []
           }
         },
-        include: { items: true },
+        include: {
+          items: {
+            include: {
+              combo: true,
+              product: {
+                include: {
+                  images: true,
+                  category: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (customerIdToLink && order.cep) {

@@ -101,26 +101,105 @@ export class CreateOrderUseCase {
             item.productName = comboRecord.name;
             item.productId = null;
 
-            // Snapshot imutável dos componentes no momento exato da compra
+            // Mapeia e valida cada componente do combo
+            // Se o componente já tem variação fixa definida no combo: usa a fixa.
+            // Se o componente não tem variação fixa: deve vir em item.comboSelections ou falhar se o produto exigir variação
+            const clientSelections = Array.isArray(item.comboSelections) ? item.comboSelections : [];
+            const snapshotItems: any[] = [];
+
+            for (let i = 0; i < comboRecord.items.length; i++) {
+              const ci = comboRecord.items[i];
+              const p = ci.product;
+
+              if (!p || p.isVisible === false) {
+                throw new BadRequestException(
+                  `O produto "${p?.title || 'Componente'}" do combo "${comboRecord.name}" está indisponível ou desativado.`,
+                );
+              }
+
+              let resolvedProductItemId = ci.productItemId;
+              let resolvedVariation = ci.variation;
+
+              if (resolvedProductItemId) {
+                // Variação fixa cadastrada no combo
+                const pi = p.items?.find((itm: any) => itm.id === resolvedProductItemId);
+                if (!pi || (pi.stock ?? 0) < ci.quantity * item.quantity) {
+                  throw new BadRequestException(
+                    `Estoque insuficiente para a opção "${ci.variation || 'padrão'}" do produto "${p.title}" no combo "${comboRecord.name}".`,
+                  );
+                }
+              } else if (p.items && p.items.length > 0 && p.items.some((itm: any) => itm.options && itm.options.length > 0)) {
+                // Produto possui variações, cliente deve ter escolhido
+                const chosen = clientSelections.find((cs: any) => cs.productId === ci.productId);
+                if (!chosen || (!chosen.productItemId && !chosen.variation)) {
+                  throw new BadRequestException(
+                    `Por favor, selecione a variação para o item "${p.title}" do combo "${comboRecord.name}".`,
+                  );
+                }
+
+                // Validar se a variação escolhida pertence ao produto
+                let matchedItem: any = null;
+                if (chosen.productItemId) {
+                  matchedItem = p.items.find((itm: any) => itm.id === chosen.productItemId);
+                }
+                if (!matchedItem && chosen.variation) {
+                  const targetVar = chosen.variation.trim().toLowerCase();
+                  matchedItem = p.items.find((itm: any) => {
+                    const optVals = (itm.options || []).map((o: any) => o.option?.value?.trim()?.toLowerCase()).filter(Boolean);
+                    const joined = optVals.join(' - ');
+                    return joined === targetVar || optVals.includes(targetVar) || targetVar.includes(joined);
+                  });
+                }
+
+                if (!matchedItem) {
+                  throw new BadRequestException(
+                    `A variação "${chosen.variation || chosen.productItemId}" não pertence ao produto "${p.title}".`,
+                  );
+                }
+
+                if ((matchedItem.stock ?? 0) < ci.quantity * item.quantity) {
+                  throw new BadRequestException(
+                    `A variação "${chosen.variation}" do produto "${p.title}" não possui estoque suficiente para o combo.`,
+                  );
+                }
+
+                resolvedProductItemId = matchedItem.id;
+                resolvedVariation = chosen.variation || (matchedItem.options || []).map((o: any) => o.option?.value).join(' - ') || null;
+              } else {
+                // Produto simples sem variações
+                const totalStock = (p.items || []).reduce((sum: number, itm: any) => sum + (itm.stock ?? 0), 0);
+                if (totalStock < ci.quantity * item.quantity) {
+                  throw new BadRequestException(
+                    `Estoque insuficiente para o produto "${p.title}" do combo "${comboRecord.name}".`,
+                  );
+                }
+                if (p.items && p.items.length === 1) {
+                  resolvedProductItemId = p.items[0].id;
+                }
+              }
+
+              const promo = p?.promotionalPrice ? Number(p.promotionalPrice) : 0;
+              const normal = p?.price ? Number(p.price) : 0;
+
+              snapshotItems.push({
+                productId: ci.productId,
+                productItemId: resolvedProductItemId || null,
+                quantity: ci.quantity,
+                variation: resolvedVariation || null,
+                productName: p?.title || 'Produto',
+                productPrice: promo > 0 ? promo : normal,
+                productCostPrice: p?.costPrice ? Number(p.costPrice) : 0,
+              });
+            }
+
+            // Snapshot imutável dos componentes com variações exatas
             item.comboSnapshot = {
               comboId: comboRecord.id,
               comboName: comboRecord.name,
               comboPrice: Number(comboRecord.price),
               comboImageUrl: comboRecord.imageUrl || null,
               quantity: item.quantity,
-              items: comboRecord.items.map((ci) => {
-                const promo = ci.product?.promotionalPrice ? Number(ci.product.promotionalPrice) : 0;
-                const normal = ci.product?.price ? Number(ci.product.price) : 0;
-                return {
-                  productId: ci.productId,
-                  productItemId: ci.productItemId,
-                  quantity: ci.quantity,
-                  variation: ci.variation,
-                  productName: ci.product?.title || 'Produto',
-                  productPrice: promo > 0 ? promo : normal,
-                  productCostPrice: ci.product?.costPrice ? Number(ci.product.costPrice) : 0,
-                };
-              }),
+              items: snapshotItems,
             };
           }
         }

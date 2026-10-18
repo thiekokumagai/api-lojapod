@@ -26,6 +26,11 @@ export interface OrderItem {
   comboId?: string | null;
   isCombo?: boolean;
   comboSnapshot?: any;
+  comboSelections?: Array<{
+    productId: string;
+    productItemId?: string;
+    variation?: string;
+  }>;
 }
 
 export class Order {

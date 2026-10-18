@@ -128,4 +128,8 @@ export class CombosService {
   async findStoreCombos(): Promise<Combo[]> {
     return this.combosRepository.findStoreCombos();
   }
+
+  async checkAndDeactivateAffectedCombos(productId: string): Promise<void> {
+    return this.combosRepository.checkAndDeactivateAffectedCombos(productId);
+  }
 }

@@ -24,9 +24,10 @@ import { ComputeStockIntelligenceUseCase } from './domain/use-cases/compute-stoc
 import { StockIntelligenceCronService } from './infrastructure/cron/stock-intelligence.cron.service';
 import { PushNotificationService } from '../../shared/services/push-notification.service';
 import { SettingsModule } from '../settings/settings.module';
+import { CombosModule } from '../combos/combos.module';
 
 @Module({
-  imports: [MinioModule, SettingsModule],
+  imports: [MinioModule, SettingsModule, CombosModule],
   controllers: [ProductsController, StoreProductsController],
   providers: [
     ListProductsUseCase,

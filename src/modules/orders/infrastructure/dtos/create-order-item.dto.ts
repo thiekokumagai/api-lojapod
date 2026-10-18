@@ -61,5 +61,15 @@ export class CreateOrderItemDto {
   @IsBoolean()
   @IsOptional()
   isCombo?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Variações escolhidas pelo cliente para os componentes do combo que não tinham variação fixa',
+  })
+  @IsOptional()
+  comboSelections?: Array<{
+    productId: string;
+    productItemId?: string;
+    variation?: string;
+  }>;
 }
 

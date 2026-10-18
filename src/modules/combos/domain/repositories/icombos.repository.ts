@@ -14,4 +14,5 @@ export interface ICombosRepository {
   findMany(filters: ComboFilters): Promise<Combo[]>;
   findStoreCombos(): Promise<Combo[]>;
   incrementTotalSold(id: string, quantity: number): Promise<void>;
+  checkAndDeactivateAffectedCombos(productId: string): Promise<void>;
 }

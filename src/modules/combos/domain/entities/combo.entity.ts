@@ -12,6 +12,7 @@ export class ComboItemEntity {
   productCostPrice?: number;
   productImage?: string | null;
   currentStock?: number;
+  product?: any; // Informações completas do produto (variações, itens, imagens)
 }
 
 export class Combo {

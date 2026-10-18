@@ -812,8 +812,9 @@ model ImportJob {
 model StockNotificationRequest {
   id            String       @id @default(uuid())
   storeId       String?
-  productId     String
+  productId     String?
   productItemId String?
+  comboId       String?
   customerName  String
   customerPhone String
   status        String       @default("PENDING") // "PENDING", "NOTIFIED"
@@ -822,10 +823,12 @@ model StockNotificationRequest {
   updatedAt     DateTime     @updatedAt
 
   store         Store?       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
   productItem   ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
+  combo         Combo?       @relation(fields: [comboId], references: [id], onDelete: Cascade)
 
   @@index([storeId, productId, status])
+  @@index([storeId, comboId, status])
   @@map("stock_notification_requests")
 }
 
@@ -944,6 +947,7 @@ model Combo {
   category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   items         ComboItem[]
   orderItems    OrderItem[]
+  stockNotificationRequests StockNotificationRequest[]
 
   @@index([storeId, isActive])
   @@map("combos")

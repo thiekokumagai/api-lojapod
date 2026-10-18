@@ -19,16 +19,36 @@ export class StockNotificationsService {
   async createForStore(dto: CreateStockNotificationDto) {
     const storeId = this.tenantContextService.getStoreId();
 
-    const product = await this.prisma.product.findUnique({
-      where: { id: dto.productId },
-      select: { id: true, storeId: true },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Produto não encontrado');
+    if (!dto.productId && !dto.comboId) {
+      throw new BadRequestException('Informe o produto ou combo para o aviso de estoque.');
     }
 
-    const effectiveStoreId = storeId || product.storeId;
+    let effectiveStoreId = storeId;
+    let productTitle = '';
+    let comboRecord: any = null;
+    let productRecord: any = null;
+
+    if (dto.comboId) {
+      comboRecord = await this.prisma.combo.findUnique({
+        where: { id: dto.comboId },
+        select: { id: true, name: true, storeId: true, imageUrl: true },
+      });
+      if (!comboRecord) {
+        throw new NotFoundException('Combo não encontrado');
+      }
+      effectiveStoreId = effectiveStoreId || comboRecord.storeId;
+      productTitle = comboRecord.name;
+    } else if (dto.productId) {
+      productRecord = await this.prisma.product.findUnique({
+        where: { id: dto.productId },
+        select: { id: true, title: true, storeId: true },
+      });
+      if (!productRecord) {
+        throw new NotFoundException('Produto não encontrado');
+      }
+      effectiveStoreId = effectiveStoreId || productRecord.storeId;
+      productTitle = productRecord.title;
+    }
 
     // Check if store allows stock notifications
     if (effectiveStoreId) {
@@ -44,8 +64,9 @@ export class StockNotificationsService {
     const notification = await this.prisma.stockNotificationRequest.create({
       data: {
         storeId: effectiveStoreId,
-        productId: dto.productId,
+        productId: dto.productId || null,
         productItemId: dto.productItemId || null,
+        comboId: dto.comboId || null,
         customerName: dto.customerName.trim(),
         customerPhone: dto.customerPhone.trim(),
         status: 'PENDING',
@@ -67,21 +88,27 @@ export class StockNotificationsService {
             },
           },
         },
+        combo: {
+          select: { id: true, name: true, imageUrl: true },
+        },
       },
     });
+
+    const displayTitle = notification.combo?.name || notification.product?.title || productTitle;
+    const variationName =
+      notification.productItem?.options
+        ?.map((opt) => opt.option.value)
+        .join(' / ') || (dto.comboId ? 'Combo Especial' : null);
 
     // 1. Notificação WebSocket para o Painel Admin em tempo real
     try {
       if (this.eventsGateway) {
         this.eventsGateway.notifyStockNotificationRequest({
           id: notification.id,
-          productTitle: notification.product.title,
+          productTitle: displayTitle,
           customerName: notification.customerName,
           customerPhone: notification.customerPhone,
-          variationName:
-            notification.productItem?.options
-              ?.map((opt) => opt.option.value)
-              .join(' / ') || null,
+          variationName,
         });
       }
     } catch (err) {
@@ -109,15 +136,13 @@ export class StockNotificationsService {
         });
 
         if (tokens.length > 0 || webSubscriptions.length > 0) {
-          const varText = notification.productItem?.options
-            ? ` (${notification.productItem.options.map((opt) => opt.option.value).join(' / ')})`
-            : '';
+          const varText = variationName ? ` (${variationName})` : '';
 
           this.pushNotificationService
             .sendNotifications(
               tokens,
               '🔔 Novo "Avise-me quando chegar"!',
-              `${notification.customerName} quer saber quando "${notification.product.title}${varText}" chegar.`,
+              `${notification.customerName} quer saber quando "${displayTitle}${varText}" chegar.`,
               { screen: 'StockNotifications', notificationId: notification.id },
               webSubscriptions,
             )
@@ -131,7 +156,7 @@ export class StockNotificationsService {
     return notification;
   }
 
-  async listAllForAdmin(filters?: { status?: string; productId?: string }) {
+  async listAllForAdmin(filters?: { status?: string; productId?: string; comboId?: string }) {
     const storeId = this.tenantContextService.getStoreId();
     if (!storeId) {
       throw new BadRequestException('Contexto de loja não informado');
@@ -143,6 +168,9 @@ export class StockNotificationsService {
     }
     if (filters?.productId) {
       where.productId = filters.productId;
+    }
+    if (filters?.comboId) {
+      where.comboId = filters.comboId;
     }
 
     const records = await this.prisma.stockNotificationRequest.findMany({
@@ -176,27 +204,81 @@ export class StockNotificationsService {
             },
           },
         },
+        combo: {
+          include: {
+            items: {
+              include: {
+                product: {
+                  include: {
+                    items: {
+                      include: {
+                        options: true,
+                      },
+                    },
+                  },
+                },
+                productItem: true,
+              },
+            },
+          },
+        },
       },
     });
 
     return records.map((record) => {
       let currentStock = 0;
-      if (record.productItem) {
+      let title = record.product?.title || record.combo?.name || 'Item';
+      let imageUrl = record.product?.images?.[0]?.url || record.combo?.imageUrl || null;
+      let variationName = record.productItem?.options
+        ?.map((opt) => opt.option.value)
+        .join(' / ') || null;
+
+      if (record.combo) {
+        title = record.combo.name;
+        imageUrl = record.combo.imageUrl || null;
+        if (!variationName) {
+          variationName = 'Combo';
+        }
+
+        // Calcula estoque real do combo baseado nos componentes
+        let minComboStock = 999999;
+        if (!record.combo.items || record.combo.items.length === 0) {
+          minComboStock = 0;
+        } else {
+          for (const item of record.combo.items) {
+            const prod = item.product;
+            if (!prod || prod.isVisible === false) {
+              minComboStock = 0;
+              break;
+            }
+            if (item.productItemId) {
+              const pi = prod.items?.find((pItem: any) => pItem.id === item.productItemId);
+              const pStock = pi ? (pi.stock ?? 0) : 0;
+              const possible = Math.floor(pStock / item.quantity);
+              if (possible < minComboStock) minComboStock = possible;
+            } else if (prod.items && prod.items.length > 0) {
+              const totalAvailableVarStock = prod.items.reduce((sum: number, itm: any) => sum + (itm.stock ?? 0), 0);
+              const possible = Math.floor(totalAvailableVarStock / item.quantity);
+              if (possible < minComboStock) minComboStock = possible;
+            } else {
+              minComboStock = 0;
+            }
+          }
+        }
+        currentStock = minComboStock === 999999 ? 0 : minComboStock;
+      } else if (record.productItem) {
         currentStock = record.productItem.stock;
       } else if (record.product?.items) {
         currentStock = record.product.items.reduce((acc, curr) => acc + curr.stock, 0);
       }
 
-      const variationName = record.productItem?.options
-        ?.map((opt) => opt.option.value)
-        .join(' / ') || null;
-
       return {
         id: record.id,
         storeId: record.storeId,
         productId: record.productId,
-        productTitle: record.product.title,
-        productImage: record.product.images?.[0]?.url || null,
+        comboId: record.comboId,
+        productTitle: title,
+        productImage: imageUrl,
         productItemId: record.productItemId,
         variationName,
         customerName: record.customerName,
@@ -206,6 +288,7 @@ export class StockNotificationsService {
         createdAt: record.createdAt,
         currentStock,
         isAvailable: currentStock > 0,
+        isCombo: !!record.comboId,
       };
     });
   }

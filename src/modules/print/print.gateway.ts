@@ -52,7 +52,19 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
       try {
         const pedidosPendentes = await this.prisma.order.findMany({
           where: { storeId, isPrinted: false },
-          include: { items: true },
+          include: {
+            items: {
+              include: {
+                combo: true,
+                product: {
+                  include: {
+                    category: true,
+                    images: true,
+                  },
+                },
+              },
+            },
+          },
         });
         
         if (pedidosPendentes.length > 0) {

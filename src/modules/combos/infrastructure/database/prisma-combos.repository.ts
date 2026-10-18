@@ -11,6 +11,59 @@ export class PrismaCombosRepository implements ICombosRepository {
     private readonly tenantContextService: TenantContextService,
   ) {}
 
+  private static readonly PRODUCT_INCLUDE = {
+    category: true,
+    images: true,
+    variations: {
+      include: {
+        variation: {
+          include: {
+            options: {
+              orderBy: { value: 'asc' as const },
+            },
+          },
+        },
+      },
+    },
+    items: {
+      include: {
+        options: {
+          include: {
+            option: {
+              include: {
+                variation: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  private static readonly COMBO_INCLUDE = {
+    category: true,
+    items: {
+      include: {
+        product: {
+          include: PrismaCombosRepository.PRODUCT_INCLUDE,
+        },
+        productItem: {
+          include: {
+            options: {
+              include: {
+                option: {
+                  include: {
+                    variation: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
   private mapToEntity(record: any): Combo {
     let originalPrice = 0;
     let minComboStock = 999999;
@@ -28,7 +81,7 @@ export class PrismaCombosRepository implements ICombosRepository {
       if (pi) {
         itemStock = pi.stock ?? 0;
       } else if (p && p.items && p.items.length > 0) {
-        // Se não tiver productItemId específico, pega a soma ou o item correspondente
+        // Se não tiver productItemId específico, pega a soma de estoque das variações
         itemStock = p.items.reduce((sum: number, it: any) => sum + (it.stock ?? 0), 0);
       }
 
@@ -55,6 +108,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         productCostPrice: p?.costPrice ? Number(p.costPrice) : 0,
         productImage: mainImg,
         currentStock: itemStock,
+        product: p,
       };
     });
 
@@ -98,6 +152,79 @@ export class PrismaCombosRepository implements ICombosRepository {
     });
   }
 
+  /**
+   * Valida as regras de negócio de produtos e variações do combo:
+   * 1. Todos os produtos existem e pertencem à loja
+   * 2. Se o combo for ativo:
+   *    - Nenhum produto pode estar invisível (isVisible: false) ou deletado
+   *    - Se productItemId for especificado: deve pertencer ao produto e ter estoque > 0
+   *    - Se productItemId for nulo mas produto possui variações: produto deve ter pelo menos uma variação com estoque > 0
+   */
+  private async validateComboItems(
+    storeId: string,
+    items: Array<{ productId: string; productItemId?: string | null; quantity: number; variation?: string | null }>,
+    isActive: boolean,
+  ): Promise<void> {
+    const productIds = items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        storeId,
+        deletedAt: null,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (products.length !== productIds.length) {
+      throw new BadRequestException('Todos os produtos do combo devem existir e pertencer à sua loja.');
+    }
+
+    // Validar se cada productItemId especificado realmente pertence ao respectivo productId
+    for (const item of items) {
+      const prod = products.find((p) => p.id === item.productId);
+      if (!prod) continue;
+
+      if (item.productItemId) {
+        const itemBelongs = prod.items.some((pi) => pi.id === item.productItemId);
+        if (!itemBelongs) {
+          throw new BadRequestException(
+            `A variação selecionada não pertence ao produto "${prod.title}".`,
+          );
+        }
+      }
+    }
+
+    // Se o combo estiver sendo ativado, valida disponibilidade de todos os produtos e variações
+    if (isActive) {
+      for (const item of items) {
+        const prod = products.find((p) => p.id === item.productId);
+        if (!prod || prod.isVisible === false) {
+          throw new BadRequestException(
+            `O produto "${prod?.title || item.productId}" está desativado. Não é possível ativar o combo.`,
+          );
+        }
+
+        if (item.productItemId) {
+          const pi = prod.items.find((pItem) => pItem.id === item.productItemId);
+          if (!pi || (pi.stock ?? 0) < item.quantity) {
+            throw new BadRequestException(
+              `A variação específica de "${prod.title}" não possui estoque suficiente. Não é possível ativar o combo.`,
+            );
+          }
+        } else if (prod.items && prod.items.length > 0) {
+          const hasAvailableVariation = prod.items.some((pItem) => (pItem.stock ?? 0) >= item.quantity);
+          if (!hasAvailableVariation) {
+            throw new BadRequestException(
+              `O produto "${prod.title}" não possui nenhuma variação com estoque suficiente disponível. Não é possível ativar o combo.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   async create(
     combo: Partial<Combo>,
     items: Array<{ productId: string; productItemId?: string | null; quantity: number; variation?: string | null }>,
@@ -107,18 +234,8 @@ export class PrismaCombosRepository implements ICombosRepository {
       throw new BadRequestException('storeId não informado no contexto.');
     }
 
-    // Validar se todos os produtos pertencem à mesma loja
-    const productIds = items.map((i) => i.productId);
-    const count = await this.prisma.product.count({
-      where: {
-        id: { in: productIds },
-        storeId,
-      },
-    });
-
-    if (count !== productIds.length) {
-      throw new BadRequestException('Todos os produtos do combo devem pertencer à sua loja.');
-    }
+    const isActive = combo.isActive ?? true;
+    await this.validateComboItems(storeId, items, isActive);
 
     const record = await this.prisma.combo.create({
       data: {
@@ -128,7 +245,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         imageUrl: combo.imageUrl,
         categoryId: combo.categoryId || null,
         price: combo.price!,
-        isActive: combo.isActive ?? true,
+        isActive,
         startDate: combo.startDate ? new Date(combo.startDate) : null,
         endDate: combo.endDate ? new Date(combo.endDate) : null,
         maxPerOrder: combo.maxPerOrder,
@@ -142,20 +259,7 @@ export class PrismaCombosRepository implements ICombosRepository {
           })),
         },
       },
-      include: {
-        category: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: true,
-                items: true,
-              },
-            },
-            productItem: true,
-          },
-        },
-      },
+      include: PrismaCombosRepository.COMBO_INCLUDE,
     });
 
     return this.mapToEntity(record);
@@ -176,19 +280,15 @@ export class PrismaCombosRepository implements ICombosRepository {
       throw new NotFoundException('Combo não encontrado.');
     }
 
-    if (items) {
-      const productIds = items.map((i) => i.productId);
-      const count = await this.prisma.product.count({
-        where: {
-          id: { in: productIds },
-          storeId: existing.storeId,
-        },
-      });
+    const targetIsActive = combo.isActive !== undefined ? combo.isActive : existing.isActive;
+    const targetItems = items || existing.items.map((i) => ({
+      productId: i.productId,
+      productItemId: i.productItemId,
+      quantity: i.quantity,
+      variation: i.variation,
+    }));
 
-      if (count !== productIds.length) {
-        throw new BadRequestException('Todos os produtos do combo devem pertencer à sua loja.');
-      }
-    }
+    await this.validateComboItems(existing.storeId, targetItems, targetIsActive);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (items) {
@@ -222,20 +322,7 @@ export class PrismaCombosRepository implements ICombosRepository {
       return tx.combo.update({
         where: { id },
         data: updateData,
-        include: {
-          category: true,
-          items: {
-            include: {
-              product: {
-                include: {
-                  images: true,
-                  items: true,
-                },
-              },
-              productItem: true,
-            },
-          },
-        },
+        include: PrismaCombosRepository.COMBO_INCLUDE,
       });
     });
 
@@ -262,20 +349,7 @@ export class PrismaCombosRepository implements ICombosRepository {
     const storeId = this.tenantContextService.getStoreId();
     const record = await this.prisma.combo.findUnique({
       where: { id },
-      include: {
-        category: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: true,
-                items: true,
-              },
-            },
-            productItem: true,
-          },
-        },
-      },
+      include: PrismaCombosRepository.COMBO_INCLUDE,
     });
 
     if (!record) return null;
@@ -306,20 +380,7 @@ export class PrismaCombosRepository implements ICombosRepository {
     const records = await this.prisma.combo.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        category: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: true,
-                items: true,
-              },
-            },
-            productItem: true,
-          },
-        },
-      },
+      include: PrismaCombosRepository.COMBO_INCLUDE,
     });
 
     return records.map((r) => this.mapToEntity(r));
@@ -341,26 +402,11 @@ export class PrismaCombosRepository implements ICombosRepository {
         ],
       },
       orderBy: { createdAt: 'desc' },
-      include: {
-        category: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: true,
-                items: true,
-              },
-            },
-            productItem: true,
-          },
-        },
-      },
+      include: PrismaCombosRepository.COMBO_INCLUDE,
     });
 
-    // Mapeia e filtra apenas os que ainda possuem estoque disponível
-    return records
-      .map((r) => this.mapToEntity(r))
-      .filter((combo) => (combo.stock ?? 0) > 0);
+    // Mapeia e retorna os combos com estoque calculado (inclusive combos com stock 0 para permitir avise-me)
+    return records.map((r) => this.mapToEntity(r));
   }
 
   async incrementTotalSold(id: string, quantity: number): Promise<void> {
@@ -370,5 +416,94 @@ export class PrismaCombosRepository implements ICombosRepository {
         totalSold: { increment: quantity },
       },
     });
+  }
+
+  /**
+   * Desativação automática de combos afetados pela desativação, exclusão ou esgotamento
+   * de um produto ou de suas variações vinculadas.
+   * Conforme especificação:
+   * 1. Respeita a configuração `autoHideOutOfStock`:
+   *    - Se autoHideOutOfStock for false: NÃO desativa o combo por simples falta de estoque.
+   *      O combo permanece ativo para permitir "Avise-me quando chegar", mas bloqueia venda.
+   *    - Se um produto obrigatório for explicitamente desativado (isVisible: false) ou deletado,
+   *      o combo continua sendo desativado.
+   * 2. Quando autoHideOutOfStock for true (ou default):
+   *    - Se um produto obrigatório estiver desativado/deletado -> combo é desativado
+   *    - Se uma variação específica vinculada estiver desativada/zerada -> combo é desativado
+   *    - Se um produto com variação aberta não tiver nenhuma variação disponível -> combo é desativado
+   * 3. Reativação NÃO é automática (manual pelo lojista).
+   */
+  async checkAndDeactivateAffectedCombos(productId: string): Promise<void> {
+    const affectedCombos = await this.prisma.combo.findMany({
+      where: {
+        isActive: true,
+        items: {
+          some: { productId },
+        },
+      },
+      include: PrismaCombosRepository.COMBO_INCLUDE,
+    });
+
+    if (affectedCombos.length === 0) return;
+
+    for (const combo of affectedCombos) {
+      let shouldDeactivate = false;
+
+      // Verifica configuração da loja para autoHideOutOfStock
+      let autoHide = true;
+      if (combo.storeId) {
+        const settings = await this.prisma.storeSettings.findFirst({
+          where: { storeId: combo.storeId },
+          select: { autoHideOutOfStock: true },
+        });
+        if (settings && settings.autoHideOutOfStock === false) {
+          autoHide = false;
+        }
+      }
+
+      for (const item of combo.items) {
+        const prod = item.product;
+        // Produto desativado ou deletado: SEMPRE desativa o combo
+        if (!prod || prod.isVisible === false || prod.deletedAt !== null) {
+          shouldDeactivate = true;
+          break;
+        }
+
+        // Se autoHide estiver desabilitado, não desativa o combo apenas por falta de estoque
+        if (!autoHide) {
+          continue;
+        }
+
+        if (item.productItemId) {
+          // Variação específica vinculada ao combo
+          const pi = prod.items?.find((pItem: any) => pItem.id === item.productItemId);
+          if (!pi || (pi.stock ?? 0) < item.quantity) {
+            shouldDeactivate = true;
+            break;
+          }
+        } else if (prod.items && prod.items.length > 0) {
+          // Variação aberta: precisa de pelo menos uma variação com estoque disponível
+          const hasAvailable = prod.items.some((pItem: any) => (pItem.stock ?? 0) >= item.quantity);
+          if (!hasAvailable) {
+            shouldDeactivate = true;
+            break;
+          }
+        } else {
+          // Produto simples sem itens com estoque
+          const totalStock = (prod.items || []).reduce((sum: number, itm: any) => sum + (itm.stock ?? 0), 0);
+          if (totalStock < item.quantity) {
+            shouldDeactivate = true;
+            break;
+          }
+        }
+      }
+
+      if (shouldDeactivate) {
+        await this.prisma.combo.update({
+          where: { id: combo.id },
+          data: { isActive: false },
+        });
+      }
+    }
   }
 }

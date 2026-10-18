@@ -7,11 +7,14 @@ import { IProductsRepository } from '../repositories/iproducts.repository';
 
 import { EventsGateway } from '../../../events/events.gateway';
 
+import { CombosService } from '../../../combos/infrastructure/services/combos.service';
+
 @Injectable()
 export class UpdateProductUseCase {
   constructor(
     private readonly productsRepository: IProductsRepository,
     private readonly eventsGateway: EventsGateway,
+    private readonly combosService: CombosService,
   ) {}
 
   async execute(
@@ -53,6 +56,16 @@ export class UpdateProductUseCase {
       isVisible: dto.isVisible,
       isFeatured: dto.isFeatured,
     });
+
+    // Se o produto foi desativado (isVisible: false), desativa combos que dependam dele
+    if (dto.isVisible === false) {
+      try {
+        await this.combosService.checkAndDeactivateAffectedCombos(id);
+      } catch (err) {
+        // Loga erro mas não quebra o fluxo
+        console.error('Erro ao desativar combos afetados pelo produto:', err);
+      }
+    }
 
     const updatedProduct = await this.productsRepository.findById(id);
     

@@ -327,6 +327,36 @@ export class PrismaProductsRepository implements IProductsRepository {
           })),
         });
       }
+
+      // Verifica totalStock e aplica autoHideOutOfStock se zerado
+      const allItems = await tx.productItem.findMany({
+        where: { productId },
+      });
+      const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
+
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { storeId: true, isVisible: true },
+      });
+
+      if (totalStock <= 0) {
+        let autoHide = true;
+        if (product?.storeId) {
+          const settings = await tx.storeSettings.findFirst({
+            where: { storeId: product.storeId },
+            select: { autoHideOutOfStock: true },
+          });
+          if (settings && settings.autoHideOutOfStock === false) {
+            autoHide = false;
+          }
+        }
+        if (autoHide) {
+          await tx.product.update({
+            where: { id: productId },
+            data: { isVisible: false },
+          });
+        }
+      }
     });
   }
 
@@ -349,6 +379,30 @@ export class PrismaProductsRepository implements IProductsRepository {
           hash: hash || `simple_${productId}`,
         },
       });
+
+      if (stock <= 0) {
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+          select: { storeId: true, isVisible: true },
+        });
+
+        let autoHide = true;
+        if (product?.storeId) {
+          const settings = await tx.storeSettings.findFirst({
+            where: { storeId: product.storeId },
+            select: { autoHideOutOfStock: true },
+          });
+          if (settings && settings.autoHideOutOfStock === false) {
+            autoHide = false;
+          }
+        }
+        if (autoHide) {
+          await tx.product.update({
+            where: { id: productId },
+            data: { isVisible: false },
+          });
+        }
+      }
     });
   }
 
@@ -418,6 +472,36 @@ export class PrismaProductsRepository implements IProductsRepository {
           productItemId: item.id,
         },
       });
+
+      // Verifica totalStock e aplica autoHideOutOfStock se zerado
+      const allItems = await tx.productItem.findMany({
+        where: { productId: item.productId },
+      });
+      const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
+
+      const product = await tx.product.findUnique({
+        where: { id: item.productId },
+        select: { storeId: true, isVisible: true },
+      });
+
+      if (totalStock <= 0) {
+        let autoHide = true;
+        if (product?.storeId) {
+          const settings = await tx.storeSettings.findFirst({
+            where: { storeId: product.storeId },
+            select: { autoHideOutOfStock: true },
+          });
+          if (settings && settings.autoHideOutOfStock === false) {
+            autoHide = false;
+          }
+        }
+        if (autoHide) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { isVisible: false },
+          });
+        }
+      }
 
       return updatedItem;
     });
