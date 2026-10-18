@@ -18,7 +18,9 @@ export class PrismaCombosRepository implements ICombosRepository {
     const items: ComboItemEntity[] = (record.items || []).map((ci: any) => {
       const p = ci.product;
       const pi = ci.productItem;
-      const productPrice = p ? Number(p.promotionalPrice || p.price || 0) : 0;
+      const promo = p?.promotionalPrice ? Number(p.promotionalPrice) : 0;
+      const normal = p?.price ? Number(p.price) : 0;
+      const productPrice = promo > 0 ? promo : normal;
       originalPrice += productPrice * ci.quantity;
 
       // Calcular estoque disponível para este item específico
@@ -50,6 +52,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         variation: ci.variation,
         productName: p?.title || 'Produto',
         productPrice,
+        productCostPrice: p?.costPrice ? Number(p.costPrice) : 0,
         productImage: mainImg,
         currentStock: itemStock,
       };
@@ -123,7 +126,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         name: combo.name!,
         description: combo.description,
         imageUrl: combo.imageUrl,
-        categoryId: combo.categoryId,
+        categoryId: combo.categoryId || null,
         price: combo.price!,
         isActive: combo.isActive ?? true,
         startDate: combo.startDate ? new Date(combo.startDate) : null,
@@ -208,7 +211,7 @@ export class PrismaCombosRepository implements ICombosRepository {
       if (combo.name !== undefined) updateData.name = combo.name;
       if (combo.description !== undefined) updateData.description = combo.description;
       if (combo.imageUrl !== undefined) updateData.imageUrl = combo.imageUrl;
-      if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId;
+      if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId || null;
       if (combo.price !== undefined) updateData.price = combo.price;
       if (combo.isActive !== undefined) updateData.isActive = combo.isActive;
       if (combo.startDate !== undefined) updateData.startDate = combo.startDate ? new Date(combo.startDate) : null;

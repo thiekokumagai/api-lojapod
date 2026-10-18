@@ -9,6 +9,7 @@ export class ComboItemEntity {
   // Carregados via include para exibição e cálculos
   productName?: string;
   productPrice?: number;
+  productCostPrice?: number;
   productImage?: string | null;
   currentStock?: number;
 }

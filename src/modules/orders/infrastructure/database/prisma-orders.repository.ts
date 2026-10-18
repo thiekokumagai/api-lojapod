@@ -91,6 +91,27 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               item.product.images.find((img: any) => img.isMain) ||
               item.product.images[0];
             imageUrl = mainImage.url;
+          } else if (item.combo?.imageUrl) {
+            imageUrl = item.combo.imageUrl;
+          } else if (item.comboSnapshot?.comboImageUrl) {
+            imageUrl = item.comboSnapshot.comboImageUrl;
+          }
+          let costPrice = item.product?.costPrice ? Number(item.product.costPrice) : 0;
+          if (costPrice === 0 && (item.isCombo || item.comboId || item.comboSnapshot)) {
+            if (item.comboSnapshot?.items && Array.isArray(item.comboSnapshot.items)) {
+              costPrice = item.comboSnapshot.items.reduce((acc: number, comp: any) => {
+                const compCost = Number(comp.productCostPrice || 0);
+                const compQty = Number(comp.quantity || 1);
+                return acc + (compCost * compQty);
+              }, 0);
+            }
+            if (costPrice === 0 && item.combo?.items && Array.isArray(item.combo.items)) {
+              costPrice = item.combo.items.reduce((acc: number, ci: any) => {
+                const compCost = ci.product?.costPrice ? Number(ci.product.costPrice) : 0;
+                const compQty = Number(ci.quantity || 1);
+                return acc + (compCost * compQty);
+              }, 0);
+            }
           }
           return {
             id: item.id,
@@ -102,7 +123,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             quantity: item.quantity,
             variation: item.variation || null,
             imageUrl,
-            costPrice: item.product?.costPrice ? Number(item.product.costPrice) : 0,
+            costPrice,
             categoryName: item.product?.category?.title || null,
             comboId: item.comboId || null,
             isCombo: item.isCombo || false,
@@ -209,6 +230,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         },
         items: {
           include: {
+            combo: true,
             product: {
               include: {
                 images: true,
@@ -253,12 +275,21 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       include: {
         items: {
           include: {
+            combo: {
+              include: {
+                items: {
+                  include: {
+                    product: true,
+                  },
+                },
+              },
+            },
             product: {
               include: {
                 category: true,
               },
             },
-          }
+          },
         },
       },
       orderBy: {
@@ -281,6 +312,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         },
         items: {
           include: {
+            combo: true,
             product: {
               include: {
                 images: true,
@@ -351,6 +383,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
+              combo: true,
               product: {
                 include: {
                   images: true,
@@ -383,6 +416,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
+              combo: true,
               product: {
                 include: {
                   images: true,
@@ -767,8 +801,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
+              combo: true,
               product: {
                 include: {
+                  images: true,
                   category: true,
                 },
               },

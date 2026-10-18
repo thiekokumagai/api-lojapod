@@ -10,6 +10,7 @@ import {
   IsArray,
   ValidateNested,
   IsUUID,
+  ValidateIf,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
@@ -53,9 +54,10 @@ export class CreateComboDto {
   imageUrl?: string;
 
   @ApiPropertyOptional({ description: 'ID da categoria opcional' })
-  @IsUUID()
+  @ValidateIf((o) => o.categoryId !== null && o.categoryId !== undefined && o.categoryId !== '')
+  @IsUUID('all', { message: 'categoryId must be a UUID' })
   @IsOptional()
-  categoryId?: string;
+  categoryId?: string | null;
 
   @ApiProperty({ description: 'Preço de venda do combo', example: 99.9 })
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -70,28 +72,32 @@ export class CreateComboDto {
   isActive?: boolean;
 
   @ApiPropertyOptional({ description: 'Data de início da disponibilidade' })
+  @ValidateIf((o) => o.startDate !== null && o.startDate !== undefined && o.startDate !== '')
   @IsDateString()
   @IsOptional()
-  startDate?: string;
+  startDate?: string | null;
 
   @ApiPropertyOptional({ description: 'Data final de disponibilidade' })
+  @ValidateIf((o) => o.endDate !== null && o.endDate !== undefined && o.endDate !== '')
   @IsDateString()
   @IsOptional()
-  endDate?: string;
+  endDate?: string | null;
 
   @ApiPropertyOptional({ description: 'Limite máximo de unidades por pedido' })
+  @ValidateIf((o) => o.maxPerOrder !== null && o.maxPerOrder !== undefined && o.maxPerOrder !== '')
   @IsNumber()
   @Min(1)
   @IsOptional()
   @Type(() => Number)
-  maxPerOrder?: number;
+  maxPerOrder?: number | null;
 
   @ApiPropertyOptional({ description: 'Limite total de vendas do combo' })
+  @ValidateIf((o) => o.maxTotalSales !== null && o.maxTotalSales !== undefined && o.maxTotalSales !== '')
   @IsNumber()
   @Min(1)
   @IsOptional()
   @Type(() => Number)
-  maxTotalSales?: number;
+  maxTotalSales?: number | null;
 
   @ApiProperty({ description: 'Itens que compõem o combo', type: [CreateComboItemDto] })
   @IsArray()

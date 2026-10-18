@@ -99,24 +99,28 @@ export class CreateOrderUseCase {
             item.isCombo = true;
             item.comboId = comboRecord.id;
             item.productName = comboRecord.name;
-            if (!item.productId) {
-              item.productId = comboRecord.id; // Para retrocompatibilidade de campos obrigatórios
-            }
+            item.productId = null;
 
             // Snapshot imutável dos componentes no momento exato da compra
             item.comboSnapshot = {
               comboId: comboRecord.id,
               comboName: comboRecord.name,
               comboPrice: Number(comboRecord.price),
+              comboImageUrl: comboRecord.imageUrl || null,
               quantity: item.quantity,
-              items: comboRecord.items.map((ci) => ({
-                productId: ci.productId,
-                productItemId: ci.productItemId,
-                quantity: ci.quantity,
-                variation: ci.variation,
-                productName: ci.product?.title || 'Produto',
-                productPrice: Number(ci.product?.promotionalPrice || ci.product?.price || 0),
-              })),
+              items: comboRecord.items.map((ci) => {
+                const promo = ci.product?.promotionalPrice ? Number(ci.product.promotionalPrice) : 0;
+                const normal = ci.product?.price ? Number(ci.product.price) : 0;
+                return {
+                  productId: ci.productId,
+                  productItemId: ci.productItemId,
+                  quantity: ci.quantity,
+                  variation: ci.variation,
+                  productName: ci.product?.title || 'Produto',
+                  productPrice: promo > 0 ? promo : normal,
+                  productCostPrice: ci.product?.costPrice ? Number(ci.product.costPrice) : 0,
+                };
+              }),
             };
           }
         }
