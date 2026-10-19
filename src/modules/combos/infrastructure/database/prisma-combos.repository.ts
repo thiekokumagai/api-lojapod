@@ -137,6 +137,7 @@ export class PrismaCombosRepository implements ICombosRepository {
       categoryId: record.categoryId,
       price,
       isActive: record.isActive,
+      isBestSeller: Boolean(record.isBestSeller),
       isFeatured: record.isFeatured ?? false,
       startDate: record.startDate,
       endDate: record.endDate,

@@ -4,6 +4,7 @@ import { Public } from '../../../auth/infrastructure/decorators/public.decorator
 import { ListProductsUseCase } from '../../domain/use-cases/list-products.use-case';
 import { FindProductByIdUseCase } from '../../domain/use-cases/find-product-by-id.use-case';
 import { ListProductsDto } from '../dtos/list-products.dto';
+import { PrismaService } from '../../../../../prisma/prisma.service';
 
 @ApiTags('Store Products')
 @Public()
@@ -12,6 +13,7 @@ export class StoreProductsController {
   constructor(
     private readonly listProductsUseCase: ListProductsUseCase,
     private readonly findProductByIdUseCase: FindProductByIdUseCase,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get()
@@ -21,10 +23,31 @@ export class StoreProductsController {
       ...query,
       isVisible: true,
     });
-    
+
+    // Mapeia vendas totais para alimentar a ordenação de Mais Vendidos
+    const salesMap = new Map<string, number>();
+    try {
+      const sales = await this.prisma.orderItem.groupBy({
+        by: ['productId'],
+        _sum: { quantity: true },
+        where: {
+          productId: { not: null },
+          order: { status: { not: 'CANCELLED' } },
+        },
+      });
+      for (const s of sales) {
+        if (s.productId) {
+          salesMap.set(s.productId, s._sum.quantity || 0);
+        }
+      }
+    } catch {
+      // Ignora erro em caso de falha de consulta de vendas
+    }
+
     return {
       data: products.map((p) => ({
         ...p,
+        totalSold: salesMap.get(p.id) || (p as any).totalSold || 0,
         imageUrl: p.images?.[0]?.url ?? null,
       })),
       total,
