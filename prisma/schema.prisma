@@ -935,6 +935,7 @@ model Combo {
   categoryId    String?
   price         Decimal     @db.Decimal(10, 2)
   isActive      Boolean     @default(true)
+  isFeatured    Boolean     @default(false)
   startDate     DateTime?
   endDate       DateTime?
   maxPerOrder   Int?

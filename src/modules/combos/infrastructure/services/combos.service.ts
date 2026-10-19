@@ -34,6 +34,7 @@ export class CombosService {
         categoryId: dto.categoryId,
         price: dto.price,
         isActive: dto.isActive,
+        isFeatured: dto.isFeatured ?? false,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         maxPerOrder: dto.maxPerOrder ?? null,
@@ -61,6 +62,7 @@ export class CombosService {
         categoryId: dto.categoryId,
         price: dto.price,
         isActive: dto.isActive,
+        isFeatured: dto.isFeatured,
         startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
         endDate: dto.endDate !== undefined ? (dto.endDate ? new Date(dto.endDate) : null) : undefined,
         maxPerOrder: dto.maxPerOrder,
@@ -91,6 +93,7 @@ export class CombosService {
         categoryId: existing.categoryId,
         price: existing.price,
         isActive: false, // Inativo por padrão ao duplicar
+        isFeatured: existing.isFeatured ?? false,
         startDate: existing.startDate,
         endDate: existing.endDate,
         maxPerOrder: existing.maxPerOrder,

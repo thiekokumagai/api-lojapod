@@ -71,6 +71,12 @@ export class CreateComboDto {
   @Transform(({ value }) => value === 'true' || value === true)
   isActive?: boolean;
 
+  @ApiPropertyOptional({ description: 'Combo em destaque na loja', default: false })
+  @IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  isFeatured?: boolean;
+
   @ApiPropertyOptional({ description: 'Data de início da disponibilidade' })
   @ValidateIf((o) => o.startDate !== null && o.startDate !== undefined && o.startDate !== '')
   @IsDateString()

@@ -137,6 +137,7 @@ export class PrismaCombosRepository implements ICombosRepository {
       categoryId: record.categoryId,
       price,
       isActive: record.isActive,
+      isFeatured: record.isFeatured ?? false,
       startDate: record.startDate,
       endDate: record.endDate,
       maxPerOrder: record.maxPerOrder,
@@ -246,6 +247,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         categoryId: combo.categoryId || null,
         price: combo.price!,
         isActive,
+        isFeatured: combo.isFeatured ?? false,
         startDate: combo.startDate ? new Date(combo.startDate) : null,
         endDate: combo.endDate ? new Date(combo.endDate) : null,
         maxPerOrder: combo.maxPerOrder,
@@ -315,6 +317,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId || null;
         if (combo.price !== undefined) updateData.price = combo.price;
         if (combo.isActive !== undefined) updateData.isActive = combo.isActive;
+        if (combo.isFeatured !== undefined) updateData.isFeatured = combo.isFeatured;
         if (combo.startDate !== undefined) updateData.startDate = combo.startDate ? new Date(combo.startDate) : null;
         if (combo.endDate !== undefined) updateData.endDate = combo.endDate ? new Date(combo.endDate) : null;
         if (combo.maxPerOrder !== undefined) updateData.maxPerOrder = combo.maxPerOrder;

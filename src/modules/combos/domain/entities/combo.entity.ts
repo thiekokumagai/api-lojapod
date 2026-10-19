@@ -24,6 +24,7 @@ export class Combo {
   categoryId?: string | null;
   price: number;
   isActive: boolean;
+  isFeatured: boolean;
   startDate?: Date | null;
   endDate?: Date | null;
   maxPerOrder?: number | null;
