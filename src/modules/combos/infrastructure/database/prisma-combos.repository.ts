@@ -290,41 +290,47 @@ export class PrismaCombosRepository implements ICombosRepository {
 
     await this.validateComboItems(existing.storeId, targetItems, targetIsActive);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (items) {
-        await tx.comboItem.deleteMany({
-          where: { comboId: id },
+    const updated = await this.prisma.$transaction(
+      async (tx) => {
+        if (items) {
+          await tx.comboItem.deleteMany({
+            where: { comboId: id },
+          });
+
+          await tx.comboItem.createMany({
+            data: items.map((item) => ({
+              comboId: id,
+              productId: item.productId,
+              productItemId: item.productItemId || null,
+              quantity: item.quantity,
+              variation: item.variation || null,
+            })),
+          });
+        }
+
+        const updateData: any = {};
+        if (combo.name !== undefined) updateData.name = combo.name;
+        if (combo.description !== undefined) updateData.description = combo.description;
+        if (combo.imageUrl !== undefined) updateData.imageUrl = combo.imageUrl;
+        if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId || null;
+        if (combo.price !== undefined) updateData.price = combo.price;
+        if (combo.isActive !== undefined) updateData.isActive = combo.isActive;
+        if (combo.startDate !== undefined) updateData.startDate = combo.startDate ? new Date(combo.startDate) : null;
+        if (combo.endDate !== undefined) updateData.endDate = combo.endDate ? new Date(combo.endDate) : null;
+        if (combo.maxPerOrder !== undefined) updateData.maxPerOrder = combo.maxPerOrder;
+        if (combo.maxTotalSales !== undefined) updateData.maxTotalSales = combo.maxTotalSales;
+
+        return tx.combo.update({
+          where: { id },
+          data: updateData,
+          include: PrismaCombosRepository.COMBO_INCLUDE,
         });
-
-        await tx.comboItem.createMany({
-          data: items.map((item) => ({
-            comboId: id,
-            productId: item.productId,
-            productItemId: item.productItemId || null,
-            quantity: item.quantity,
-            variation: item.variation || null,
-          })),
-        });
-      }
-
-      const updateData: any = {};
-      if (combo.name !== undefined) updateData.name = combo.name;
-      if (combo.description !== undefined) updateData.description = combo.description;
-      if (combo.imageUrl !== undefined) updateData.imageUrl = combo.imageUrl;
-      if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId || null;
-      if (combo.price !== undefined) updateData.price = combo.price;
-      if (combo.isActive !== undefined) updateData.isActive = combo.isActive;
-      if (combo.startDate !== undefined) updateData.startDate = combo.startDate ? new Date(combo.startDate) : null;
-      if (combo.endDate !== undefined) updateData.endDate = combo.endDate ? new Date(combo.endDate) : null;
-      if (combo.maxPerOrder !== undefined) updateData.maxPerOrder = combo.maxPerOrder;
-      if (combo.maxTotalSales !== undefined) updateData.maxTotalSales = combo.maxTotalSales;
-
-      return tx.combo.update({
-        where: { id },
-        data: updateData,
-        include: PrismaCombosRepository.COMBO_INCLUDE,
-      });
-    });
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      },
+    );
 
     return this.mapToEntity(updated);
   }
