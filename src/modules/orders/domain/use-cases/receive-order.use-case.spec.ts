@@ -32,21 +32,7 @@ describe('ReceiveOrderUseCase', () => {
     updatedAt: new Date(),
   } as StoreSettings;
 
-  const mockOrder = new Order({
-    id: 'order-1',
-    orderNumber: 100,
-    customerName: 'Cliente Teste',
-    customerPhone: '11999999999',
-    itemsTotal: 100,
-    freight: 10,
-    totalOrder: 110,
-    totalReceived: 0,
-    cardFee: 0,
-    paymentType: 'Cartão',
-    paymentMethod: 'Cartão de Crédito',
-    status: OrderStatus.CONFIRMED,
-    paymentStatus: PaymentStatus.PENDING,
-  });
+  let mockOrder: Order;
 
   beforeEach(() => {
     mockOrdersRepository = {
@@ -61,13 +47,35 @@ describe('ReceiveOrderUseCase', () => {
     const mockEventsGateway = {
       emitOrderUpdated: jest.fn(),
       emitOrderCreated: jest.fn(),
+      notifyOrderUpdated: jest.fn(),
+    } as any;
+
+    const mockLoyaltyService = {
+      processOrderCompleted: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     receiveOrderUseCase = new ReceiveOrderUseCase(
       mockOrdersRepository,
       mockSettingsRepository,
       mockEventsGateway,
+      mockLoyaltyService,
     );
+
+    mockOrder = new Order({
+      id: 'order-1',
+      orderNumber: 100,
+      customerName: 'Cliente Teste',
+      customerPhone: '11999999999',
+      itemsTotal: 100,
+      freight: 10,
+      totalOrder: 110,
+      totalReceived: 0,
+      cardFee: 0,
+      paymentType: 'Cartão',
+      paymentMethod: 'Cartão de Crédito',
+      status: OrderStatus.CONFIRMED,
+      paymentStatus: PaymentStatus.PENDING,
+    });
   });
 
   it('should throw NotFoundException if order does not exist', async () => {

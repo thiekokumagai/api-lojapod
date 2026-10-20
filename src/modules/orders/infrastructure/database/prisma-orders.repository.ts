@@ -124,7 +124,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             variation: item.variation || null,
             imageUrl,
             costPrice,
-            categoryName: item.product?.category?.title || null,
+            categoryName: item.product?.category?.title || item.combo?.category?.title || null,
             comboId: item.comboId || null,
             isCombo: item.isCombo || false,
             comboSnapshot: item.comboSnapshot || null,
@@ -230,7 +230,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         },
         items: {
           include: {
-            combo: true,
+            combo: {
+              include: {
+                category: true,
+              },
+            },
             product: {
               include: {
                 images: true,
@@ -277,6 +281,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           include: {
             combo: {
               include: {
+                category: true,
                 items: {
                   include: {
                     product: true,
@@ -312,7 +317,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         },
         items: {
           include: {
-            combo: true,
+            combo: {
+              include: {
+                category: true,
+              },
+            },
             product: {
               include: {
                 images: true,
@@ -383,7 +392,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
-              combo: true,
+              combo: {
+                include: {
+                  category: true,
+                },
+              },
               product: {
                 include: {
                   images: true,
@@ -416,7 +429,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
-              combo: true,
+              combo: {
+                include: {
+                  category: true,
+                },
+              },
               product: {
                 include: {
                   images: true,
@@ -830,7 +847,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         include: {
           items: {
             include: {
-              combo: true,
+              combo: {
+                include: {
+                  category: true,
+                },
+              },
               product: {
                 include: {
                   images: true,

@@ -285,15 +285,29 @@ export class GetDashboardStatsUseCase {
           in: orders.map(o => o.id),
         },
         ...(filters.categoryId && {
-          product: {
-            categoryId: filters.categoryId,
-          },
+          OR: [
+            {
+              product: {
+                categoryId: filters.categoryId,
+              },
+            },
+            {
+              combo: {
+                categoryId: filters.categoryId,
+              },
+            },
+          ],
         }),
       },
       include: {
         product: {
           include: {
             images: true,
+            category: true,
+          },
+        },
+        combo: {
+          include: {
             category: true,
           },
         },
@@ -313,8 +327,9 @@ export class GetDashboardStatsUseCase {
     >();
 
     for (const item of orderItems) {
-      const productId = item.productId || 'removed';
-      const existing = productSalesMap.get(productId);
+      const isCombo = item.isCombo || !!item.comboId;
+      const itemId = (isCombo ? item.comboId : item.productId) || item.productId || item.productName || 'removed';
+      const existing = productSalesMap.get(itemId);
       const quantity = item.quantity;
       const revenue = Number(item.price) * quantity;
 
@@ -322,16 +337,26 @@ export class GetDashboardStatsUseCase {
         existing.quantity += quantity;
         existing.totalRevenue += revenue;
       } else {
-        const mainImage =
-          item.product && item.product.images && item.product.images.length > 0
-            ? item.product.images[0].url
-            : undefined;
+        let mainImage: string | undefined = undefined;
+        let categoryTitle = 'Sem Categoria';
 
-        productSalesMap.set(productId, {
-          id: productId,
-          title:
-            item.productName || (item.product?.title ?? 'Produto Removido'),
-          categoryTitle: item.product?.category?.title ?? 'Sem Categoria',
+        if (isCombo && item.combo) {
+          mainImage = item.combo.imageUrl || undefined;
+          categoryTitle = item.combo.category?.title || 'Sem Categoria';
+        } else if (item.product) {
+          mainImage =
+            item.product.images && item.product.images.length > 0
+              ? item.product.images[0].url
+              : undefined;
+          categoryTitle = item.product.category?.title || 'Sem Categoria';
+        }
+
+        const title = item.productName || (isCombo ? item.combo?.name : item.product?.title) || 'Produto Removido';
+
+        productSalesMap.set(itemId, {
+          id: itemId,
+          title,
+          categoryTitle,
           quantity,
           totalRevenue: revenue,
           imageUrl: mainImage,

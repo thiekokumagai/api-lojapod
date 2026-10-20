@@ -10,6 +10,7 @@ import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -25,6 +26,7 @@ export class CreateOrderUseCase {
     private readonly tenantContextService: TenantContextService,
     private readonly settingsRepository: ISettingsRepository,
     private readonly prisma: PrismaService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async execute(
@@ -573,6 +575,21 @@ export class CreateOrderUseCase {
         this.eventsGateway.server.emit('products.refresh');
       } catch (err) {
         console.error('Erro ao emitir eventos websocket', err);
+      }
+
+      // Atribuição de fidelidade (selos, pontos ou cashback) se o pedido já foi criado como pago ou concluído (ex: pedido manual no admin)
+      if (savedOrder.status === 'COMPLETED' || savedOrder.paymentStatus === 'PAID') {
+        this.loyaltyService
+          .processOrderCompleted({
+            id: savedOrder.id,
+            storeId: savedOrder.storeId || storeId,
+            customerPhone: savedOrder.customerPhone,
+            customerName: savedOrder.customerName,
+            totalOrder: savedOrder.totalOrder,
+          })
+          .catch((err) => {
+            console.error('[Loyalty] Erro ao processar fidelidade no pedido criado:', err);
+          });
       }
 
       return savedOrder;

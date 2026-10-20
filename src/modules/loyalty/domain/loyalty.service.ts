@@ -266,6 +266,20 @@ export class LoyaltyService {
       },
     });
 
+    if (!card) {
+      const phoneVariations = [
+        cleanPhone,
+        cleanPhone.replace(/^55/, ''),
+        cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`,
+      ];
+      card = await this.prisma.loyaltyCard.findFirst({
+        where: {
+          storeId: order.storeId,
+          customerPhone: { in: phoneVariations },
+        },
+      });
+    }
+
     const now = new Date();
     const newExpiresAt = this.calculateExpirationDate(program.validityDays, now);
 
