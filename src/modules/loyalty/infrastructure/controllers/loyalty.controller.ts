@@ -19,6 +19,11 @@ export class LoyaltyController {
     return this.loyaltyService.updateProgram(dto);
   }
 
+  @Get('card')
+  async getCard(@Query('phone') phone?: string) {
+    return this.loyaltyService.getCustomerCard(phone);
+  }
+
   @Get('cards')
   async listCards(
     @Query('search') search?: string,

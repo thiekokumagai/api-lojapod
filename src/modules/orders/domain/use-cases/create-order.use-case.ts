@@ -592,6 +592,14 @@ export class CreateOrderUseCase {
           });
       }
 
+      if (savedOrder.status === 'COMPLETED') {
+        this.loyaltyService
+          .markRedemptionDeliveredByOrderId(savedOrder.id)
+          .catch((err) => {
+            console.error('[Loyalty] Erro ao marcar brinde entregue:', err);
+          });
+      }
+
       return savedOrder;
     } catch (error: any) {
       throw new BadRequestException(error.message);
