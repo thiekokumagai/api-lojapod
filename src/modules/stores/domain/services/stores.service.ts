@@ -543,6 +543,18 @@ export class StoresService {
       throw new UnauthorizedException('Loja inativa. A impressora não pode ser autenticada.');
     }
 
+    // Ao ativar a impressora com token, marcar todos os pedidos pendentes anteriores da loja como já impressos (isPrinted: true)
+    // para evitar imprimir em lote pedidos antigos acumulados e travar o computador
+    await this.prisma.order.updateMany({
+      where: {
+        storeId: store.id,
+        isPrinted: false,
+      },
+      data: {
+        isPrinted: true,
+      },
+    });
+
     return {
       success: true,
       storeId: store.id,
