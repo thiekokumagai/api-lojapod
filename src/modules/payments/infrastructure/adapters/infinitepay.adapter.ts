@@ -47,16 +47,43 @@ export class InfinitePayAdapter implements IPaymentGateway {
       });
     }
 
+    // Formatar telefone para padrão internacional (+55...)
+    let formattedPhone: string | undefined = undefined;
+    if (input.customerPhone) {
+      const cleanDigits = input.customerPhone.replace(/\D/g, '');
+      if (cleanDigits.length >= 10) {
+        formattedPhone = cleanDigits.startsWith('55') ? `+${cleanDigits}` : `+55${cleanDigits}`;
+      }
+    }
+
+    // Formatar email (se não informado, gera um alias válido baseado no telefone do cliente para não travar na InfinitePay)
+    const customerEmail = input.customerEmail?.trim() || (formattedPhone ? `cliente_${formattedPhone.replace(/\D/g, '')}@lojapod.com` : undefined);
+
     const payload: any = {
       handle,
       order_nsu: String(orderNumber),
       redirect_url: redirectUrl,
       items: formattedItems,
+      customer: {
+        name: input.customerName || 'Cliente',
+        ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+        ...(customerEmail ? { email: customerEmail } : {}),
+      },
       options: {
         payment_methods_enabled: ['credit_card'],
         single_payment: true,
       },
     };
+
+    if (input.address && input.address.cep) {
+      payload.address = {
+        cep: input.address.cep.replace(/\D/g, ''),
+        street: input.address.street || '',
+        number: input.address.number || 'S/N',
+        neighborhood: input.address.neighborhood || '',
+        ...(input.address.complement ? { complement: input.address.complement } : {}),
+      };
+    }
 
     if (webhookUrl) {
       payload.webhook_url = webhookUrl;

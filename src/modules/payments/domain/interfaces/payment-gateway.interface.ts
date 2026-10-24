@@ -4,6 +4,14 @@ export interface CreateCheckoutInput {
   amount: number; // Em reais (ex: 150.00)
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
+  address?: {
+    cep?: string;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    complement?: string;
+  };
   redirectUrl: string;
   webhookUrl: string;
   credentials: any;

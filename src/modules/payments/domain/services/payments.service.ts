@@ -32,8 +32,9 @@ export class PaymentsService {
       throw new NotFoundException('Pedido não encontrado.');
     }
 
+    const effectiveStoreId = storeId || order.storeId;
     const settings = await this.prisma.storeSettings.findFirst({
-      where: { storeId },
+      where: { storeId: effectiveStoreId },
     });
 
     const gateways = (settings?.paymentGateways as any) || {};
@@ -69,7 +70,7 @@ export class PaymentsService {
     if (!apiBaseUrl.endsWith('/api')) {
       apiBaseUrl = `${apiBaseUrl}/api`;
     }
-    const webhookUrl = `${apiBaseUrl}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${storeId}&orderId=${order.id}`;
+    const webhookUrl = `${apiBaseUrl}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${effectiveStoreId}&orderId=${order.id}`;
 
     const checkoutResult = await gateway.createCreditCardCheckout({
       orderId: order.id,
@@ -77,6 +78,13 @@ export class PaymentsService {
       amount: Number(order.totalOrder),
       customerName: order.customerName,
       customerPhone: order.customerPhone,
+      address: {
+        cep: order.cep,
+        street: order.street,
+        number: order.number,
+        neighborhood: order.neighborhood,
+        complement: order.complement || undefined,
+      },
       redirectUrl,
       webhookUrl,
       credentials,
