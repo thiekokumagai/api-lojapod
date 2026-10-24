@@ -58,6 +58,7 @@ export interface StoreSettings {
   payOnDeliveryCardCredit: boolean;
 
   paymentRules: any; // Mapeado para Array de PaymentRule ou nulo
+  paymentGateways?: any; // Configurações de gateways online (InfinitePay, etc.)
 
   // Frete e Retirada
   freeShippingEnabled?: boolean;

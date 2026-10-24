@@ -55,6 +55,7 @@ export interface UpdateSettingsInput {
   vendizapAuthSecret?: string | null;
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;
+  paymentGateways?: any;
 }
 
 @Injectable()
@@ -256,6 +257,10 @@ export class UpdateSettingsUseCase {
         input.enableStockAlertNotification !== undefined
           ? input.enableStockAlertNotification
           : (base as any).enableStockAlertNotification,
+      paymentGateways:
+        input.paymentGateways !== undefined
+          ? input.paymentGateways
+          : (base as any).paymentGateways,
     });
   }
 }

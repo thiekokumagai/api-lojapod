@@ -420,6 +420,9 @@ model StoreSettings {
   // Descontos/Taxas adicionais salvos como JSON para flexibilidade
   paymentRules Json?
 
+  // Gateways de Pagamento Online (InfinitePay, MercadoPago, etc.)
+  paymentGateways Json?
+
   deliveryOriginCep    String?
   deliveryOriginNumber String?
   deliveryRanges       Json?
@@ -596,6 +599,11 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Pagamento Online (Gateways)
+  onlineGateway        String?  // Ex: "INFINITEPAY", "MERCADOPAGO"
+  gatewayTransactionId String?
+  gatewayCheckoutUrl   String?  @db.Text
 
   store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
 

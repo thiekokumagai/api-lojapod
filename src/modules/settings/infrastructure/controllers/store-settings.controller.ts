@@ -12,7 +12,39 @@ export class StoreSettingsController {
   @ApiOperation({ summary: 'Obter configurações públicas da loja (vitrine)' })
   @ApiResponse({ status: 200 })
   async getStoreSettings() {
-    return this.getSettingsUseCase.execute();
+    const settings = await this.getSettingsUseCase.execute();
+    if (!settings) return settings;
+
+    // Sanitizar credenciais sensíveis de gateways de pagamento para a vitrine pública
+    const rawGateways = settings.paymentGateways as any;
+    const publicGateways: any = {};
+
+    if (rawGateways && typeof rawGateways === 'object') {
+      if (rawGateways.infinitepay) {
+        publicGateways.infinitepay = {
+          enabled: !!rawGateways.infinitepay.enabled,
+          acceptCreditCard: !!rawGateways.infinitepay.acceptCreditCard,
+        };
+      }
+      if (rawGateways.mercadopago) {
+        publicGateways.mercadopago = {
+          enabled: !!rawGateways.mercadopago.enabled,
+          acceptCreditCard: !!rawGateways.mercadopago.acceptCreditCard,
+        };
+      }
+      if (rawGateways.asaas) {
+        publicGateways.asaas = {
+          enabled: !!rawGateways.asaas.enabled,
+          acceptCreditCard: !!rawGateways.asaas.acceptCreditCard,
+        };
+      }
+    }
+
+    return {
+      ...settings,
+      vendizapAuthSecret: undefined,
+      paymentGateways: publicGateways,
+    };
   }
 
   @Get('status')
