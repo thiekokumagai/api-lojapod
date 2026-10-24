@@ -240,6 +240,9 @@ export class PaymentsService {
           paymentStatus: 'PAID',
           paymentDate: new Date(),
         },
+        include: {
+          items: true,
+        },
       });
 
       try {
