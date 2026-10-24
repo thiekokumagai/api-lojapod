@@ -77,11 +77,14 @@ export class InfinitePayAdapter implements IPaymentGateway {
     };
 
     if (input.address && input.address.cep) {
+      const cleanCep = input.address.cep.replace(/\D/g, '');
       payload.address = {
-        cep: input.address.cep.replace(/\D/g, ''),
+        cep: cleanCep,
         street: input.address.street || '',
         number: input.address.number || 'S/N',
         neighborhood: input.address.neighborhood || '',
+        ...(input.address.city ? { city: input.address.city } : {}),
+        ...(input.address.state ? { state: input.address.state } : {}),
         ...(input.address.complement ? { complement: input.address.complement } : {}),
       };
     }

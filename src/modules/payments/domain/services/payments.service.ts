@@ -83,6 +83,8 @@ export class PaymentsService {
         street: order.street,
         number: order.number,
         neighborhood: order.neighborhood,
+        city: order.city || undefined,
+        state: order.state || undefined,
         complement: order.complement || undefined,
       },
       redirectUrl,
