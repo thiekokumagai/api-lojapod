@@ -72,6 +72,7 @@ export class InfinitePayAdapter implements IPaymentGateway {
       options: {
         payment_methods_enabled: ['credit_card'],
         single_payment: true,
+        require_delivery_address: false,
       },
     };
 
