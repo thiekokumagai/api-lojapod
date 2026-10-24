@@ -56,8 +56,8 @@ export class InfinitePayAdapter implements IPaymentGateway {
       }
     }
 
-    // Formatar email (se não informado, gera um alias válido baseado no telefone do cliente para não travar na InfinitePay)
-    const customerEmail = input.customerEmail?.trim() || (formattedPhone ? `cliente_${formattedPhone.replace(/\D/g, '')}@lojapod.com` : undefined);
+    // Formatar email (se o cliente tiver informado)
+    const customerEmail = input.customerEmail?.trim() || undefined;
 
     const payload: any = {
       handle,
