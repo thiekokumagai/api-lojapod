@@ -60,6 +60,9 @@ export class InfinitePayAdapter implements IPaymentGateway {
 
     if (webhookUrl) {
       payload.webhook_url = webhookUrl;
+      payload.webhook = {
+        url: webhookUrl,
+      };
     }
 
     const headers: Record<string, string> = {

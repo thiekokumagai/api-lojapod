@@ -64,8 +64,12 @@ export class PaymentsService {
     const redirectUrl = `${cleanOrigin}/pedido/${order.id}/sucesso`;
 
     // Montar webhook URL pública se configurada na env
-    const apiBaseUrl = process.env.API_PUBLIC_URL || process.env.VITE_ADMIN_API || 'https://api.lojapod.com';
-    const webhookUrl = `${apiBaseUrl.replace(/\/$/, '')}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${storeId}&orderId=${order.id}`;
+    let apiBaseUrl = process.env.API_PUBLIC_URL || process.env.VITE_ADMIN_API || 'https://ecommerce-core-api-production-3cc7.up.railway.app';
+    apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
+    if (!apiBaseUrl.endsWith('/api')) {
+      apiBaseUrl = `${apiBaseUrl}/api`;
+    }
+    const webhookUrl = `${apiBaseUrl}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${storeId}&orderId=${order.id}`;
 
     const checkoutResult = await gateway.createCreditCardCheckout({
       orderId: order.id,
@@ -129,8 +133,14 @@ export class PaymentsService {
       payload?.paid === true ||
       payload?.status === 'paid' ||
       payload?.status === 'approved' ||
+      payload?.status === 'succeeded' ||
+      payload?.status === 'captured' ||
+      payload?.event === 'paid' ||
       payload?.event === 'payment.paid' ||
-      payload?.event === 'charge.paid';
+      payload?.event === 'charge.paid' ||
+      payload?.event === 'transaction.paid' ||
+      payload?.data?.status === 'paid' ||
+      payload?.data?.status === 'approved';
 
     if (isPaid) {
       const updatedOrder = await this.prisma.order.update({
