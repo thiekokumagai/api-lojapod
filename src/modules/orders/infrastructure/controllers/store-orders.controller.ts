@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
   Body,
   HttpCode,
   HttpStatus,
@@ -13,12 +15,14 @@ import {
 
 import { CreateOrderDto } from '../dtos/create-order.dto';
 import { CreateOrderUseCase } from '../../domain/use-cases/create-order.use-case';
+import { GetOrderDetailUseCase } from '../../domain/use-cases/get-order-detail.use-case';
 
 @ApiTags('Store Orders')
 @Controller('store/orders')
 export class StoreOrdersController {
   constructor(
     private readonly createOrderUseCase: CreateOrderUseCase,
+    private readonly getOrderDetailUseCase: GetOrderDetailUseCase,
   ) {}
 
   @Post()
@@ -35,5 +39,11 @@ export class StoreOrdersController {
   })
   async create(@Body() body: CreateOrderDto) {
     return this.createOrderUseCase.execute(body as any);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Consultar status e dados do pedido pelo cliente' })
+  async getById(@Param('id') id: string) {
+    return this.getOrderDetailUseCase.execute(id);
   }
 }
