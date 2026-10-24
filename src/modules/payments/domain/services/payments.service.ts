@@ -186,6 +186,9 @@ export class PaymentsService {
   async checkOrderStatus(orderId: string, storeId: string, transactionNsu?: string, slug?: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: {
+        items: true,
+      },
     });
 
     if (!order) {
@@ -193,11 +196,11 @@ export class PaymentsService {
     }
 
     if (order.paymentStatus === 'PAID') {
-      return { paid: true, status: order.status, paymentStatus: order.paymentStatus };
+      return { paid: true, status: order.status, paymentStatus: order.paymentStatus, order };
     }
 
     if (!order.onlineGateway) {
-      return { paid: false, paymentStatus: order.paymentStatus };
+      return { paid: false, paymentStatus: order.paymentStatus, order };
     }
 
     const settings = await this.prisma.storeSettings.findFirst({
@@ -208,7 +211,7 @@ export class PaymentsService {
     const credentials = gateways[order.onlineGateway.toLowerCase()];
 
     if (!credentials) {
-      return { paid: false, paymentStatus: order.paymentStatus };
+      return { paid: false, paymentStatus: order.paymentStatus, order };
     }
 
     const gateway = this.gatewayFactory.getGateway(order.onlineGateway);
@@ -233,9 +236,9 @@ export class PaymentsService {
         this.eventsGateway.server?.emit('orders.updated', updatedOrder);
       } catch (e) {}
 
-      return { paid: true, status: updatedOrder.status, paymentStatus: updatedOrder.paymentStatus };
+      return { paid: true, status: updatedOrder.status, paymentStatus: updatedOrder.paymentStatus, order: updatedOrder };
     }
 
-    return { paid: false, status: order.status, paymentStatus: order.paymentStatus };
+    return { paid: false, status: order.status, paymentStatus: order.paymentStatus, order };
   }
 }
