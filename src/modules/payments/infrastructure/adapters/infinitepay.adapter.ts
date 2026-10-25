@@ -59,6 +59,13 @@ export class InfinitePayAdapter implements IPaymentGateway {
     // Formatar email (se o cliente tiver informado)
     const customerEmail = input.customerEmail?.trim() || undefined;
 
+    const assuredInstallments =
+      credentials?.assuredInstallments !== undefined &&
+      credentials?.assuredInstallments !== null &&
+      credentials?.assuredInstallments !== ''
+        ? Number(credentials.assuredInstallments)
+        : 1;
+
     const payload: any = {
       handle,
       order_nsu: String(orderNumber),
@@ -73,13 +80,14 @@ export class InfinitePayAdapter implements IPaymentGateway {
         payment_methods_enabled: ['credit_card'],
         single_payment: true,
         require_delivery_address: false,
-        installments_max: 4,
-        assured_installments: 1,
+        installments_max: 2,
+        assured_installments: assuredInstallments,
       },
     };
 
     if (input.address && input.address.cep) {
       const cleanCep = input.address.cep.replace(/\D/g, '');
+      console.log('CEP:' + cleanCep);
       payload.address = {
         cep: cleanCep,
         street: input.address.street || '',
@@ -106,7 +114,9 @@ export class InfinitePayAdapter implements IPaymentGateway {
       headers['X-Api-Key'] = apiKey;
     }
 
-    this.logger.log(`Criando link de pagamento InfinitePay para o pedido #${orderNumber} (Handle: ${handle})`);
+    this.logger.log(
+      `Criando link de pagamento InfinitePay para o pedido #${orderNumber} (Handle: ${handle}, AssuredInstallments: ${assuredInstallments})`,
+    );
 
     try {
       const response = await fetch(`${this.baseUrl}/links`, {
