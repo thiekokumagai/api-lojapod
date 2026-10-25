@@ -79,24 +79,28 @@ export class InfinitePayAdapter implements IPaymentGateway {
       options: {
         payment_methods_enabled: ['credit_card'],
         single_payment: true,
-        require_delivery_address: false,
-        installments_max: 2,
         assured_installments: assuredInstallments,
       },
     };
 
-    if (input.address && input.address.cep) {
-      const cleanCep = input.address.cep.replace(/\D/g, '');
-      console.log('CEP:' + cleanCep);
-      payload.address = {
-        cep: cleanCep,
-        street: input.address.street || '',
-        number: input.address.number || 'S/N',
-        neighborhood: input.address.neighborhood || '',
-        ...(input.address.city ? { city: input.address.city } : {}),
-        ...(input.address.state ? { state: input.address.state } : {}),
-        ...(input.address.complement ? { complement: input.address.complement } : {}),
-      };
+    if (input.address) {
+      let cleanCep = input.address.cep ? input.address.cep.replace(/\D/g, '') : '';
+      if (!cleanCep || cleanCep === '00000000' || cleanCep.length !== 8) {
+        const fallbackCep = credentials?.storeCep || credentials?.cep;
+        if (fallbackCep) {
+          cleanCep = String(fallbackCep).replace(/\D/g, '');
+        }
+      }
+
+      if (cleanCep && cleanCep.length === 8 && cleanCep !== '00000000') {
+        payload.address = {
+          cep: cleanCep,
+          street: input.address.street || '',
+          neighborhood: input.address.neighborhood || '',
+          number: input.address.number || 'S/N',
+          ...(input.address.complement?.trim() ? { complement: input.address.complement.trim() } : {}),
+        };
+      }
     }
 
     if (webhookUrl) {
