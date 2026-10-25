@@ -45,10 +45,7 @@ export class PaymentsService {
 
     if (gateways.infinitepay?.enabled && gateways.infinitepay?.acceptCreditCard) {
       selectedProvider = 'INFINITEPAY';
-      credentials = {
-        ...gateways.infinitepay,
-        storeCep: settings?.deliveryOriginCep || settings?.cep,
-      };
+      credentials = gateways.infinitepay;
     } else if (gateways.mercadopago?.enabled && gateways.mercadopago?.acceptCreditCard) {
       selectedProvider = 'MERCADOPAGO';
       credentials = gateways.mercadopago;

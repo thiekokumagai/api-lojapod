@@ -84,14 +84,7 @@ export class InfinitePayAdapter implements IPaymentGateway {
     };
 
     if (input.address) {
-      let cleanCep = input.address.cep ? input.address.cep.replace(/\D/g, '') : '';
-      if (!cleanCep || cleanCep === '00000000' || cleanCep.length !== 8) {
-        const fallbackCep = credentials?.storeCep || credentials?.cep;
-        if (fallbackCep) {
-          cleanCep = String(fallbackCep).replace(/\D/g, '');
-        }
-      }
-
+      const cleanCep = input.address.cep ? input.address.cep.replace(/\D/g, '') : '';
       if (cleanCep && cleanCep.length === 8 && cleanCep !== '00000000') {
         payload.address = {
           cep: cleanCep,
