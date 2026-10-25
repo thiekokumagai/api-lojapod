@@ -136,8 +136,22 @@ export class PaymentsService {
       return { success: false, message: 'Pedido não encontrado' };
     }
 
-    // Se já estiver pago, ignora para idempotência
+    // Se já estiver pago, ignora para idempotência (mas atualiza parcelas se vieram na notificação)
     if (order.paymentStatus === 'PAID') {
+      const incomingInstallments =
+        payload?.installments ||
+        payload?.data?.installments ||
+        payload?.metadata?.installments;
+      if (
+        incomingInstallments &&
+        Number(incomingInstallments) > 0 &&
+        order.installments !== Number(incomingInstallments)
+      ) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { installments: Number(incomingInstallments) },
+        });
+      }
       return { success: true, message: 'Pedido já marcado como pago' };
     }
 
@@ -156,12 +170,31 @@ export class PaymentsService {
       payload?.data?.status === 'approved';
 
     if (isPaid) {
+      const incomingInstallments =
+        payload?.installments ||
+        payload?.data?.installments ||
+        payload?.metadata?.installments;
+      const transactionId =
+        payload?.transaction_nsu ||
+        payload?.id ||
+        payload?.invoice_slug;
+
+      const updateData: any = {
+        paymentStatus: 'PAID',
+        paymentDate: new Date(),
+      };
+
+      if (incomingInstallments && Number(incomingInstallments) > 0) {
+        updateData.installments = Number(incomingInstallments);
+      }
+
+      if (transactionId && !order.gatewayTransactionId) {
+        updateData.gatewayTransactionId = String(transactionId);
+      }
+
       const updatedOrder = await this.prisma.order.update({
         where: { id: order.id },
-        data: {
-          paymentStatus: 'PAID',
-          paymentDate: new Date(),
-        },
+        data: updateData,
       });
 
       this.logger.log(`Pedido #${order.orderNumber} atualizado para PAID via Webhook ${provider}`);
@@ -237,12 +270,22 @@ export class PaymentsService {
     });
 
     if (result.paid) {
+      const updateData: any = {
+        paymentStatus: 'PAID',
+        paymentDate: new Date(),
+      };
+
+      if (result.installments && Number(result.installments) > 0) {
+        updateData.installments = Number(result.installments);
+      }
+
+      if (result.transactionId && !order.gatewayTransactionId) {
+        updateData.gatewayTransactionId = String(result.transactionId);
+      }
+
       const updatedOrder = await this.prisma.order.update({
         where: { id: order.id },
-        data: {
-          paymentStatus: 'PAID',
-          paymentDate: new Date(),
-        },
+        data: updateData,
         include: {
           items: true,
         },

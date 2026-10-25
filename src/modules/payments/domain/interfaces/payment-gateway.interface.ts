@@ -43,6 +43,7 @@ export interface PaymentCheckOutput {
   paidAmount?: number;
   captureMethod?: string;
   installments?: number;
+  transactionId?: string;
 }
 
 export interface IPaymentGateway {

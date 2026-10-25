@@ -188,6 +188,7 @@ export class InfinitePayAdapter implements IPaymentGateway {
         paidAmount: data?.paid_amount ? data.paid_amount / 100 : undefined,
         captureMethod: data?.capture_method,
         installments: data?.installments,
+        transactionId: data?.transaction_nsu || data?.slug || data?.id,
       };
     } catch (err: any) {
       this.logger.error(`Erro ao verificar status na InfinitePay: ${err.message}`);
