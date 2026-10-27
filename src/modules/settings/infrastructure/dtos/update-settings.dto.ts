@@ -270,6 +270,11 @@ export class UpdateSettingsDto {
   @IsOptional()
   enableStockAlertNotification?: boolean;
 
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  showVariationsOnCard?: boolean;
+
   @ApiProperty({ example: {}, required: false })
   @IsOptional()
   paymentGateways?: any;

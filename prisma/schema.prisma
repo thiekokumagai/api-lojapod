@@ -448,6 +448,7 @@ model StoreSettings {
   // Estoque e Disponibilidade
   autoHideOutOfStock          Boolean @default(true)
   enableStockAlertNotification Boolean @default(true)
+  showVariationsOnCard        Boolean @default(true)
 
   createdAt DateTime @default(now())
   enableExchangePolicy Boolean @default(false)

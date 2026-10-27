@@ -55,6 +55,7 @@ export interface UpdateSettingsInput {
   vendizapAuthSecret?: string | null;
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;
+  showVariationsOnCard?: boolean;
   paymentGateways?: any;
 }
 
@@ -257,6 +258,12 @@ export class UpdateSettingsUseCase {
         input.enableStockAlertNotification !== undefined
           ? input.enableStockAlertNotification
           : (base as any).enableStockAlertNotification,
+      showVariationsOnCard:
+        input.showVariationsOnCard !== undefined
+          ? input.showVariationsOnCard
+          : (base as any).showVariationsOnCard !== undefined
+            ? (base as any).showVariationsOnCard
+            : true,
       paymentGateways:
         input.paymentGateways !== undefined
           ? input.paymentGateways
