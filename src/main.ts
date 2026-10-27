@@ -25,28 +25,74 @@ async function bootstrap() {
     const fs = require('fs');
     const path = require('path');
 
-    const hostname = req.hostname;
-    const parts = hostname.split('.');
-    let subdomain = parts[0];
+    const host = (req.headers['x-forwarded-host'] || req.headers.host || req.hostname || '').toString().toLowerCase();
+    const cleanHost = host.split(':')[0].replace(/^www\./, '');
+    const subdomain = cleanHost.split('.')[0];
 
-    let title = 'Loja Online | Compre com segurança e rapidez';
-    let description = 'Acesse nossa loja online e confira nossos produtos. Compra segura e entrega rápida!';
-    let image = '/placeholder.svg';
-
+    let store: any = null;
     try {
-      const store = await prisma.store.findUnique({
-        where: { subdomain: subdomain.toLowerCase() },
-        include: { storeSettings: true }
+      store = await prisma.store.findFirst({
+        where: {
+          OR: [
+            { subdomain: subdomain },
+            { customDomain: cleanHost },
+            { customDomain: `www.${cleanHost}` },
+          ],
+        },
+        include: { storeSettings: true },
       });
-
-      if (store) {
-        title = store.title;
-        description = `Os melhores produtos da loja ${store.title}. Compra segura e entrega rápida!`;
-        if (store.storeSettings?.logoUrl) {
-          image = store.storeSettings.logoUrl;
-        }
+      if (!store) {
+        store = await prisma.store.findFirst({
+          include: { storeSettings: true },
+        });
       }
     } catch (e) {}
+
+    const storeName = store?.storeSettings?.storeName || store?.title || 'Loja Online';
+    let title = `${storeName} | Catálogo Online`;
+    let description = `Acesse o catálogo online da ${storeName} e confira nossos produtos a pronta entrega!`;
+    let image = '/placeholder.svg';
+
+    if (store?.storeSettings?.logoUrl) {
+      const rawLogo = store.storeSettings.logoUrl;
+      if (rawLogo.startsWith('http://') || rawLogo.startsWith('https://')) {
+        image = rawLogo;
+      } else {
+        const minioUrl = (process.env.MINIO_PUBLIC_URL || 'https://bucket-production-10ac.up.railway.app').replace(/\/$/, '');
+        const bucket = process.env.MINIO_BUCKET || 'lojapod';
+        const cleanPath = rawLogo.replace(/^\//, '');
+        image = `${minioUrl}/${bucket}/${cleanPath}`;
+      }
+    }
+
+    // Se for rota de produto (/produto/:id)
+    if (req.path.startsWith('/produto/')) {
+      const productId = req.path.split('/')[2];
+      if (productId) {
+        try {
+          const product = await prisma.product.findUnique({
+            where: { id: productId },
+          });
+          if (product) {
+            title = `${product.name} | ${storeName}`;
+            if (product.description) {
+              description = product.description.substring(0, 160);
+            }
+            if (product.imageUrl) {
+              const rawImg = product.imageUrl;
+              if (rawImg.startsWith('http://') || rawImg.startsWith('https://')) {
+                image = rawImg;
+              } else {
+                const minioUrl = (process.env.MINIO_PUBLIC_URL || 'https://bucket-production-10ac.up.railway.app').replace(/\/$/, '');
+                const bucket = process.env.MINIO_BUCKET || 'lojapod';
+                const cleanPath = rawImg.replace(/^\//, '');
+                image = `${minioUrl}/${bucket}/${cleanPath}`;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    }
 
     const clientPath = path.join(__dirname, '..', '..', '..', 'cliente-lojapod', 'dist', 'index.html');
     const devPath = path.join(__dirname, '..', '..', '..', 'cliente-lojapod', 'index.html');
@@ -60,10 +106,21 @@ async function bootstrap() {
       return next();
     }
 
-    html = html.replace(/Lojapod \| A sua loja/g, title);
-    html = html.replace(/content="Os melhores produtos estão aqui\."/g, `content="${description}"`);
-    html = html.replace(/content="Lojapod"/g, `content="${title}"`);
-    html = html.replace(/content="\/placeholder\.svg"/g, `content="${image}"`);
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<meta\s+property=["']og:title["']\s+content=["'].*?["']\s*\/?>/i, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+name=["']twitter:title["']\s+content=["'].*?["']\s*\/?>/i, `<meta name="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+name=["']description["']\s+content=["'].*?["']\s*\/?>/i, `<meta name="description" content="${description}" />`);
+    html = html.replace(/<meta\s+property=["']og:description["']\s+content=["'].*?["']\s*\/?>/i, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+name=["']twitter:description["']\s+content=["'].*?["']\s*\/?>/i, `<meta name="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property=["']og:image["']\s+content=["'].*?["']\s*\/?>/i, `<meta property="og:image" content="${image}" />`);
+    html = html.replace(/<meta\s+name=["']twitter:image["']\s+content=["'].*?["']\s*\/?>/i, `<meta name="twitter:image" content="${image}" />`);
+    html = html.replace(/<meta\s+name=["']author["']\s+content=["'].*?["']\s*\/?>/i, `<meta name="author" content="${storeName}" />`);
+
+    if (!html.includes('og:site_name')) {
+      html = html.replace(/<\/head>/i, `  <meta property="og:site_name" content="${storeName}" />\n</head>`);
+    } else {
+      html = html.replace(/<meta\s+property=["']og:site_name["']\s+content=["'].*?["']\s*\/?>/i, `<meta property="og:site_name" content="${storeName}" />`);
+    }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
