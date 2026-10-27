@@ -63,7 +63,7 @@ export class TenantMiddleware implements NestMiddleware {
       const isLojapodSubdomain = cleanIdentifier.endsWith('.lojapod.com');
       const targetSubdomain = isLojapodSubdomain ? firstPart : cleanIdentifier;
 
-      const store = await this.prisma.store.findFirst({
+      let store = await this.prisma.store.findFirst({
         where: {
           OR: [
             { customDomain: cleanIdentifier },
@@ -75,6 +75,34 @@ export class TenantMiddleware implements NestMiddleware {
           ],
         },
       });
+
+      // Se não encontrou na Store, busca na tabela store_domains
+      if (!store) {
+        const storeDomain = await this.prisma.storeDomain.findFirst({
+          where: {
+            OR: [
+              { hostname: cleanIdentifier },
+              { hostname: `www.${cleanIdentifier}` },
+              { hostname: rawIdentifier },
+            ],
+          },
+          include: {
+            store: true,
+          },
+        });
+
+        if (storeDomain?.store) {
+          store = storeDomain.store;
+
+          // Auto-sincronização: se a store ainda não tinha o customDomain salvo, atualiza para acelerar buscas futuras
+          if (!store.customDomain) {
+            this.prisma.store.update({
+              where: { id: store.id },
+              data: { customDomain: storeDomain.hostname },
+            }).catch(() => {});
+          }
+        }
+      }
 
       if (store) {
         storeId = store.id;

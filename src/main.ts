@@ -42,6 +42,20 @@ async function bootstrap() {
         include: { storeSettings: true },
       });
       if (!store) {
+        const storeDomain = await prisma.storeDomain.findFirst({
+          where: {
+            OR: [
+              { hostname: cleanHost },
+              { hostname: `www.${cleanHost}` },
+            ],
+          },
+          include: { store: { include: { storeSettings: true } } },
+        });
+        if (storeDomain?.store) {
+          store = storeDomain.store;
+        }
+      }
+      if (!store) {
         store = await prisma.store.findFirst({
           include: { storeSettings: true },
         });
