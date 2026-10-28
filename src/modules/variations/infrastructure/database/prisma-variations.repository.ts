@@ -57,50 +57,56 @@ export class PrismaVariationsRepository implements IVariationsRepository {
     optionsToUpdate?: { id: string; value: string; order: number }[],
     optionIdsToDelete?: string[],
   ): Promise<Variation> {
-    return this.prisma.$transaction(async (tx) => {
-      if (title !== undefined) {
-        await tx.variation.update({
-          where: { id },
-          data: { title },
-        });
-      }
-
-      if (optionIdsToDelete && optionIdsToDelete.length > 0) {
-        await tx.variationOption.deleteMany({
-          where: { id: { in: optionIdsToDelete } },
-        });
-      }
-
-      if (optionsToUpdate && optionsToUpdate.length > 0) {
-        for (const opt of optionsToUpdate) {
-          await tx.variationOption.update({
-            where: { id: opt.id },
-            data: { value: opt.value, order: opt.order },
+    return this.prisma.$transaction(
+      async (tx) => {
+        if (title !== undefined) {
+          await tx.variation.update({
+            where: { id },
+            data: { title },
           });
         }
-      }
 
-      if (optionsToCreate && optionsToCreate.length > 0) {
-        for (const opt of optionsToCreate) {
-          await tx.variationOption.create({
-            data: {
+        if (optionIdsToDelete && optionIdsToDelete.length > 0) {
+          await tx.variationOption.deleteMany({
+            where: { id: { in: optionIdsToDelete } },
+          });
+        }
+
+        if (optionsToUpdate && optionsToUpdate.length > 0) {
+          await Promise.all(
+            optionsToUpdate.map((opt) =>
+              tx.variationOption.update({
+                where: { id: opt.id },
+                data: { value: opt.value, order: opt.order },
+              }),
+            ),
+          );
+        }
+
+        if (optionsToCreate && optionsToCreate.length > 0) {
+          await tx.variationOption.createMany({
+            data: optionsToCreate.map((opt) => ({
               variationId: id,
               value: opt.value,
               order: opt.order,
-            },
+            })),
           });
         }
-      }
 
-      return tx.variation.findUniqueOrThrow({
-        where: { id },
-        include: {
-          options: {
-            orderBy: { order: 'asc' },
+        return tx.variation.findUniqueOrThrow({
+          where: { id },
+          include: {
+            options: {
+              orderBy: { order: 'asc' },
+            },
           },
-        },
-      });
-    });
+        });
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      },
+    );
   }
 
   async softDelete(id: string): Promise<Variation> {
@@ -150,26 +156,36 @@ export class PrismaVariationsRepository implements IVariationsRepository {
       {} as Record<string, typeof merged>,
     );
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const variationId in grouped) {
-        const group = grouped[variationId];
-        for (const item of group) {
-          await tx.variationOption.update({
-            where: { id: item.id },
-            data: { order: item.order + 1000 },
-          });
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const variationId in grouped) {
+          const group = grouped[variationId];
+          await Promise.all(
+            group.map((item) =>
+              tx.variationOption.update({
+                where: { id: item.id },
+                data: { order: item.order + 1000 },
+              }),
+            ),
+          );
         }
-      }
-      for (const variationId in grouped) {
-        const group = grouped[variationId];
-        group.sort((a, b) => a.order - b.order);
-        for (let i = 0; i < group.length; i++) {
-          await tx.variationOption.update({
-            where: { id: group[i].id },
-            data: { order: i + 1 },
-          });
+        for (const variationId in grouped) {
+          const group = grouped[variationId];
+          group.sort((a, b) => a.order - b.order);
+          await Promise.all(
+            group.map((item, i) =>
+              tx.variationOption.update({
+                where: { id: item.id },
+                data: { order: i + 1 },
+              }),
+            ),
+          );
         }
-      }
-    });
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      },
+    );
   }
 }
