@@ -24,6 +24,7 @@ export interface UpdateSettingsInput {
   state?: string;
   complement?: string | null;
   hideAddress?: boolean;
+  savedStoreAddresses?: any;
   deliveryOriginCep?: string | null;
   deliveryOriginNumber?: string | null;
   deliveryRanges?: any;
@@ -85,6 +86,7 @@ export class UpdateSettingsUseCase {
       state: '',
       complement: null,
       hideAddress: false,
+      savedStoreAddresses: [],
       deliveryOriginCep: null,
       deliveryOriginNumber: null,
       deliveryRanges: [],
@@ -143,6 +145,10 @@ export class UpdateSettingsUseCase {
         input.complement !== undefined ? input.complement : base.complement,
       hideAddress:
         input.hideAddress !== undefined ? input.hideAddress : base.hideAddress,
+      savedStoreAddresses:
+        input.savedStoreAddresses !== undefined
+          ? input.savedStoreAddresses
+          : ((base as any).savedStoreAddresses || []),
       deliveryOriginCep:
         input.deliveryOriginCep !== undefined
           ? input.deliveryOriginCep

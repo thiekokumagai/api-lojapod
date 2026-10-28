@@ -36,6 +36,7 @@ export interface StoreSettings {
   state: string;
   complement: string | null;
   hideAddress: boolean;
+  savedStoreAddresses?: any;
 
   deliveryOriginCep: string | null;
   deliveryOriginNumber: string | null;

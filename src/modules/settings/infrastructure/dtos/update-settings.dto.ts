@@ -143,6 +143,10 @@ export class UpdateSettingsDto {
   @IsOptional()
   hideAddress?: boolean;
 
+  @ApiProperty({ example: [], required: false })
+  @IsOptional()
+  savedStoreAddresses?: any;
+
   @ApiProperty({ example: '79002-075', required: false })
   @IsString()
   @IsOptional()

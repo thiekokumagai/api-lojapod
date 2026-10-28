@@ -79,6 +79,7 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       state: settings.state,
       complement: settings.complement,
       hideAddress: settings.hideAddress,
+      savedStoreAddresses: settings.savedStoreAddresses ?? [],
       deliveryOriginCep: settings.deliveryOriginCep,
       deliveryOriginNumber: settings.deliveryOriginNumber,
       deliveryRanges: settings.deliveryRanges ?? [],
