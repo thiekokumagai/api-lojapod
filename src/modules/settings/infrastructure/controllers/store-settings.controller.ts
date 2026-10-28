@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
+import { getTimezoneFromCepOrState } from '../../../../common/utils/date.utils';
 
 @ApiTags('Store Settings')
 @Controller('store/settings')
@@ -58,9 +59,14 @@ export class StoreSettingsController {
       return { isOpen: false };
     }
 
-    // Usar fuso horário de Campo Grande (AMT)
+    // Identificar fuso horário pelo CEP ou Estado da loja
+    const timeZone = getTimezoneFromCepOrState(
+      settings.deliveryOriginCep || settings.cep,
+      settings.state,
+    );
+
     const nowStr = new Date().toLocaleString('en-US', {
-      timeZone: 'America/Campo_Grande',
+      timeZone,
     });
     const now = new Date(nowStr);
 
