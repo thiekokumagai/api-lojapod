@@ -19,6 +19,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       id: record.id,
       name: record.name,
       phone: record.phone,
+      isBlocked: Boolean(record.isBlocked),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       addresses:
@@ -91,7 +92,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
     return this.mapToDomain(record);
   }
 
-  async create(data: { name: string; phone: string }): Promise<Customer> {
+  async create(data: { name: string; phone: string; isBlocked?: boolean }): Promise<Customer> {
     if (data.phone) {
       const cleanPhone = data.phone.replace(/\D/g, '');
       if (cleanPhone) {

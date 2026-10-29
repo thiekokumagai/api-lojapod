@@ -21,6 +21,7 @@ export class Customer {
   id: string;
   name: string;
   phone: string;
+  isBlocked?: boolean;
   createdAt: Date;
   updatedAt: Date;
   addresses?: CustomerAddress[];

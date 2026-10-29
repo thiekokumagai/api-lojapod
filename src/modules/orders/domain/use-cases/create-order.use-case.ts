@@ -605,4 +605,76 @@ export class CreateOrderUseCase {
       throw new BadRequestException(error.message);
     }
   }
+
+  private async checkIfCustomerIsBlocked(
+    customerId?: string | null,
+    customerPhone?: string,
+  ): Promise<void> {
+    if (customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true, isBlocked: true },
+      });
+      if (customer?.isBlocked) {
+        throw new BadRequestException(
+          'Não foi possível finalizar o pedido. Este número de telefone está bloqueado para compras.',
+        );
+      }
+    }
+
+    if (customerPhone) {
+      const cleanIncoming = customerPhone.replace(/\D/g, '');
+      if (!cleanIncoming) return;
+
+      const normIncoming =
+        cleanIncoming.startsWith('55') && cleanIncoming.length > 11
+          ? cleanIncoming.substring(2)
+          : cleanIncoming;
+
+      const last8 =
+        normIncoming.length >= 8 ? normIncoming.slice(-8) : normIncoming;
+
+      const blockedCandidates = await this.prisma.customer.findMany({
+        where: {
+          isBlocked: true,
+          OR: [
+            { phone: customerPhone },
+            { phone: cleanIncoming },
+            { phone: normIncoming },
+            { phone: { contains: last8 } },
+          ],
+        },
+        select: { id: true, phone: true },
+      });
+
+      const isBlocked = blockedCandidates.some((c) => {
+        const cleanCandidate = (c.phone || '').replace(/\D/g, '');
+        const normCandidate =
+          cleanCandidate.startsWith('55') && cleanCandidate.length > 11
+            ? cleanCandidate.substring(2)
+            : cleanCandidate;
+
+        if (normCandidate === normIncoming) return true;
+        if (normCandidate.length === 10 && normIncoming.length === 11) {
+          return (
+            normCandidate.slice(0, 2) === normIncoming.slice(0, 2) &&
+            normCandidate.slice(2) === normIncoming.slice(3)
+          );
+        }
+        if (normCandidate.length === 11 && normIncoming.length === 10) {
+          return (
+            normCandidate.slice(0, 2) === normIncoming.slice(0, 2) &&
+            normCandidate.slice(3) === normIncoming.slice(2)
+          );
+        }
+        return false;
+      });
+
+      if (isBlocked) {
+        throw new BadRequestException(
+          'Não foi possível finalizar o pedido. Este número de telefone está bloqueado para compras.',
+        );
+      }
+    }
+  }
 }

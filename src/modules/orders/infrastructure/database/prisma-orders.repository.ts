@@ -697,6 +697,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           where: { phone: order.customerPhone, storeId: order.storeId || null },
         });
 
+        if (customer?.isBlocked) {
+          throw new Error('Não foi possível finalizar o pedido. O telefone informado está bloqueado para compras.');
+        }
+
         if (!customer) {
           try {
             customer = await tx.customer.create({

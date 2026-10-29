@@ -9,6 +9,7 @@ import {
   Get,
   Put,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -73,6 +74,17 @@ export class CustomersController {
   @ApiResponse({ status: 404, description: 'Cliente não encontrado.' })
   async update(@Param('id') id: string, @Body() data: UpdateCustomerDto) {
     return this.updateCustomerUseCase.execute(id, data);
+  }
+
+    @Patch(':id/toggle-block')
+  @ApiOperation({
+    summary: 'Alternar bloqueio de cliente',
+    description: 'Adiciona ou remove um cliente da block list',
+  })
+  @ApiResponse({ status: 200, description: 'Status de bloqueio atualizado com sucesso.' })
+  async toggleBlock(@Param('id') id: string) {
+    const customer = await this.getCustomerUseCase.execute(id);
+    return this.updateCustomerUseCase.execute(id, { isBlocked: !customer.isBlocked });
   }
 
   @Post()

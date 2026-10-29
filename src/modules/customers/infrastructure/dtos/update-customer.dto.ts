@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateCustomerDto {
@@ -19,4 +19,13 @@ export class UpdateCustomerDto {
   @IsString()
   @IsOptional()
   phone?: string;
+
+  @ApiProperty({
+    example: false,
+    description: 'Flag para indicar se o cliente está na block list',
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isBlocked?: boolean;
 }

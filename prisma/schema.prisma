@@ -496,6 +496,7 @@ model Customer {
   storeId   String?
   name      String
   phone     String
+  isBlocked Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
