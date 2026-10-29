@@ -677,4 +677,16 @@ export class CreateOrderUseCase {
       }
     }
   }
+
+  public async isCustomerBlocked(
+    customerId?: string | null,
+    customerPhone?: string,
+  ): Promise<boolean> {
+    try {
+      await this.checkIfCustomerIsBlocked(customerId, customerPhone);
+      return false;
+    } catch {
+      return true;
+    }
+  }
 }

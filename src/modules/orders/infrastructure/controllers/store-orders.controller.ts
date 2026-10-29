@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Param,
+  Query,
   Body,
   HttpCode,
   HttpStatus,
@@ -39,6 +40,14 @@ export class StoreOrdersController {
   })
   async create(@Body() body: CreateOrderDto) {
     return this.createOrderUseCase.execute(body as any);
+  }
+
+  @Get('check-blocked')
+  @ApiOperation({ summary: 'Verifica se o telefone do cliente está bloqueado' })
+  async checkBlocked(@Query('phone') phone: string) {
+    if (!phone) return { isBlocked: false };
+    const isBlocked = await this.createOrderUseCase.isCustomerBlocked(null, phone);
+    return { isBlocked };
   }
 
   @Get(':id')
