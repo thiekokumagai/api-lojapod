@@ -4,6 +4,7 @@ export interface CustomerFilters {
   search?: string;
   page?: number;
   limit?: number;
+  isBlocked?: boolean | string;
 }
 
 export interface PaginatedCustomers {

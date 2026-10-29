@@ -54,6 +54,11 @@ export class PrismaCustomersRepository implements ICustomersRepository {
         where.OR.push({ phone: { contains: f3, mode: 'insensitive' } });
       }
     }
+
+    if (filters.isBlocked !== undefined && filters.isBlocked !== null && filters.isBlocked !== '') {
+      where.isBlocked = String(filters.isBlocked) === 'true';
+    }
+
     const page = filters.page ? Math.max(1, Number(filters.page)) : 1;
     const limit = filters.limit ? Math.max(1, Number(filters.limit)) : 10;
     const skip = (page - 1) * limit;
@@ -116,6 +121,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       data: {
         name: data.name,
         phone: data.phone,
+        isBlocked: Boolean(data.isBlocked),
       },
       include: { addresses: true },
     });
@@ -143,12 +149,15 @@ export class PrismaCustomersRepository implements ICustomersRepository {
         }
       }
     }
+
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.isBlocked !== undefined) updateData.isBlocked = Boolean(data.isBlocked);
+
     const record = await this.prisma.customer.update({
       where: { id },
-      data: {
-        name: data.name,
-        phone: data.phone,
-      },
+      data: updateData,
       include: { addresses: true },
     });
     return this.mapToDomain(record);
