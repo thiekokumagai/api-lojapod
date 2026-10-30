@@ -203,6 +203,68 @@ export class CreateOrderUseCase {
               quantity: item.quantity,
               items: snapshotItems,
             };
+          } else if (item.productId) {
+            // Validação e resolução rigorosa de produto convencional
+            const prod = await this.prisma.product.findUnique({
+              where: { id: item.productId },
+              include: {
+                items: {
+                  include: {
+                    options: {
+                      include: { option: true },
+                    },
+                  },
+                },
+              },
+            });
+
+            if (!prod) {
+              throw new BadRequestException(`Produto "${item.productName}" não encontrado.`);
+            }
+
+            if (!prod.items || prod.items.length === 0) {
+              throw new BadRequestException(`Produto "${item.productName}" não possui estoque cadastrado.`);
+            }
+
+            let resolvedPi: any = null;
+
+            if (item.productItemId) {
+              resolvedPi = prod.items.find((pi: any) => pi.id === item.productItemId);
+            }
+
+            if (!resolvedPi && item.variation && item.variation.trim() !== '') {
+              const targetVar = item.variation.trim().toLowerCase();
+              resolvedPi = prod.items.find((pi: any) => {
+                const optVals = (pi.options || []).map((o: any) => o.option?.value?.trim()?.toLowerCase()).filter(Boolean);
+                const joined = optVals.join(' - ');
+                return joined === targetVar || optVals.includes(targetVar) || targetVar.includes(joined);
+              });
+
+              if (!resolvedPi) {
+                throw new BadRequestException(
+                  `A opção "${item.variation}" do produto "${prod.title}" não está mais disponível no catálogo.`,
+                );
+              }
+            } else if (!resolvedPi && prod.items.length === 1 && (!prod.items[0].options || prod.items[0].options.length === 0)) {
+              resolvedPi = prod.items[0];
+            } else if (!resolvedPi && prod.items.length === 1) {
+              resolvedPi = prod.items[0];
+            }
+
+            if (!resolvedPi && prod.items.length > 1) {
+              throw new BadRequestException(
+                `Por favor, selecione a variação desejada para o produto "${prod.title}".`,
+              );
+            }
+
+            if (resolvedPi) {
+              item.productItemId = resolvedPi.id;
+              if (resolvedPi.stock < (item.quantity || 1)) {
+                throw new BadRequestException(
+                  `Estoque insuficiente para "${prod.title}${item.variation ? ' - ' + item.variation : ''}". Disponível: ${resolvedPi.stock}, Solicitado: ${item.quantity}`,
+                );
+              }
+            }
           }
         }
       }

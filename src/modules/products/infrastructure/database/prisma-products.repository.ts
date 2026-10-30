@@ -367,18 +367,27 @@ export class PrismaProductsRepository implements IProductsRepository {
     hash?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      await tx.productItem.deleteMany({
+      const existing = await tx.productItem.findFirst({
         where: { productId },
       });
 
-      await tx.productItem.create({
-        data: {
-          productId,
-          stock: stock,
-
-          hash: hash || `simple_${productId}`,
-        },
-      });
+      if (existing) {
+        await tx.productItem.update({
+          where: { id: existing.id },
+          data: {
+            stock,
+            hash: hash || existing.hash || `simple_${productId}`,
+          },
+        });
+      } else {
+        await tx.productItem.create({
+          data: {
+            productId,
+            stock: stock,
+            hash: hash || `simple_${productId}`,
+          },
+        });
+      }
 
       if (stock <= 0) {
         const product = await tx.product.findUnique({

@@ -483,6 +483,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
     if (allItems.length === 0) return null;
 
+    // Se o produto possui apenas 1 item (produto simples sem variação), retorna ele
+    if (allItems.length === 1 && (!allItems[0].options || allItems[0].options.length === 0)) {
+      return allItems[0];
+    }
+
     if (variation && variation.trim() !== '') {
       const targetVar = variation.trim().toLowerCase();
       const match = allItems.find((pi: any) => {
@@ -495,12 +500,19 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         );
       });
       if (match) return match;
+
+      // Se foi solicitada uma variação específica mas não foi encontrada entre as opções existentes,
+      // NUNCA fazer fallback para outra variação aleatória para não gerar divergência de estoque
+      return null;
     }
 
-    const itemWithStock = allItems.find((pi: any) => pi.stock >= requiredQuantity);
-    if (itemWithStock) return itemWithStock;
+    // Se não foi informada variação e há apenas 1 item cadastrado
+    if (allItems.length === 1) {
+      return allItems[0];
+    }
 
-    return [...allItems].sort((a: any, b: any) => b.stock - a.stock)[0];
+    // Se há múltiplos itens/variações mas não foi informada variação, não assumir uma aleatória
+    return null;
   }
 
   async saveWithStockDecrement(order: Order): Promise<Order> {
@@ -1357,7 +1369,17 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           let productItem: any;
           if (item.productItemId) {
             productItem = await tx.productItem.findUnique({ where: { id: item.productItemId } });
-          } else {
+          }
+          if (!productItem) {
+            productItem = await this.findProductItem(
+              tx,
+              item.productId,
+              null,
+              item.variation,
+              item.quantity,
+            );
+          }
+          if (!productItem) {
             productItem = await tx.productItem.findFirst({ where: { productId: item.productId } });
           }
 
@@ -1502,7 +1524,17 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           let productItem: any;
           if (item.productItemId) {
             productItem = await tx.productItem.findUnique({ where: { id: item.productItemId } });
-          } else {
+          }
+          if (!productItem) {
+            productItem = await this.findProductItem(
+              tx,
+              item.productId,
+              null,
+              item.variation,
+              item.quantity,
+            );
+          }
+          if (!productItem) {
             productItem = await tx.productItem.findFirst({ where: { productId: item.productId } });
           }
 
