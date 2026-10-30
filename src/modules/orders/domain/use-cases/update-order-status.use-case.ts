@@ -105,6 +105,14 @@ export class UpdateOrderStatusUseCase {
               'credit': 'credit',
               'debit': 'debit',
               'cash': 'cash',
+              'Vale Refeição': 'meal_voucher',
+              'vale refeição': 'meal_voucher',
+              'vale_refeicao': 'meal_voucher',
+              'meal_voucher': 'meal_voucher',
+              'Vale Alimentação': 'food_voucher',
+              'vale alimentação': 'food_voucher',
+              'vale_alimentacao': 'food_voucher',
+              'food_voucher': 'food_voucher',
             };
 
             const normalizedMethod = methodMap[order.paymentMethod || ''];
@@ -239,6 +247,14 @@ export class UpdateOrderStatusUseCase {
             'credit': 'credit',
             'debit': 'debit',
             'cash': 'cash',
+            'Vale Refeição': 'meal_voucher',
+            'vale refeição': 'meal_voucher',
+            'vale_refeicao': 'meal_voucher',
+            'meal_voucher': 'meal_voucher',
+            'Vale Alimentação': 'food_voucher',
+            'vale alimentação': 'food_voucher',
+            'vale_alimentacao': 'food_voucher',
+            'food_voucher': 'food_voucher',
           };
 
           const normalizedMethod = methodMap[order.paymentMethod || ''] || (order.paymentMethod ? order.paymentMethod.toLowerCase() : '');

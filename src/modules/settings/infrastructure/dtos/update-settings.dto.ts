@@ -249,6 +249,16 @@ export class UpdateSettingsDto {
   @IsOptional()
   payOnDeliveryCardCredit?: boolean;
 
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  payOnDeliveryMealVoucher?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  payOnDeliveryFoodVoucher?: boolean;
+
   @ApiProperty({ example: [], required: false })
   @IsOptional()
   @IsArray()

@@ -408,9 +408,11 @@ model StoreSettings {
   pixKey     String?
   pixHolder  String?
 
-  payOnDeliveryCash       Boolean @default(false)
-  payOnDeliveryCardDebit  Boolean @default(false)
-  payOnDeliveryCardCredit Boolean @default(false)
+  payOnDeliveryCash        Boolean @default(false)
+  payOnDeliveryCardDebit   Boolean @default(false)
+  payOnDeliveryCardCredit  Boolean @default(false)
+  payOnDeliveryMealVoucher Boolean @default(false)
+  payOnDeliveryFoodVoucher Boolean @default(false)
 
   templateId           String  @default("classic")
   primaryColor         String? @default("#dc2626")

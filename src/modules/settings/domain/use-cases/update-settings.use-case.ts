@@ -41,6 +41,8 @@ export interface UpdateSettingsInput {
   payOnDeliveryCash?: boolean;
   payOnDeliveryCardDebit?: boolean;
   payOnDeliveryCardCredit?: boolean;
+  payOnDeliveryMealVoucher?: boolean;
+  payOnDeliveryFoodVoucher?: boolean;
   paymentRules?: any;
   freeShippingEnabled?: boolean;
   freeShippingMinValue?: number | null;
@@ -103,6 +105,8 @@ export class UpdateSettingsUseCase {
       payOnDeliveryCash: false,
       payOnDeliveryCardDebit: false,
       payOnDeliveryCardCredit: false,
+      payOnDeliveryMealVoucher: false,
+      payOnDeliveryFoodVoucher: false,
       paymentRules: [],
     };
 
@@ -184,6 +188,14 @@ export class UpdateSettingsUseCase {
         input.payOnDeliveryCardCredit !== undefined
           ? input.payOnDeliveryCardCredit
           : base.payOnDeliveryCardCredit,
+      payOnDeliveryMealVoucher:
+        input.payOnDeliveryMealVoucher !== undefined
+          ? input.payOnDeliveryMealVoucher
+          : base.payOnDeliveryMealVoucher,
+      payOnDeliveryFoodVoucher:
+        input.payOnDeliveryFoodVoucher !== undefined
+          ? input.payOnDeliveryFoodVoucher
+          : base.payOnDeliveryFoodVoucher,
       paymentRules:
         input.paymentRules !== undefined
           ? input.paymentRules

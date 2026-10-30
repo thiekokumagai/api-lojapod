@@ -57,6 +57,8 @@ export interface StoreSettings {
   payOnDeliveryCash: boolean;
   payOnDeliveryCardDebit: boolean;
   payOnDeliveryCardCredit: boolean;
+  payOnDeliveryMealVoucher: boolean;
+  payOnDeliveryFoodVoucher: boolean;
 
   paymentRules: any; // Mapeado para Array de PaymentRule ou nulo
   paymentGateways?: any; // Configurações de gateways online (InfinitePay, etc.)
