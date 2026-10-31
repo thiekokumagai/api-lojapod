@@ -72,6 +72,37 @@ export class PaymentsService {
     }
     const webhookUrl = `${apiBaseUrl}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${effectiveStoreId}&orderId=${order.id}`;
 
+    // Montar lista completa de itens (produtos com variação, frete e acréscimos)
+    const itemsList: Array<{ description: string; quantity: number; price: number }> = (order.items || []).map((item) => {
+      let desc = item.productName || 'Produto';
+      if (item.variation) {
+        desc += ` (${item.variation})`;
+      }
+      return {
+        description: desc,
+        quantity: item.quantity,
+        price: Number(item.price),
+      };
+    });
+
+    const freightNum = Number(order.freight || 0);
+    if (freightNum > 0) {
+      itemsList.push({
+        description: 'Taxa de Entrega',
+        quantity: 1,
+        price: freightNum,
+      });
+    }
+
+    const surchargeNum = Number(order.cardFee || 0) + Number(order.receiptSurcharge || 0) + Number(order.installmentSurcharge || 0);
+    if (surchargeNum > 0) {
+      itemsList.push({
+        description: 'Taxa de Pagamento / Acréscimo',
+        quantity: 1,
+        price: surchargeNum,
+      });
+    }
+
     const checkoutResult = await gateway.createCreditCardCheckout({
       orderId: order.id,
       orderNumber: order.orderNumber,
@@ -90,11 +121,7 @@ export class PaymentsService {
       redirectUrl,
       webhookUrl,
       credentials,
-      items: (order.items || []).map((item) => ({
-        description: item.productName || 'Produto',
-        quantity: item.quantity,
-        price: Number(item.price),
-      })),
+      items: itemsList,
     });
 
     // Atualizar pedido com os dados do checkout

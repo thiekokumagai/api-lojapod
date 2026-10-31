@@ -24,27 +24,68 @@ export class InfinitePayAdapter implements IPaymentGateway {
 
     const totalCents = Math.round(amount * 100);
 
-    const formattedItems = items && items.length > 0
-      ? items.map((item) => ({
-          description: item.description || `Item do pedido #${orderNumber}`,
-          quantity: item.quantity,
-          price: Math.round(item.price * 100),
-        }))
-      : [
-          {
-            description: `Pedido #${orderNumber}`,
-            quantity: 1,
-            price: totalCents,
-          },
-        ];
+    let formattedItems: Array<{ description: string; quantity: number; price: number }> = [];
 
-    const itemsSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
-    if (itemsSum !== totalCents) {
-      formattedItems.splice(0, formattedItems.length, {
-        description: `Pedido #${orderNumber}`,
-        quantity: 1,
-        price: totalCents,
-      });
+    if (items && items.length > 0) {
+      formattedItems = items.map((item) => ({
+        description: item.description || `Item do pedido #${orderNumber}`,
+        quantity: item.quantity,
+        price: Math.round(item.price * 100),
+      }));
+
+      const itemsSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+
+      // Se a soma não bater com o total (ex: cupom de desconto aplicado no total)
+      if (itemsSum !== totalCents) {
+        if (itemsSum > 0 && totalCents > 0) {
+          const ratio = totalCents / itemsSum;
+          let distributedSum = 0;
+
+          formattedItems = formattedItems.map((item, index) => {
+            if (index === formattedItems.length - 1) {
+              const remaining = totalCents - distributedSum;
+              const unitPrice = Math.max(1, Math.round(remaining / item.quantity));
+              return {
+                ...item,
+                price: unitPrice,
+              };
+            }
+            const unitPrice = Math.max(1, Math.round(item.price * ratio));
+            distributedSum += unitPrice * item.quantity;
+            return {
+              ...item,
+              price: unitPrice,
+            };
+          });
+
+          const finalSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+          if (finalSum !== totalCents && formattedItems.length > 0) {
+            const diff = totalCents - finalSum;
+            formattedItems[0].price += diff;
+          }
+        }
+
+        const verifiedSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+        const hasInvalidPrice = formattedItems.some((item) => item.price <= 0);
+
+        if (verifiedSum !== totalCents || hasInvalidPrice) {
+          formattedItems = [
+            {
+              description: `Pedido #${orderNumber}`,
+              quantity: 1,
+              price: totalCents,
+            },
+          ];
+        }
+      }
+    } else {
+      formattedItems = [
+        {
+          description: `Pedido #${orderNumber}`,
+          quantity: 1,
+          price: totalCents,
+        },
+      ];
     }
 
     // Formatar telefone para padrão internacional (+55...)
