@@ -13,6 +13,8 @@ import { FixProductCategoriesUseCase } from './domain/use-cases/fix-product-cate
 import { PrismaService } from '../../../prisma/prisma.service';
 
 
+import { ImportOrdersFromSheetUseCase } from './domain/use-cases/import-orders-from-sheet.use-case';
+
 @Module({
   imports: [MinioModule],
   controllers: [VendizapImportsController],
@@ -25,6 +27,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
     ImportProductImagesUseCase,
     ImportProductVariationsUseCase,
     ImportOrdersUseCase,
+    ImportOrdersFromSheetUseCase,
     FixProductCategoriesUseCase,
     ClearDatabaseUseCase,
   ],

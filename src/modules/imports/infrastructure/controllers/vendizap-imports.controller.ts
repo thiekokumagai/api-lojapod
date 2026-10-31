@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import {
   Controller,
   Post,
@@ -6,8 +5,12 @@ import {
   Res,
   HttpStatus,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../auth/infrastructure/decorators/current-user.decorator';
@@ -17,6 +20,7 @@ import { ImportProductsUseCase } from '../../domain/use-cases/import-products.us
 import { ImportProductImagesUseCase } from '../../domain/use-cases/import-product-images.use-case';
 import { ImportProductVariationsUseCase } from '../../domain/use-cases/import-product-variations.use-case';
 import { ImportOrdersUseCase } from '../../domain/use-cases/import-orders.use-case';
+import { ImportOrdersFromSheetUseCase } from '../../domain/use-cases/import-orders-from-sheet.use-case';
 import { ClearDatabaseUseCase } from '../../domain/use-cases/clear-database.use-case';
 import { FixProductCategoriesUseCase } from '../../domain/use-cases/fix-product-categories.use-case';
 
@@ -31,6 +35,7 @@ export class VendizapImportsController {
     private readonly importProductImagesUseCase: ImportProductImagesUseCase,
     private readonly importProductVariationsUseCase: ImportProductVariationsUseCase,
     private readonly importOrdersUseCase: ImportOrdersUseCase,
+    private readonly importOrdersFromSheetUseCase: ImportOrdersFromSheetUseCase,
     private readonly clearDatabaseUseCase: ClearDatabaseUseCase,
     private readonly fixProductCategoriesUseCase: FixProductCategoriesUseCase,
   ) {}
@@ -125,6 +130,45 @@ export class VendizapImportsController {
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
         .json({ error: error.message });
+    }
+  }
+
+  @Post('orders/sheet')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async importOrdersSheet(
+    @UploadedFile() file: Express.Multer.File,
+    @Res() res: Response,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    if (!user.storeId) {
+      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'StoreId is required' });
+    }
+    if (!file || !file.buffer) {
+      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Arquivo (.xlsx ou .csv) não fornecido' });
+    }
+
+    try {
+      const result = await this.importOrdersFromSheetUseCase.execute(file.buffer, user.storeId);
+      return res.status(HttpStatus.OK).json({
+        message: 'Planilha de pedidos importada com sucesso',
+        ...result,
+      });
+    } catch (error: any) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error.message || 'Erro ao importar planilha de pedidos',
+      });
     }
   }
 
