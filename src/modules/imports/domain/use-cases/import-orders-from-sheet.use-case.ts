@@ -16,6 +16,7 @@ interface ImportedOrder {
   itemsTotal: number;
   paymentType: string;
   paymentMethod: string;
+  status: string;
   street: string;
   number: string;
   neighborhood: string;
@@ -190,6 +191,7 @@ export class ImportOrdersFromSheetUseCase {
       ),
       paymentType,
       paymentMethod,
+      status: this.cleanText(this.getColumn(row, 'status')),
       street: this.cleanText(
         this.getColumn(row, 'endereco', 'rua', 'logradouro'),
       ),
@@ -307,7 +309,10 @@ export class ImportOrdersFromSheetUseCase {
           deliveryModality: 'DELIVERY',
           cardFee: 0,
           isPrinted: true,
-          status: 'COMPLETED' as const,
+          status:
+            normalize(order.status) === 'realizado'
+              ? ('COMPLETED' as const)
+              : ('PENDING' as const),
           paymentStatus: 'PAID' as const,
           createdAt: order.createdAt,
           paymentDate: order.createdAt,

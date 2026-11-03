@@ -12,6 +12,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
     [Prisma.CustomerUpsertArgs]
   >;
   let orderUpsert: jest.Mock<Promise<{ id: string }>, [Prisma.OrderUpsertArgs]>;
+  let orderCreate: jest.Mock<Promise<{ id: string }>, [Prisma.OrderCreateArgs]>;
 
   beforeEach(() => {
     customerUpsert = jest
@@ -27,6 +28,9 @@ describe('ImportOrdersFromSheetUseCase', () => {
     orderUpsert = jest
       .fn<Promise<{ id: string }>, [Prisma.OrderUpsertArgs]>()
       .mockResolvedValue({ id: 'order-id' });
+    orderCreate = jest
+      .fn<Promise<{ id: string }>, [Prisma.OrderCreateArgs]>()
+      .mockResolvedValue({ id: 'order-id' });
     prisma = {
       customer: {
         upsert: customerUpsert,
@@ -37,7 +41,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
       },
       order: {
         upsert: orderUpsert,
-        create: jest.fn().mockResolvedValue({ id: 'order-id' }),
+        create: orderCreate,
       },
     } as unknown as PrismaService;
     useCase = new ImportOrdersFromSheetUseCase(prisma);
@@ -82,6 +86,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
         pagamento: 'Vale alimentação',
         observacao: '',
         total: '134,99',
+        status: 'Em andamento',
         data: '27/10/2026 11:57',
       },
       {
@@ -96,6 +101,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
         cep: '78700-000',
         pagamento: 'Pix',
         total: '109,90',
+        status: 'Cancelado',
         data: '27/10/2026 12:40',
       },
       {
@@ -110,6 +116,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
         cep: '78715-738',
         pagamento: 'Cartão de débito',
         total: '134,99',
+        status: 'Aguardando',
         data: '27/10/2026 14:49',
       },
       {
@@ -124,6 +131,7 @@ describe('ImportOrdersFromSheetUseCase', () => {
         cep: '78717-704',
         pagamento: 'Em dinheiro',
         total: '125,90',
+        status: 'Realizado',
         data: '27/10/2026 15:20',
       },
     ]);
@@ -171,11 +179,16 @@ describe('ImportOrdersFromSheetUseCase', () => {
     expect(
       orderUpsert.mock.calls.map(([args]) => args.create.paymentMethod),
     ).toEqual(['credit', 'food_voucher', 'pix', 'debit', 'cash']);
+    expect(orderUpsert.mock.calls.map(([args]) => args.create.status)).toEqual([
+      'COMPLETED',
+      'PENDING',
+      'PENDING',
+      'PENDING',
+      'COMPLETED',
+    ]);
     expect(
       orderUpsert.mock.calls.every(
-        ([args]) =>
-          args.create.status === 'COMPLETED' &&
-          args.create.paymentStatus === 'PAID',
+        ([args]) => args.create.paymentStatus === 'PAID',
       ),
     ).toBe(true);
     expect(customerUpsert).toHaveBeenCalledWith(
@@ -188,5 +201,13 @@ describe('ImportOrdersFromSheetUseCase', () => {
         },
       }),
     );
+
+    await useCase.execute(fileBuffer, storeId);
+
+    expect(orderUpsert).toHaveBeenCalledTimes(10);
+    expect(orderUpsert.mock.calls[0][0].where.externalId).toBe(
+      orderUpsert.mock.calls[5][0].where.externalId,
+    );
+    expect(orderCreate).not.toHaveBeenCalled();
   });
 });
