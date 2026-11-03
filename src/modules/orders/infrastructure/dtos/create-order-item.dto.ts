@@ -62,6 +62,16 @@ export class CreateOrderItemDto {
   @IsOptional()
   isCombo?: boolean;
 
+  @ApiPropertyOptional({ description: 'Indica se este item foi adicionado via Order Bump', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isOrderBump?: boolean;
+
+  @ApiPropertyOptional({ description: 'ID da regra de Order Bump que originou este item' })
+  @IsString()
+  @IsOptional()
+  orderBumpId?: string;
+
   @ApiPropertyOptional({
     description: 'Variações escolhidas pelo cliente para os componentes do combo que não tinham variação fixa',
   })
