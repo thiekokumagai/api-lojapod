@@ -9,77 +9,213 @@ export interface ImportSheetResult {
   errors: Array<{ line: number; message: string }>;
 }
 
+interface ImportedOrder {
+  sourceId: string;
+  customerName: string;
+  customerPhone: string;
+  itemsTotal: number;
+  paymentType: string;
+  paymentMethod: string;
+  street: string;
+  number: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  cep: string;
+  complement: string;
+  observation: string;
+  createdAt: Date;
+}
+
+const normalize = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
 @Injectable()
 export class ImportOrdersFromSheetUseCase {
   private readonly logger = new Logger(ImportOrdersFromSheetUseCase.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  private parseDate(rawDate: any): Date {
-    if (!rawDate) return new Date();
+  private getColumn(row: Record<string, unknown>, ...names: string[]): unknown {
+    const normalizedNames = names.map(normalize);
+    const entry = Object.entries(row).find(([key]) =>
+      normalizedNames.includes(normalize(key)),
+    );
+    return entry?.[1] ?? '';
+  }
 
+  private cleanText(value: unknown): string {
+    let text = '';
+    if (typeof value === 'string') {
+      text = value.trim();
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      text = String(value).trim();
+    } else if (value instanceof Date) {
+      text = value.toISOString();
+    } else if (value !== null && value !== undefined) {
+      throw new Error('Valor de célula inválido');
+    }
+
+    return /^null$/i.test(text) ? '' : text;
+  }
+
+  private parseDate(rawDate: unknown): Date {
     if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
       return rawDate;
     }
 
-    if (typeof rawDate === 'number') {
-      // Excel serial date format
-      const parsedDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
-      if (!isNaN(parsedDate.getTime())) return parsedDate;
+    if (typeof rawDate === 'number' && Number.isFinite(rawDate)) {
+      const excelEpoch = Date.UTC(1899, 11, 30);
+      const parsed = new Date(excelEpoch + rawDate * 24 * 60 * 60 * 1000);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
 
-    const str = String(rawDate).trim();
-    if (!str) return new Date();
+    const value = this.cleanText(rawDate);
+    const brazilianDate = value.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+    );
 
-    const parts = str.split(' ');
-    const datePart = parts[0];
-    const timePart = parts[1] || '12:00:00';
-
-    if (datePart.includes('/')) {
-      const [day, month, year] = datePart.split('/');
-      const [hour = '00', min = '00', sec = '00'] = timePart.split(':');
-      const date = new Date(
+    if (brazilianDate) {
+      const [, day, month, year, hour = '00', minute = '00', second = '00'] =
+        brazilianDate;
+      const parsed = new Date(
         Number(year),
         Number(month) - 1,
         Number(day),
         Number(hour),
-        Number(min),
-        Number(sec)
+        Number(minute),
+        Number(second),
       );
-      if (!isNaN(date.getTime())) return date;
-    } else if (datePart.includes('-')) {
-      const [year, month, day] = datePart.split('-');
-      const [hour = '00', min = '00', sec = '00'] = timePart.split(':');
-      const date = new Date(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        Number(hour),
-        Number(min),
-        Number(sec)
-      );
-      if (!isNaN(date.getTime())) return date;
+
+      if (
+        parsed.getFullYear() === Number(year) &&
+        parsed.getMonth() === Number(month) - 1 &&
+        parsed.getDate() === Number(day) &&
+        parsed.getHours() === Number(hour) &&
+        parsed.getMinutes() === Number(minute) &&
+        parsed.getSeconds() === Number(second)
+      ) {
+        return parsed;
+      }
+    } else if (value) {
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
 
-    const fallback = new Date(str);
-    return isNaN(fallback.getTime()) ? new Date() : fallback;
+    throw new Error(`Data inválida: "${value || 'vazia'}"`);
   }
 
-  private parseDecimal(val: any): number {
-    if (val === null || val === undefined || val === '') return 0;
-    if (typeof val === 'number') return val;
-    let s = String(val).trim().replace('R$', '').trim();
-    if (s.includes(',') && s.includes('.')) {
-      s = s.replace(/\./g, '').replace(',', '.');
-    } else if (s.includes(',')) {
-      s = s.replace(',', '.');
+  private parseDecimal(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Number(value.toFixed(2));
     }
-    const num = parseFloat(s);
-    return isNaN(num) ? 0 : num;
+
+    let text = this.cleanText(value)
+      .replace(/^R\$\s*/i, '')
+      .replace(/\s/g, '');
+    if (text.includes(',') && text.includes('.')) {
+      text = text.replace(/\./g, '').replace(',', '.');
+    } else if (text.includes(',')) {
+      text = text.replace(',', '.');
+    }
+
+    const amount = Number(text);
+    if (!text || !Number.isFinite(amount) || amount < 0) {
+      throw new Error(`Total inválido: "${this.cleanText(value) || 'vazio'}"`);
+    }
+
+    return Number(amount.toFixed(2));
   }
 
-  async execute(fileBuffer: Buffer, storeId: string): Promise<ImportSheetResult> {
-    this.logger.log(`Iniciando importação de planilha de pedidos para a loja: ${storeId}`);
+  private parsePaymentMethod(value: string): {
+    paymentType: string;
+    paymentMethod: string;
+  } {
+    const payment = normalize(value);
+
+    if (payment === 'pix') {
+      return { paymentType: 'Online', paymentMethod: 'pix' };
+    }
+    if (payment.includes('credito')) {
+      return { paymentType: 'Presencial', paymentMethod: 'credit' };
+    }
+    if (payment.includes('debito')) {
+      return { paymentType: 'Presencial', paymentMethod: 'debit' };
+    }
+    if (payment.includes('dinheiro') || payment === 'cash') {
+      return { paymentType: 'Presencial', paymentMethod: 'cash' };
+    }
+    if (payment.includes('valealimentacao') || payment === 'foodvoucher') {
+      return { paymentType: 'Presencial', paymentMethod: 'food_voucher' };
+    }
+    if (payment.includes('valerefeicao') || payment === 'mealvoucher') {
+      return { paymentType: 'Presencial', paymentMethod: 'meal_voucher' };
+    }
+
+    throw new Error(
+      `Forma de pagamento não reconhecida: "${value || 'vazia'}"`,
+    );
+  }
+
+  private mapRow(row: Record<string, unknown>): ImportedOrder {
+    const customerName = this.cleanText(this.getColumn(row, 'nome', 'cliente'));
+    const customerPhone = this.cleanText(
+      this.getColumn(row, 'whatsapp', 'telefone', 'celular', 'fone'),
+    );
+    const paymentValue = this.cleanText(
+      this.getColumn(row, 'pagamento', 'forma_pagamento', 'forma_pagto'),
+    );
+    const { paymentType, paymentMethod } =
+      this.parsePaymentMethod(paymentValue);
+
+    return {
+      sourceId: this.cleanText(
+        this.getColumn(
+          row,
+          'num_pedido',
+          'num_pedi',
+          'numero_pedido',
+          'id_pedido',
+        ),
+      ),
+      customerName: customerName || 'Cliente Importado',
+      customerPhone,
+      itemsTotal: this.parseDecimal(
+        this.getColumn(row, 'total', 'valor_total', 'valor'),
+      ),
+      paymentType,
+      paymentMethod,
+      street: this.cleanText(
+        this.getColumn(row, 'endereco', 'rua', 'logradouro'),
+      ),
+      number:
+        this.cleanText(
+          this.getColumn(row, 'numero', 'num_endereco', 'numero_endereco'),
+        ) || 'S/N',
+      neighborhood: this.cleanText(this.getColumn(row, 'bairro')),
+      city: this.cleanText(this.getColumn(row, 'cidade')),
+      state: this.cleanText(this.getColumn(row, 'estado', 'uf')),
+      cep: this.cleanText(this.getColumn(row, 'cep')),
+      complement: this.cleanText(
+        this.getColumn(row, 'referencia', 'complemento'),
+      ),
+      observation: this.cleanText(this.getColumn(row, 'observacao', 'obs')),
+      createdAt: this.parseDate(
+        this.getColumn(row, 'data', 'data_pedido', 'criado_em'),
+      ),
+    };
+  }
+
+  async execute(
+    fileBuffer: Buffer,
+    storeId: string,
+  ): Promise<ImportSheetResult> {
+    this.logger.log(`Iniciando importação de planilha para a loja: ${storeId}`);
 
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -87,233 +223,128 @@ export class ImportOrdersFromSheetUseCase {
       throw new Error('Nenhuma planilha encontrada no arquivo enviado.');
     }
 
-    const sheet = workbook.Sheets[sheetName];
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
-      defval: '',
-      raw: false,
-    });
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      workbook.Sheets[sheetName],
+      { defval: '', raw: false },
+    );
 
-    if (!rawRows || rawRows.length === 0) {
+    if (rows.length === 0) {
       return { totalProcessed: 0, imported: 0, skipped: 0, errors: [] };
     }
 
     let imported = 0;
     let skipped = 0;
-    const errors: Array<{ line: number; message: string }> = [];
+    const errors: ImportSheetResult['errors'] = [];
 
-    // Busca regras de taxa da loja se houver
-    const settings = await this.prisma.storeSettings.findUnique({ where: { storeId } });
-    const rules = (settings && Array.isArray(settings.paymentRules) ? settings.paymentRules : []) as any[];
-
-    for (let i = 0; i < rawRows.length; i++) {
-      const row = rawRows[i];
-      const lineNumber = i + 2; // Linha 1 = cabeçalho
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      const line = index + 2;
 
       try {
-        // Encontrar os nomes das colunas de forma flexível (sem se preocupar com maiúsculas/acentos)
-        const getCol = (...names: string[]) => {
-          for (const key of Object.keys(row)) {
-            const normalizedKey = key.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            for (const name of names) {
-              const normalizedName = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              if (normalizedKey === normalizedName || normalizedKey.includes(normalizedName)) {
-                return row[key];
-              }
-            }
-          }
-          return '';
-        };
+        const order = this.mapRow(row);
+        const customer = order.customerPhone
+          ? await this.prisma.customer.upsert({
+              where: {
+                storeId_phone: {
+                  storeId,
+                  phone: order.customerPhone,
+                },
+              },
+              update: { name: order.customerName },
+              create: {
+                storeId,
+                phone: order.customerPhone,
+                name: order.customerName,
+              },
+            })
+          : null;
 
-        const numPedido = String(getCol('num_pedido', 'pedido', 'id', 'numero') || '').trim();
-        const nomeCliente = String(getCol('nome', 'cliente') || 'Cliente Importado').trim();
-        let whatsapp = String(getCol('whatsapp', 'telefone', 'celular', 'fone') || '').trim();
-        const entregaModo = String(getCol('entrega', 'tipo_entrega', 'modalidade') || 'Entregar').trim();
-        const endereco = String(getCol('endereco', 'rua', 'logradouro') || '').trim();
-        const numero = String(getCol('numero', 'num') || 'S/N').trim();
-        const bairro = String(getCol('bairro') || '').trim();
-        const cidade = String(getCol('cidade') || '').trim();
-        const estado = String(getCol('estado', 'uf') || '').trim();
-        const cep = String(getCol('cep') || '').trim();
-        const referencia = String(getCol('referencia', 'complemento') || '').trim();
-        const formaPagamentoRaw = String(getCol('pagamento', 'forma_pagamento', 'forma pagto') || 'PIX').trim();
-        const trocoRaw = getCol('troco');
-        const observacao = String(getCol('observacao', 'obs') || '').trim();
-        const totalRaw = getCol('total', 'valor_total', 'valor');
-        const cupom = String(getCol('cupom') || '').trim();
-        const dataRaw = getCol('data', 'data_pedido', 'criado_em');
-
-        const totalOrder = this.parseDecimal(totalRaw);
-        if (totalOrder <= 0 && !numPedido) {
-          skipped++;
-          continue;
-        }
-
-        // Normalizar Telefone
-        if (!whatsapp) {
-          whatsapp = numPedido ? `S-FONE-${numPedido}` : `NO-PHONE-${Date.now()}-${i}`;
-        }
-
-        // Criar ou atualizar cliente
-        const customer = await this.prisma.customer.upsert({
-          where: { storeId_phone: { storeId, phone: whatsapp } },
-          update: {
-            name: nomeCliente || undefined,
-          },
-          create: {
-            storeId,
-            phone: whatsapp,
-            name: nomeCliente || 'Cliente Importado',
-          },
-        });
-
-        // Criar endereço do cliente se houver rua
-        if (endereco && endereco !== 'NULL') {
-          const existingAddr = await this.prisma.customerAddress.findFirst({
+        if (customer && order.street) {
+          const existingAddress = await this.prisma.customerAddress.findFirst({
             where: {
               customerId: customer.id,
-              street: endereco,
-              number: numero,
+              street: order.street,
+              number: order.number,
             },
           });
 
-          if (!existingAddr) {
+          if (!existingAddress) {
             await this.prisma.customerAddress.create({
               data: {
                 storeId,
                 customerId: customer.id,
-                street: endereco,
-                number: numero,
-                neighborhood: bairro !== 'NULL' ? bairro : '',
-                city: cidade !== 'NULL' ? cidade : '',
-                state: estado !== 'NULL' ? estado : '',
-                cep: cep !== 'NULL' ? cep : '',
-                complement: referencia !== 'NULL' ? referencia : '',
+                street: order.street,
+                number: order.number,
+                neighborhood: order.neighborhood,
+                city: order.city,
+                state: order.state,
+                cep: order.cep,
+                complement: order.complement,
                 isDefault: true,
               },
             });
           }
         }
 
-        // Mapear método de pagamento e cálculo de taxas
-        const fpUpper = formaPagamentoRaw.toUpperCase();
-        let paymentMethodStr = 'pix';
-        let paymentTypeStr = 'Online';
+        const orderData = {
+          customerId: customer?.id ?? null,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          itemsTotal: order.itemsTotal,
+          freight: 0,
+          totalOrder: order.itemsTotal,
+          totalReceived: order.itemsTotal,
+          paymentType: order.paymentType,
+          paymentMethod: order.paymentMethod,
+          street: order.street,
+          number: order.number,
+          neighborhood: order.neighborhood,
+          city: order.city,
+          state: order.state,
+          cep: order.cep,
+          complement: order.complement,
+          observation: order.observation,
+          deliveryModality: 'DELIVERY',
+          cardFee: 0,
+          isPrinted: true,
+          status: 'COMPLETED' as const,
+          paymentStatus: 'PAID' as const,
+          createdAt: order.createdAt,
+          paymentDate: order.createdAt,
+        };
 
-        if (fpUpper.includes('PIX')) {
-          paymentMethodStr = 'pix';
-          paymentTypeStr = 'Online';
-        } else if (fpUpper.includes('CRÉDITO') || fpUpper.includes('CREDITO')) {
-          paymentMethodStr = 'credit';
-          paymentTypeStr = 'Presencial';
-        } else if (fpUpper.includes('DÉBITO') || fpUpper.includes('DEBITO')) {
-          paymentMethodStr = 'debit';
-          paymentTypeStr = 'Presencial';
-        } else if (fpUpper.includes('DINHEIRO') || fpUpper.includes('MONEY')) {
-          paymentMethodStr = 'money';
-          paymentTypeStr = 'Presencial';
-        } else if (fpUpper.includes('VALE') || fpUpper.includes('ALIMENTA')) {
-          paymentMethodStr = 'voucher';
-          paymentTypeStr = 'Presencial';
+        const externalId = order.sourceId
+          ? `sheet:${storeId}:${order.sourceId}`
+          : null;
+
+        if (externalId) {
+          await this.prisma.order.upsert({
+            where: { externalId },
+            update: { ...orderData, storeId },
+            create: { ...orderData, externalId, storeId },
+          });
         } else {
-          paymentMethodStr = formaPagamentoRaw.toLowerCase();
-          paymentTypeStr = 'Presencial';
+          await this.prisma.order.create({
+            data: { ...orderData, storeId },
+          });
         }
-
-        // Taxas de cartão se houver configurado na loja
-        let cardFee = 0;
-        const matchingRule = rules.find(
-          (r: any) =>
-            r.method &&
-            (r.method.toLowerCase() === paymentMethodStr ||
-              (paymentMethodStr === 'credit' && r.method.toLowerCase().includes('crédito')) ||
-              (paymentMethodStr === 'debit' && r.method.toLowerCase().includes('débito')))
-        );
-
-        if (matchingRule && matchingRule.feePercentage) {
-          const feePercent = Number(matchingRule.feePercentage) || 0;
-          cardFee = Number(((totalOrder * feePercent) / 100).toFixed(2));
-        }
-
-        const externalId = numPedido ? String(numPedido) : `PLANILHA-${Date.now()}-${i}`;
-        const createdAtDate = this.parseDate(dataRaw);
-        const changeAmount = trocoRaw ? this.parseDecimal(trocoRaw) : null;
-        const deliveryModality = entregaModo.toLowerCase().includes('retir') ? 'STORE_PICKUP' : 'DELIVERY';
-
-        // Upsert do pedido
-        await this.prisma.order.upsert({
-          where: { externalId },
-          update: {
-            customerId: customer.id,
-            customerName: customer.name,
-            customerPhone: customer.phone,
-            itemsTotal: totalOrder,
-            freight: 0,
-            totalOrder: totalOrder,
-            totalReceived: totalOrder,
-            paymentType: paymentTypeStr,
-            paymentMethod: paymentMethodStr,
-            cardFee: cardFee,
-            street: endereco !== 'NULL' ? endereco : '',
-            number: numero !== 'NULL' ? numero : '',
-            neighborhood: bairro !== 'NULL' ? bairro : '',
-            city: cidade !== 'NULL' ? cidade : '',
-            state: estado !== 'NULL' ? estado : '',
-            cep: cep !== 'NULL' ? cep : '',
-            complement: referencia !== 'NULL' ? referencia : '',
-            observation: observacao !== 'NULL' ? observacao : '',
-            changeAmount: changeAmount,
-            deliveryModality,
-            couponDiscount: cupom ? 0 : 0,
-            isPrinted: true,
-            status: 'COMPLETED',
-            paymentStatus: 'PAID',
-            createdAt: createdAtDate,
-            paymentDate: createdAtDate,
-          },
-          create: {
-            storeId,
-            externalId,
-            customerId: customer.id,
-            customerName: customer.name,
-            customerPhone: customer.phone,
-            itemsTotal: totalOrder,
-            freight: 0,
-            totalOrder: totalOrder,
-            totalReceived: totalOrder,
-            paymentType: paymentTypeStr,
-            paymentMethod: paymentMethodStr,
-            cardFee: cardFee,
-            street: endereco !== 'NULL' ? endereco : '',
-            number: numero !== 'NULL' ? numero : '',
-            neighborhood: bairro !== 'NULL' ? bairro : '',
-            city: cidade !== 'NULL' ? cidade : '',
-            state: estado !== 'NULL' ? estado : '',
-            cep: cep !== 'NULL' ? cep : '',
-            complement: referencia !== 'NULL' ? referencia : '',
-            observation: observacao !== 'NULL' ? observacao : '',
-            changeAmount: changeAmount,
-            deliveryModality,
-            isPrinted: true,
-            status: 'COMPLETED',
-            paymentStatus: 'PAID',
-            createdAt: createdAtDate,
-            paymentDate: createdAtDate,
-          },
-        });
 
         imported++;
-      } catch (err: any) {
-        this.logger.error(`Erro ao importar linha ${lineNumber}: ${err.message}`);
-        errors.push({ line: lineNumber, message: err.message || 'Erro ao processar linha' });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Erro ao processar linha';
+        this.logger.error(`Erro ao importar linha ${line}: ${message}`);
+        errors.push({ line, message });
+        skipped++;
       }
     }
 
     this.logger.log(
-      `Importação de planilha concluída: ${imported} importados, ${skipped} ignorados, ${errors.length} erros.`
+      `Importação concluída: ${imported} importados, ${skipped} ignorados.`,
     );
 
     return {
-      totalProcessed: rawRows.length,
+      totalProcessed: rows.length,
       imported,
       skipped,
       errors,

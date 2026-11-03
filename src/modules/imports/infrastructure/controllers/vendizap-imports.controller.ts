@@ -156,7 +156,9 @@ export class VendizapImportsController {
       return res.status(HttpStatus.BAD_REQUEST).json({ error: 'StoreId is required' });
     }
     if (!file || !file.buffer) {
-      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Arquivo (.xlsx ou .csv) não fornecido' });
+      return res
+        .status(HttpStatus.BAD_REQUEST)
+        .json({ error: 'Arquivo (.xls, .xlsx ou .csv) não fornecido' });
     }
 
     try {
