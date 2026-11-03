@@ -318,8 +318,10 @@ export class OrderBumpsService {
 
       if (!isTriggerMatched) continue;
 
-      // Calcular o preço final com o desconto do Order Bump se houver
-      const originalPrice = Number(product.promotionalPrice || product.price || 0);
+      // Calcular o preço base real do produto (promocional ativo ou normal)
+      const promo = product.promotionalPrice ? Number(product.promotionalPrice) : 0;
+      const normal = product.price ? Number(product.price) : 0;
+      const originalPrice = promo > 0 ? promo : normal;
       let bumpPrice = originalPrice;
 
       if (rule.customPrice !== null && rule.customPrice !== undefined && Number(rule.customPrice) > 0) {
@@ -328,6 +330,9 @@ export class OrderBumpsService {
         const discountVal = (originalPrice * Number(rule.discountPercent)) / 100;
         bumpPrice = Math.max(0, originalPrice - discountVal);
       }
+
+      bumpPrice = Math.round(bumpPrice * 100) / 100;
+      const finalOriginalPrice = Math.round(originalPrice * 100) / 100;
 
       seenProductIds.add(product.id);
 
@@ -338,8 +343,8 @@ export class OrderBumpsService {
           id: product.id,
           title: product.title,
           price: bumpPrice,
-          originalPrice: originalPrice,
-          hasDiscount: bumpPrice < originalPrice,
+          originalPrice: finalOriginalPrice,
+          hasDiscount: bumpPrice < finalOriginalPrice,
           discountPercent: rule.discountPercent ? Number(rule.discountPercent) : null,
           imageUrl: product.images?.[0]?.url || null,
           totalStock: totalAvailableStock,
