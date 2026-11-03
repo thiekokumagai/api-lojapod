@@ -72,6 +72,7 @@ model Store {
   loyaltyTransactions    LoyaltyTransaction[]
   loyaltyRedemptions     LoyaltyRewardRedemption[]
   combos                 Combo[]
+  orderBumps             OrderBump[]
 
   storeDomain            StoreDomain?
 
@@ -244,6 +245,7 @@ model Category {
   store    Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   products Product[]
   combos   Combo[]
+  orderBumpTriggers OrderBump[] @relation("OrderBumpTriggerCategory")
 
   @@map("categories")
 }
@@ -304,6 +306,8 @@ model Product {
   comboItems          ComboItem[]
   stockMovements      StockMovement[]
   stockNotificationRequests StockNotificationRequest[]
+  orderBumpTriggers   OrderBump[]        @relation("OrderBumpTriggerProduct")
+  orderBumpSuggestions OrderBump[]       @relation("OrderBumpSuggestedProduct")
 
   minStock            Int                @default(5)
   dailyRunRate        Float?             @default(0)
@@ -642,6 +646,10 @@ model OrderItem {
   combo         Combo?       @relation(fields: [comboId], references: [id], onDelete: SetNull)
   isCombo       Boolean      @default(false)
   comboSnapshot Json?
+
+  isOrderBump   Boolean      @default(false)
+  orderBumpId   String?
+  orderBump     OrderBump?   @relation(fields: [orderBumpId], references: [id], onDelete: SetNull)
 
   @@map("order_items")
 }
@@ -982,6 +990,40 @@ model ComboItem {
   productItem   ProductItem? @relation(fields: [productItemId], references: [id], onDelete: SetNull)
 
   @@map("combo_items")
+}
+
+model OrderBump {
+  id                 String    @id @default(uuid())
+  storeId            String
+  title              String    @default("Peça também")
+  isActive           Boolean   @default(true)
+  priority           Int       @default(0)
+
+  // Gatilho: "ALL" (qualquer carrinho), "CATEGORY", "PRODUCT"
+  triggerType        String    @default("ALL")
+  triggerProductId   String?
+  triggerCategoryId  String?
+
+  // Produto Ofertado (Bump)
+  suggestedProductId String
+  customPrice        Decimal?  @db.Decimal(10, 2)
+  discountPercent    Decimal?  @db.Decimal(5, 2)
+
+  viewsCount         Int       @default(0)
+  conversionsCount   Int       @default(0)
+  totalRevenue       Decimal   @default(0) @db.Decimal(10, 2)
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store              Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  triggerProduct     Product?  @relation("OrderBumpTriggerProduct", fields: [triggerProductId], references: [id], onDelete: Cascade)
+  triggerCategory    Category? @relation("OrderBumpTriggerCategory", fields: [triggerCategoryId], references: [id], onDelete: Cascade)
+  suggestedProduct   Product   @relation("OrderBumpSuggestedProduct", fields: [suggestedProductId], references: [id], onDelete: Cascade)
+  orderItems         OrderItem[]
+
+  @@index([storeId, isActive])
+  @@map("order_bumps")
 }
 
 

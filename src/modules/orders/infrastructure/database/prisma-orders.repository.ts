@@ -128,6 +128,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             comboId: item.comboId || null,
             isCombo: item.isCombo || false,
             comboSnapshot: item.comboSnapshot || null,
+            isOrderBump: item.isOrderBump || false,
+            orderBumpId: item.orderBumpId || null,
           };
         }) ?? [],
     });
@@ -857,6 +859,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 comboId: item.comboId || null,
                 isCombo: item.isCombo || false,
                 comboSnapshot: item.comboSnapshot || undefined,
+                isOrderBump: (item as any).isOrderBump || false,
+                orderBumpId: (item as any).orderBumpId || null,
               })) ?? [],
           },
         } as any,
@@ -884,6 +888,23 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           where: { id: { in: createdStockMovementIds } },
           data: { observation: `Venda via pedido #${createdOrder.orderNumber}` }
         });
+      }
+
+      // Incrementar métricas de conversão e faturamento das regras de Order Bump
+      if (order.items && order.items.length > 0) {
+        for (const item of order.items) {
+          const bumpId = (item as any).orderBumpId;
+          if (bumpId && ((item as any).isOrderBump || (item as any).isBump)) {
+            const itemRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+            await (tx as any).orderBump.update({
+              where: { id: bumpId },
+              data: {
+                conversionsCount: { increment: 1 },
+                totalRevenue: { increment: itemRevenue },
+              },
+            }).catch((err: any) => console.error('Erro ao registrar conversão no order bump:', err));
+          }
+        }
       }
 
       return createdOrder;

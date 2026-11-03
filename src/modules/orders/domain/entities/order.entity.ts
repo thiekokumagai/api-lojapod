@@ -26,6 +26,8 @@ export interface OrderItem {
   comboId?: string | null;
   isCombo?: boolean;
   comboSnapshot?: any;
+  isOrderBump?: boolean;
+  orderBumpId?: string | null;
   comboSelections?: Array<{
     productId: string;
     productItemId?: string;

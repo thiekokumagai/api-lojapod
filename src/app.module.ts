@@ -30,6 +30,7 @@ import { StockNotificationsModule } from './modules/stock-notifications/stock-no
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { CombosModule } from './modules/combos/combos.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { OrderBumpsModule } from './modules/order-bumps/order-bumps.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     ImportsModule,
     StockNotificationsModule,
     LoyaltyModule,
+    OrderBumpsModule,
   ],
 })
 export class AppModule {}
