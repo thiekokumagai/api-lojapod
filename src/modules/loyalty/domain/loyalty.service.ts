@@ -876,34 +876,119 @@ export class LoyaltyService {
   /**
    * Listagem de cartões de fidelidade para o painel Admin
    */
-  async listCards(query?: { search?: string; status?: string; page?: number; limit?: number }) {
+  async listCards(query?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    filterType?: string;
+  }) {
     const storeId = this.tenantContextService.getStoreId();
-    if (!storeId) return { data: [], total: 0 };
+    if (!storeId) return { data: [], total: 0, page: 1, limit: 20, program: null };
 
     const page = Number(query?.page) || 1;
     const limit = Number(query?.limit) || 20;
     const skip = (page - 1) * limit;
 
-    const where: any = { storeId };
+    const program = await this.getProgram();
+
+    const andConditions: any[] = [{ storeId }];
 
     if (query?.status && query.status !== 'ALL') {
-      where.status = query.status;
+      andConditions.push({ status: query.status });
+    }
+
+    if (query?.filterType && query.filterType !== 'ALL') {
+      switch (query.filterType) {
+        case 'WITH_POINTS':
+          andConditions.push({ pointsBalance: { gt: 0 } });
+          break;
+        case 'WITH_STAMPS':
+          andConditions.push({ currentStamps: { gt: 0 } });
+          break;
+        case 'WITH_CASHBACK':
+          andConditions.push({ cashbackBalance: { gt: 0 } });
+          break;
+        case 'WITH_BALANCE':
+          andConditions.push({
+            OR: [
+              { pointsBalance: { gt: 0 } },
+              { currentStamps: { gt: 0 } },
+              { cashbackBalance: { gt: 0 } },
+            ],
+          });
+          break;
+        case 'READY_REWARD': {
+          const reqStamps = program?.stampsRequired || 10;
+          andConditions.push({
+            OR: [
+              { status: 'COMPLETED' },
+              { currentStamps: { gte: reqStamps } },
+            ],
+          });
+          break;
+        }
+        case 'EXPIRING_SOON': {
+          const now = new Date();
+          const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          andConditions.push({
+            status: 'ACTIVE',
+            expiresAt: { gte: now, lte: in7Days },
+          });
+          break;
+        }
+      }
     }
 
     if (query?.search) {
       const s = query.search.trim();
       const numOnly = s.replace(/\D/g, '');
-      where.OR = [
-        { customerName: { contains: s, mode: 'insensitive' } },
-        ...(numOnly ? [{ customerPhone: { contains: numOnly } }] : [{ customerPhone: { contains: s } }]),
-      ];
+      andConditions.push({
+        OR: [
+          { customerName: { contains: s, mode: 'insensitive' } },
+          ...(numOnly ? [{ customerPhone: { contains: numOnly } }] : [{ customerPhone: { contains: s } }]),
+        ],
+      });
     }
 
-    const [total, data, program, pendingRedemptionsCount] = await Promise.all([
+    const where = { AND: andConditions };
+
+    const allowedSortFields = [
+      'pointsBalance',
+      'currentStamps',
+      'cashbackBalance',
+      'totalCompleted',
+      'customerName',
+      'expiresAt',
+      'updatedAt',
+      'createdAt',
+    ];
+
+    const sortField = query?.sortBy && allowedSortFields.includes(query.sortBy)
+      ? query.sortBy
+      : 'updatedAt';
+    const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc';
+
+    const orderBy: any = { [sortField]: sortOrder };
+
+    const now = new Date();
+    const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const reqStamps = program?.stampsRequired || 10;
+
+    const [
+      total,
+      data,
+      pendingRedemptionsCount,
+      stats,
+      readyToRedeemCount,
+      expiringSoonCount,
+    ] = await Promise.all([
       this.prisma.loyaltyCard.count({ where }),
       this.prisma.loyaltyCard.findMany({
         where,
-        orderBy: { updatedAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
         include: {
@@ -916,9 +1001,35 @@ export class LoyaltyService {
           },
         },
       }),
-      this.getProgram(),
       this.prisma.loyaltyRewardRedemption.count({
         where: { storeId, status: 'PENDING_DELIVERY' },
+      }),
+      this.prisma.loyaltyCard.aggregate({
+        where: { storeId },
+        _count: { id: true },
+        _sum: {
+          pointsBalance: true,
+          cashbackBalance: true,
+          currentStamps: true,
+        },
+        _max: {
+          pointsBalance: true,
+          currentStamps: true,
+          cashbackBalance: true,
+        },
+      }),
+      this.prisma.loyaltyCard.count({
+        where: {
+          storeId,
+          OR: [{ status: 'COMPLETED' }, { currentStamps: { gte: reqStamps } }],
+        },
+      }),
+      this.prisma.loyaltyCard.count({
+        where: {
+          storeId,
+          status: 'ACTIVE',
+          expiresAt: { gte: now, lte: in7Days },
+        },
       }),
     ]);
 
@@ -934,6 +1045,17 @@ export class LoyaltyService {
       };
     });
 
+    const summary = {
+      totalCards: stats._count.id || 0,
+      totalPointsInCirculation: Number(stats._sum.pointsBalance || 0),
+      totalCashbackInCirculation: Number(stats._sum.cashbackBalance || 0),
+      maxPoints: Number(stats._max.pointsBalance || 0),
+      maxStamps: stats._max.currentStamps || 0,
+      maxCashback: Number(stats._max.cashbackBalance || 0),
+      readyToRedeemCount,
+      expiringSoonCount,
+    };
+
     return {
       data: enrichedData,
       total,
@@ -941,6 +1063,7 @@ export class LoyaltyService {
       limit,
       program,
       pendingRedemptionsCount,
+      summary,
     };
   }
 }

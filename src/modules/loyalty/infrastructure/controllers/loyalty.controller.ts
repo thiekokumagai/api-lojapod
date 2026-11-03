@@ -30,12 +30,18 @@ export class LoyaltyController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('filterType') filterType?: string,
   ) {
     return this.loyaltyService.listCards({
       search,
       status,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
+      sortBy,
+      sortOrder,
+      filterType,
     });
   }
 
