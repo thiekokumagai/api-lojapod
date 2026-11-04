@@ -73,6 +73,19 @@ export interface StoreSettings {
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
 
+  // Uber Direct
+  uberDirectEnabled?: boolean;
+  uberDirectAutoDispatch?: boolean;
+  uberDirectClientId?: string | null;
+  uberDirectClientSecret?: string | null;
+  uberDirectCustomerId?: string | null;
+  uberDirectEnvironment?: string;
+  uberDirectPickupInstructions?: string | null;
+  uberDirectPickupPhone?: string | null;
+  uberDirectBatchSize?: number;
+  uberDirectMaxAngleDelta?: number;
+  uberDirectDispatchDelayMinutes?: number;
+
   // Estoque e Disponibilidade
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;

@@ -82,6 +82,13 @@ export class Order {
   paymentDate?: Date | null;
   isPrinted: boolean;
 
+  // Uber Direct
+  uberDeliveryId?: string | null;
+  uberDeliveryStatus?: string | null;
+  uberDeliveryFee?: number | null;
+  uberTrackingUrl?: string | null;
+  uberBatchId?: string | null;
+
   createdAt: Date;
   updatedAt: Date;
 

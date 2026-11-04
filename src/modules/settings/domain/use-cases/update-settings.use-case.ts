@@ -56,6 +56,19 @@ export interface UpdateSettingsInput {
   defaultProductSort?: string | null;
   vendizapAuthId?: string | null;
   vendizapAuthSecret?: string | null;
+
+  // Uber Direct
+  uberDirectEnabled?: boolean;
+  uberDirectAutoDispatch?: boolean;
+  uberDirectClientId?: string | null;
+  uberDirectClientSecret?: string | null;
+  uberDirectCustomerId?: string | null;
+  uberDirectEnvironment?: string;
+  uberDirectPickupInstructions?: string | null;
+  uberDirectPickupPhone?: string | null;
+  uberDirectBatchSize?: number;
+  uberDirectMaxAngleDelta?: number;
+  uberDirectDispatchDelayMinutes?: number;
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;
   showVariationsOnCard?: boolean;
@@ -108,6 +121,17 @@ export class UpdateSettingsUseCase {
       payOnDeliveryMealVoucher: false,
       payOnDeliveryFoodVoucher: false,
       paymentRules: [],
+      uberDirectEnabled: false,
+      uberDirectAutoDispatch: false,
+      uberDirectClientId: null,
+      uberDirectClientSecret: null,
+      uberDirectCustomerId: null,
+      uberDirectEnvironment: 'sandbox',
+      uberDirectPickupInstructions: null,
+      uberDirectPickupPhone: null,
+      uberDirectBatchSize: 3,
+      uberDirectMaxAngleDelta: 45,
+      uberDirectDispatchDelayMinutes: 0,
     };
 
     return this.settingsRepository.save({
@@ -268,6 +292,47 @@ export class UpdateSettingsUseCase {
         input.vendizapAuthSecret !== undefined
           ? input.vendizapAuthSecret
           : (base as any).vendizapAuthSecret,
+
+      uberDirectEnabled:
+        input.uberDirectEnabled !== undefined
+          ? input.uberDirectEnabled
+          : (base as any).uberDirectEnabled ?? false,
+      uberDirectAutoDispatch:
+        input.uberDirectAutoDispatch !== undefined
+          ? input.uberDirectAutoDispatch
+          : (base as any).uberDirectAutoDispatch ?? false,
+      uberDirectClientId:
+        input.uberDirectClientId !== undefined
+          ? input.uberDirectClientId
+          : (base as any).uberDirectClientId ?? null,
+      uberDirectClientSecret:
+        input.uberDirectClientSecret !== undefined
+          ? input.uberDirectClientSecret
+          : (base as any).uberDirectClientSecret ?? null,
+      uberDirectCustomerId:
+        input.uberDirectCustomerId !== undefined
+          ? input.uberDirectCustomerId
+          : (base as any).uberDirectCustomerId ?? null,
+      uberDirectEnvironment:
+        input.uberDirectEnvironment !== undefined
+          ? input.uberDirectEnvironment
+          : (base as any).uberDirectEnvironment ?? 'sandbox',
+      uberDirectPickupInstructions:
+        input.uberDirectPickupInstructions !== undefined
+          ? input.uberDirectPickupInstructions
+          : (base as any).uberDirectPickupInstructions ?? null,
+      uberDirectPickupPhone:
+        input.uberDirectPickupPhone !== undefined
+          ? input.uberDirectPickupPhone
+          : (base as any).uberDirectPickupPhone ?? null,
+      uberDirectBatchSize:
+        input.uberDirectBatchSize !== undefined
+          ? input.uberDirectBatchSize
+          : (base as any).uberDirectBatchSize ?? 3,
+      uberDirectMaxAngleDelta:
+        input.uberDirectMaxAngleDelta !== undefined
+          ? input.uberDirectMaxAngleDelta
+          : (base as any).uberDirectMaxAngleDelta ?? 45,
       autoHideOutOfStock:
         input.autoHideOutOfStock !== undefined
           ? input.autoHideOutOfStock

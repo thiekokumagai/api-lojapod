@@ -8,6 +8,7 @@ import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { EventsGateway } from '../../../events/events.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
+import { UberDirectService } from '../../../uber/uber-direct.service';
 
 @Injectable()
 export class UpdateOrderStatusUseCase {
@@ -16,6 +17,7 @@ export class UpdateOrderStatusUseCase {
     private readonly settingsRepository: ISettingsRepository,
     private readonly eventsGateway: EventsGateway,
     private readonly loyaltyService: LoyaltyService,
+    private readonly uberDirectService: UberDirectService,
   ) {}
 
   async execute(
@@ -322,6 +324,39 @@ export class UpdateOrderStatusUseCase {
           totalOrder: savedOrder.totalOrder,
         }).catch((err) => {
           console.error('[Loyalty] Erro ao processar selo de fidelidade:', err);
+        });
+      }
+
+      // Disparo automático do Uber Direct quando o pedido for marcado como SEPARADO (CONFIRMED)
+      if (
+        savedOrder.status === OrderStatus.CONFIRMED &&
+        previousStatus !== OrderStatus.CONFIRMED &&
+        savedOrder.deliveryModality === 'DELIVERY' &&
+        !savedOrder.uberDeliveryId
+      ) {
+        this.uberDirectService.getStoreUberSettings(savedOrder.storeId || '').then((uberConfig) => {
+          if (uberConfig && uberConfig.enabled && uberConfig.autoDispatch) {
+            const delayMs = (uberConfig.dispatchDelayMinutes ?? 0) * 60 * 1000;
+            const doDispatch = () => {
+              this.uberDirectService.dispatchUberDelivery(savedOrder.storeId || '', [savedOrder]).then((res) => {
+                if (res?.tracking_url || res?.trackingUrl) {
+                  savedOrder.uberDeliveryId = res.id;
+                  savedOrder.uberTrackingUrl = res.tracking_url || res.trackingUrl;
+                  savedOrder.uberDeliveryStatus = res.status;
+                  this.eventsGateway.notifyOrderUpdated(savedOrder);
+                }
+              }).catch((uberErr) => {
+                console.error('[UpdateOrderStatus] Erro ao disparar Uber Direct automático:', uberErr.message || uberErr);
+              });
+            };
+            if (delayMs > 0) {
+              setTimeout(doDispatch, delayMs);
+            } else {
+              doDispatch();
+            }
+          }
+        }).catch((err) => {
+          console.error('[UpdateOrderStatus] Erro ao verificar configurações Uber:', err);
         });
       }
 

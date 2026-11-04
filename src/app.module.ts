@@ -31,6 +31,7 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { CombosModule } from './modules/combos/combos.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { OrderBumpsModule } from './modules/order-bumps/order-bumps.module';
+import { UberModule } from './modules/uber/uber.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { OrderBumpsModule } from './modules/order-bumps/order-bumps.module';
     StockNotificationsModule,
     LoyaltyModule,
     OrderBumpsModule,
+    UberModule,
   ],
 })
 export class AppModule {}

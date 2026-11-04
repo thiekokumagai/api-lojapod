@@ -83,6 +83,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       isPrinted: record.isPrinted,
+      uberDeliveryId: record.uberDeliveryId,
+      uberDeliveryStatus: record.uberDeliveryStatus,
+      uberDeliveryFee: record.uberDeliveryFee ? Number(record.uberDeliveryFee) : null,
+      uberTrackingUrl: record.uberTrackingUrl,
+      uberBatchId: record.uberBatchId,
       items:
         record.items?.map((item: any) => {
           let imageUrl = undefined;
@@ -384,6 +389,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       cardFee: order.cardFee,
       couponId: order.couponId || undefined,
       isPrinted: order.isPrinted || false,
+      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
+      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
+      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
+      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
+      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
     };
 
     let record;
@@ -842,6 +852,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         couponId: order.couponId || undefined,
         courierTransactionId: order.courierTransactionId || undefined,
         isPrinted: order.isPrinted || false,
+      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
+      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
+      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
+      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
+      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
       };
 
       const createdOrder = await tx.order.create({
@@ -1221,6 +1236,11 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         couponId: order.couponId || undefined,
         courierTransactionId: order.courierTransactionId || undefined,
         isPrinted: order.isPrinted || false,
+      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
+      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
+      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
+      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
+      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
       };
 
       const updatedOrder = await tx.order.update({

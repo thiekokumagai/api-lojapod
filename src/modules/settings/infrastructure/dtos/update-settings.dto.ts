@@ -274,6 +274,58 @@ export class UpdateSettingsDto {
   @IsOptional()
   vendizapAuthSecret?: string | null;
 
+  // Uber Direct
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  uberDirectEnabled?: boolean;
+
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  uberDirectAutoDispatch?: boolean;
+
+  @ApiProperty({ example: 'client_id_here', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectClientId?: string | null;
+
+  @ApiProperty({ example: 'client_secret_here', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectClientSecret?: string | null;
+
+  @ApiProperty({ example: 'customer_id_here', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectCustomerId?: string | null;
+
+  @ApiProperty({ example: 'sandbox', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectEnvironment?: string;
+
+  @ApiProperty({ example: 'Retirar no balcao', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectPickupInstructions?: string | null;
+
+  @ApiProperty({ example: '+5511999999999', required: false })
+  @IsString()
+  @IsOptional()
+  uberDirectPickupPhone?: string | null;
+
+  @ApiProperty({ example: 3, required: false })
+  @IsOptional()
+  uberDirectBatchSize?: number;
+
+  @ApiProperty({ example: 45, required: false })
+  @IsOptional()
+  uberDirectMaxAngleDelta?: number;
+
+  @IsOptional()
+  uberDirectDispatchDelayMinutes?: number;
+
   @ApiProperty({ example: true, required: false })
   @IsBoolean()
   @IsOptional()
