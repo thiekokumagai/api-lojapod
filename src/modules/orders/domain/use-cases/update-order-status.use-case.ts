@@ -334,11 +334,20 @@ export class UpdateOrderStatusUseCase {
         savedOrder.deliveryModality === 'DELIVERY' &&
         !savedOrder.uberDeliveryId
       ) {
+        // Apenas disparar Uber automático se for PIX ou Cartão já pago online (só ida)
+        const isPaidOrder = savedOrder.paymentStatus === PaymentStatus.PAID || 
+                            (savedOrder.paymentMethod && savedOrder.paymentMethod.toLowerCase().includes('pix'));
+
+        if (!isPaidOrder) {
+          // Pedidos com pagamento na entrega (dinheiro / maquininha de cartão) não chamam Uber automático,
+          // pois exigem que o entregador volte para a loja com a maquininha ou o dinheiro.
+          return savedOrder;
+        }
         this.uberDirectService.getStoreUberSettings(savedOrder.storeId || '').then((uberConfig) => {
           if (uberConfig && uberConfig.enabled && uberConfig.autoDispatch) {
             const delayMs = (uberConfig.dispatchDelayMinutes ?? 0) * 60 * 1000;
             const doDispatch = () => {
-              this.uberDirectService.dispatchUberDelivery(savedOrder.storeId || '', [savedOrder]).then((res) => {
+              this.uberDirectService.processStoreAutomaticDispatch(savedOrder.storeId || '', savedOrder.id).then((res) => {
                 if (res?.tracking_url || res?.trackingUrl) {
                   savedOrder.uberDeliveryId = res.id;
                   savedOrder.uberTrackingUrl = res.tracking_url || res.trackingUrl;

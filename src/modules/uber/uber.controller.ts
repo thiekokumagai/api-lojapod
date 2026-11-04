@@ -99,10 +99,15 @@ export class UberController {
       where.uberDeliveryId = null;
     }
 
-    const orders = await this.prisma.order.findMany({
+    let orders = await this.prisma.order.findMany({
       where,
       include: { items: true },
     });
+
+    // Se nenhum pedido foi selecionado manualmente, incluir apenas pedidos pagos (PIX ou Cartão online)
+    if (!body.orderIds || body.orderIds.length === 0) {
+      orders = orders.filter((o) => o.paymentStatus === 'PAID' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('pix')));
+    }
 
     if (orders.length === 0) {
       return {
@@ -117,8 +122,9 @@ export class UberController {
     let storeCoords = await this.uberService.geocodeAddress(storeAddr);
 
     if (!storeCoords) {
-      // Fallback para centro da cidade se endereço da loja não resolver
-      storeCoords = { lat: -23.55052, lng: -46.633308 };
+      throw new BadRequestException(
+        `Não foi possível localizar o endereço da loja para integração com Uber Direct: ${storeAddr}. Verifique o endereço cadastrado nas configurações.`,
+      );
     }
 
     // Agrupar pedidos em rotas com mesmo rumo

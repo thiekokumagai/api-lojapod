@@ -14,6 +14,7 @@ export function normalizeUberPhone(phoneStr?: string | null): string {
 }
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { EventsGateway } from '../events/events.gateway';
 
 export interface Coordinates {
   lat: number;
@@ -34,7 +35,10 @@ export class UberDirectService {
   private tokenCache = new Map<string, UberAuthToken>();
   private geocodeCache = new Map<string, Coordinates>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   /**
    * Obtém as configurações Uber Direct da loja
@@ -303,157 +307,193 @@ export class UberDirectService {
       country: 'BR',
     };
 
-    // Montar os itens manifest e dropoff
-    const batchId = orders.length > 1 ? `BATCH-${Date.now()}` : undefined;
-
-    // Se for 1 pedido:
-    if (orders.length === 1) {
-      const order = orders[0];
-      const dropoffAddress = {
-        street_address: [`${order.street || ''}, ${order.number || ''}`.trim()],
-        city: order.city || '',
-        state: order.state || '',
-        zip_code: order.cep ? order.cep.replace(/\D/g, '') : '',
-        country: 'BR',
-      };
-
-      const manifestItems = (order.items || []).map((it: any) => ({
-        name: it.productName || 'Produto',
-        quantity: it.quantity || 1,
-      }));
-
-      if (manifestItems.length === 0) {
-        manifestItems.push({ name: `Pedido #${order.orderNumber || order.id}`, quantity: 1 });
-      }
-
-      const body: any = {
-        pickup: {
-          name: storeAddr.storeName || 'Loja',
-          address: JSON.stringify(pickupAddress),
-          phone_number: normalizeUberPhone(config.pickupPhone || storeAddr.phone),
-          instructions: config.pickupInstructions || 'Retirar no balcão de expedição.',
-        },
-        dropoff: {
-          name: order.customerName || 'Cliente',
-          address: JSON.stringify(dropoffAddress),
-          phone_number: normalizeUberPhone(order.customerPhone),
-          instructions: order.observation || order.complement || undefined,
-        },
-        manifest_items: manifestItems,
-        manifest_reference: `PEDIDO-${order.orderNumber || order.id}`,
-      };
-
-      const endpoint = `https://api.uber.com/v1/customers/${config.customerId}/deliveries`;
-      this.logger.log(`[UberDirect] Enviando corrida para pedido #${order.orderNumber} em ${endpoint}`);
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        this.logger.error(`[UberDirect] Erro na criação da entrega (${response.status}): ${errorData}`);
-        throw new Error(`Erro ao acionar Uber Direct (${response.status}): ${errorData}`);
-      }
-
-      const entrega = await response.json();
-
-      // Atualiza o pedido no banco
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          uberDeliveryId: entrega.id,
-          uberTrackingUrl: entrega.tracking_url || entrega.trackingUrl,
-          uberDeliveryStatus: entrega.status || 'processing',
-          uberDeliveryFee: entrega.fee ? Number(entrega.fee) / 100 : null,
-          uberBatchId: null,
-        },
-      });
-
-      return entrega;
-    }
-
-    // Se forem múltiplos pedidos na mesma corrida (Múltiplos dropoffs em sequência na mesma linha reta)
-    const dropoffs = orders.map((order, idx) => {
-      const dropoffAddress = {
-        street_address: [`${order.street || ''}, ${order.number || ''}`.trim()],
-        city: order.city || '',
-        state: order.state || '',
-        zip_code: order.cep ? order.cep.replace(/\D/g, '') : '',
-        country: 'BR',
-      };
-
-      const manifestItems = (order.items || []).map((it: any) => ({
-        name: it.productName || 'Produto',
-        quantity: it.quantity || 1,
-      }));
-
-      if (manifestItems.length === 0) {
-        manifestItems.push({ name: `Pedido #${order.orderNumber || order.id}`, quantity: 1 });
-      }
-
-      return {
-        name: order.customerName || `Cliente ${idx + 1}`,
-        address: JSON.stringify(dropoffAddress),
-        phone_number: normalizeUberPhone(order.customerPhone),
-        instructions: order.observation || order.complement || undefined,
-        manifest_items: manifestItems,
-        manifest_reference: `PEDIDO-${order.orderNumber || order.id}`,
-      };
-    });
-
-    const body: any = {
-      pickup: {
-        name: storeAddr.storeName || 'Loja',
-        address: JSON.stringify(pickupAddress),
-        phone_number: normalizeUberPhone(config.pickupPhone || storeAddr.phone),
-        instructions: config.pickupInstructions || 'Retirar todos os pacotes identificados no balcão.',
-      },
-      dropoffs,
-      manifest_reference: `ROTA-${orders.map((o) => o.orderNumber).join('-')}`,
-    };
-
-    const endpoint = `https://api.uber.com/v1/customers/${config.customerId}/deliveries`;
-    this.logger.log(`[UberDirect] Enviando rota em lote com ${orders.length} pedidos em ${endpoint}`);
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      this.logger.error(`[UberDirect] Erro na rota em lote (${response.status}): ${errorData}`);
-      throw new Error(`Erro ao acionar Uber Direct (${response.status}): ${errorData}`);
-    }
-
-    const entrega = await response.json();
-    const trackingUrl = entrega.tracking_url || entrega.trackingUrl;
-    const feePerOrder = entrega.fee ? (Number(entrega.fee) / 100) / orders.length : null;
+    const batchId = orders.length > 1 ? `BATCH-${Date.now()}` : null;
+    const results: any[] = [];
 
     for (const order of orders) {
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          uberDeliveryId: entrega.id,
-          uberTrackingUrl: trackingUrl,
-          uberDeliveryStatus: entrega.status || 'processing',
-          uberDeliveryFee: feePerOrder,
-          uberBatchId: batchId,
-        },
-      });
+      try {
+        const dropoffAddress = {
+          street_address: [`${order.street || ''}, ${order.number || ''}`.trim()],
+          city: order.city || '',
+          state: order.state || '',
+          zip_code: order.cep ? order.cep.replace(/\D/g, '') : '',
+          country: 'BR',
+        };
+
+        const manifestItems = (order.items || []).map((it: any) => ({
+          name: it.productName || 'Produto',
+          quantity: it.quantity || 1,
+        }));
+
+        if (manifestItems.length === 0) {
+          manifestItems.push({ name: `Pedido #${order.orderNumber || order.id}`, quantity: 1 });
+        }
+
+        // Lógica de Pagamento: PIX/Pago (Só ida) vs Dinheiro/Cartão (Cobrar e retornar à loja)
+        const isPaid = order.paymentStatus === 'PAID' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('pix'));
+        const totalFormatted = Number(order.totalOrder || order.totalReceived || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const methodLabel = order.paymentMethod || 'Não informado';
+
+        let driverPickupInstructions = config.pickupInstructions || 'Retirar no balcão de expedição.';
+        let driverDropoffInstructions = order.observation || order.complement || '';
+
+        if (!isPaid) {
+          driverPickupInstructions += ` | [A COBRAR: ${totalFormatted} no ${methodLabel}] - ATENÇÃO: Levar maquininha/troco. OBRIGATÓRIO RETORNAR À LOJA com a maquininha ou o dinheiro recebido!`;
+          driverDropoffInstructions = `[COBRAR NA ENTREGA: ${totalFormatted} no ${methodLabel}] - OBRIGATÓRIO RETORNAR À LOJA COM A MAQUININHA OU O PAGAMENTO. ` + driverDropoffInstructions;
+        } else {
+          driverPickupInstructions += ` | [PEDIDO JÁ PAGO VIA PIX/ONLINE] - Apenas retirar e entregar ao cliente (só ida).`;
+          driverDropoffInstructions = `[PEDIDO JÁ PAGO VIA ${methodLabel.toUpperCase()}] - Apenas entregar o pacote ao cliente (só ida, não cobrar nada). ` + driverDropoffInstructions;
+        }
+
+        const body: any = {
+          pickup: {
+            name: storeAddr.storeName || 'Loja',
+            address: JSON.stringify(pickupAddress),
+            phone_number: normalizeUberPhone(config.pickupPhone || storeAddr.phone),
+            instructions: driverPickupInstructions.trim(),
+          },
+          dropoff: {
+            name: order.customerName || 'Cliente',
+            address: JSON.stringify(dropoffAddress),
+            phone_number: normalizeUberPhone(order.customerPhone),
+            instructions: driverDropoffInstructions.trim(),
+          },
+          manifest_items: manifestItems,
+          manifest_reference: `PEDIDO-${order.orderNumber || order.id}`,
+        };
+
+        const endpoint = `https://api.uber.com/v1/customers/${config.customerId}/deliveries`;
+        this.logger.log(`[UberDirect] Enviando corrida para pedido #${order.orderNumber} (${isPaid ? 'SÓ IDA' : 'COM RETORNO DE MAQUININHA'}) em ${endpoint}`);
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          this.logger.error(`[UberDirect] Erro na criação da entrega para pedido #${order.orderNumber} (${response.status}): ${errorData}`);
+          throw new Error(`Erro ao acionar Uber Direct (${response.status}): ${errorData}`);
+        }
+
+        const entrega = await response.json();
+
+        // Atualiza o pedido no banco: STATUS VIRA 'DISPATCHED' (ENVIADO)
+        const updatedOrder = await this.prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: 'DISPATCHED',
+            uberDeliveryId: entrega.id,
+            uberTrackingUrl: entrega.tracking_url || entrega.trackingUrl,
+            uberDeliveryStatus: entrega.status || 'processing',
+            uberDeliveryFee: entrega.fee ? Number(entrega.fee) / 100 : null,
+            uberBatchId: batchId,
+          },
+          include: { items: true },
+        });
+
+        // Notifica painel de pedidos / kanban em tempo real
+        try {
+          this.eventsGateway.notifyOrderUpdated(updatedOrder);
+          this.eventsGateway.server.emit('products.refresh');
+        } catch (emitErr) {
+          this.logger.warn(`[UberDirect] Falha ao emitir socket de atualização do pedido: ${emitErr.message}`);
+        }
+
+        results.push(entrega);
+      } catch (err: any) {
+        this.logger.error(`[UberDirect] Falha ao despachar pedido #${order.orderNumber}: ${err.message}`);
+        if (orders.length === 1) throw err;
+      }
     }
 
-    return entrega;
+    if (results.length === 0 && orders.length > 0) {
+      throw new Error('Falha ao acionar Uber Direct para todos os pedidos da rota');
+    }
+
+    return results[0];
+  }
+
+  /**
+   * Processa o despacho automático inteligente de uma loja:
+   * Se houver outros pedidos separados no mesmo rumo, agrupa em rota em linha reta.
+   */
+  async processStoreAutomaticDispatch(storeId: string, triggeringOrderId: string): Promise<any> {
+    const config = await this.getStoreUberSettings(storeId);
+    if (!config || !config.enabled || !config.autoDispatch) {
+      return null;
+    }
+
+    // 1. Verificar se o pedido gatilho ainda existe e ainda não foi despachado
+    const triggeringOrder = await this.prisma.order.findUnique({
+      where: { id: triggeringOrderId },
+      include: { items: true },
+    });
+
+    if (
+      !triggeringOrder ||
+      triggeringOrder.uberDeliveryId ||
+      triggeringOrder.status !== 'CONFIRMED' ||
+      triggeringOrder.deliveryModality !== 'DELIVERY'
+    ) {
+      return null;
+    }
+
+    // 2. Verificar se o pedido é elegível: APENAS PEDIDOS PAGOS (PIX ou Cartão Pago)
+    const isPaid = triggeringOrder.paymentStatus === 'PAID' || 
+                   (triggeringOrder.paymentMethod && triggeringOrder.paymentMethod.toLowerCase().includes('pix'));
+
+    if (!isPaid) {
+      this.logger.log(`[UberDirect Auto] Pedido #${triggeringOrder.orderNumber} não foi enviado para a Uber automaticamente pois o pagamento (${triggeringOrder.paymentMethod || 'não informado'}) é na entrega e exige retorno de maquininha/dinheiro à loja.`);
+      return null;
+    }
+
+    // 2. Buscar todos os pedidos confirmados/separados aguardando envio desta loja (apenas PIX ou já pagos)
+    const rawPendingOrders = await this.prisma.order.findMany({
+      where: {
+        storeId,
+        status: 'CONFIRMED',
+        deliveryModality: 'DELIVERY',
+        uberDeliveryId: null,
+      },
+      include: { items: true },
+    });
+
+    const pendingOrders = rawPendingOrders.filter((o) => {
+      return o.paymentStatus === 'PAID' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('pix'));
+    });
+
+    // Se só tem 1 pedido (ou nenhum outro), despacha individualmente
+    if (pendingOrders.length <= 1) {
+      return await this.dispatchUberDelivery(storeId, [triggeringOrder]);
+    }
+
+    // 3. Obter coordenadas da loja para cálculo dos rumos/azimutes
+    const storeAddr = `${config.storeAddress.street || ''}, ${config.storeAddress.number || ''}, ${config.storeAddress.neighborhood || ''}, ${config.storeAddress.city || ''} - ${config.storeAddress.state || ''}`;
+    let storeCoords = await this.geocodeAddress(storeAddr);
+    if (!storeCoords) {
+      storeCoords = { lat: -23.55052, lng: -46.633308 };
+    }
+
+    // 4. Agrupar todos os pedidos pendentes em rotas contínuas na mesma linha reta
+    const routes = await this.groupOrdersIntoStraightRoutes(
+      storeCoords,
+      pendingOrders,
+      config.batchSize || 3,
+      config.maxAngleDelta || 45.0,
+    );
+
+    // 5. Encontrar a rota que contém o pedido gatilho
+    const targetRoute = routes.find((r) => r.some((o) => o.id === triggeringOrderId));
+    if (targetRoute && targetRoute.length > 0) {
+      return await this.dispatchUberDelivery(storeId, targetRoute);
+    }
+
+    // Fallback: se não estiver em grupo específico, despacha o pedido gatilho
+    return await this.dispatchUberDelivery(storeId, [triggeringOrder]);
   }
 }
-
