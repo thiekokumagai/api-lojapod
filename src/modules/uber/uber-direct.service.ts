@@ -474,9 +474,11 @@ export class UberDirectService {
 
     // 3. Obter coordenadas da loja para cálculo dos rumos/azimutes
     const storeAddr = `${config.storeAddress.street || ''}, ${config.storeAddress.number || ''}, ${config.storeAddress.neighborhood || ''}, ${config.storeAddress.city || ''} - ${config.storeAddress.state || ''}`;
-    let storeCoords = await this.geocodeAddress(storeAddr);
+    const storeCoords = await this.geocodeAddress(storeAddr);
     if (!storeCoords) {
-      storeCoords = { lat: -23.55052, lng: -46.633308 };
+      throw new Error(
+        `Não foi possível localizar o endereço da loja para agrupar as entregas: ${storeAddr}. Verifique o endereço cadastrado nas configurações.`,
+      );
     }
 
     // 4. Agrupar todos os pedidos pendentes em rotas contínuas na mesma linha reta
