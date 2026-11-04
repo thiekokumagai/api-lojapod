@@ -4,7 +4,7 @@ import {
   IProductsRepository,
   ProductWithDetails,
 } from '../../domain/repositories/iproducts.repository';
-import { Product, ProductImage } from '@prisma/client';
+import { Prisma, Product, ProductImage } from '@prisma/client';
 
 @Injectable()
 export class PrismaProductsRepository implements IProductsRepository {
@@ -77,6 +77,9 @@ export class PrismaProductsRepository implements IProductsRepository {
     isFeatured?: boolean;
   }): Promise<ProductWithDetails[]> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
+    const matchingIds = searchWords?.length
+      ? await this.findAccentInsensitiveProductIds(searchWords)
+      : undefined;
 
     const products = await this.prisma.product.findMany({
       skip: params.skip,
@@ -87,13 +90,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
-              AND: searchWords.map((word) => ({
-                OR: [
-                  { title: { contains: word, mode: 'insensitive' } },
-                  { description: { contains: word, mode: 'insensitive' } },
-                  { category: { title: { contains: word, mode: 'insensitive' } } },
-                ],
-              })),
+              id: { in: matchingIds?.map(({ id }) => id) ?? [] },
             }
           : {}),
         ...(params.categoryId ? { categoryId: params.categoryId } : {}),
@@ -139,6 +136,9 @@ export class PrismaProductsRepository implements IProductsRepository {
     isFeatured?: boolean;
   }): Promise<number> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
+    const matchingIds = searchWords?.length
+      ? await this.findAccentInsensitiveProductIds(searchWords)
+      : undefined;
 
     return this.prisma.product.count({
       where: {
@@ -147,18 +147,33 @@ export class PrismaProductsRepository implements IProductsRepository {
         ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
-              AND: searchWords.map((word) => ({
-                OR: [
-                  { title: { contains: word, mode: 'insensitive' } },
-                  { description: { contains: word, mode: 'insensitive' } },
-                  { category: { title: { contains: word, mode: 'insensitive' } } },
-                ],
-              })),
+              id: { in: matchingIds?.map(({ id }) => id) ?? [] },
             }
           : {}),
         ...(params.categoryId ? { categoryId: params.categoryId } : {}),
       },
     });
+  }
+
+  private findAccentInsensitiveProductIds(words: string[]) {
+    const accentMapFrom = 'áàâãäåçéèêëíìîïñóòôõöúùûüýÿ';
+    const accentMapTo = 'aaaaaaceeeeiiiinooooouuuuyy';
+    const wordConditions = words.map((word) => {
+      const pattern = `%${word}%`;
+      return Prisma.sql`(
+        translate(lower(p.title), ${accentMapFrom}, ${accentMapTo}) LIKE translate(lower(${pattern}), ${accentMapFrom}, ${accentMapTo})
+        OR translate(lower(coalesce(p.description, '')), ${accentMapFrom}, ${accentMapTo}) LIKE translate(lower(${pattern}), ${accentMapFrom}, ${accentMapTo})
+        OR translate(lower(c.title), ${accentMapFrom}, ${accentMapTo}) LIKE translate(lower(${pattern}), ${accentMapFrom}, ${accentMapTo})
+      )`;
+    });
+
+    return this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT p.id
+      FROM products p
+      LEFT JOIN categories c ON c.id = p."categoryId"
+      WHERE p."deletedAt" IS NULL
+        AND ${Prisma.join(wordConditions, ' AND ')}
+    `);
   }
 
   async checkCategoryExists(categoryId: string): Promise<boolean> {
