@@ -58,6 +58,8 @@ export abstract class IProductsRepository {
 
   abstract addImages(productId: string, urls: string[]): Promise<void>;
 
+  abstract reorderImages(productId: string, imageIds: string[]): Promise<void>;
+
   abstract findImageById(imageId: string): Promise<ProductImage | null>;
 
   abstract removeImage(imageId: string): Promise<void>;

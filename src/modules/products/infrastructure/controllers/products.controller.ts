@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UploadedFiles,
@@ -36,6 +37,7 @@ import { AttachProductVariationsDto } from '../dtos/attach-product-variations.dt
 import { CreateProductItemsDto } from '../dtos/create-product-items.dto';
 import { UpdateProductItemStockDto } from '../dtos/update-product-item-stock.dto';
 import { UploadProductImagesDto } from '../dtos/upload-product-images.dto';
+import { ReorderProductImagesDto } from '../dtos/reorder-product-images.dto';
 import { UpdateProductDto } from '../dtos/update-product.dto';
 
 import { ListProductsUseCase } from '../../domain/use-cases/list-products.use-case';
@@ -222,6 +224,13 @@ export class ProductsController {
     }
 
     return this.manageProductImagesUseCase.addImages(id, urls);
+  }
+
+  @Put(':id/images/order')
+  @ApiOperation({ summary: 'Reordenar imagens do produto (a primeira é a principal)' })
+  @ApiBody({ type: ReorderProductImagesDto })
+  reorderImages(@Param('id') id: string, @Body() dto: ReorderProductImagesDto) {
+    return this.manageProductImagesUseCase.reorderImages(id, dto.imageIds);
   }
 
   @Patch(':id/images/:imageId')

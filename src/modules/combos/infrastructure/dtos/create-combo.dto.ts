@@ -8,6 +8,7 @@ import {
   IsBoolean,
   IsDateString,
   IsArray,
+  ArrayMaxSize,
   ValidateNested,
   IsUUID,
   ValidateIf,
@@ -52,6 +53,13 @@ export class CreateComboDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Galeria de imagens do combo (a primeira é a principal)', type: [String] })
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'O combo pode ter no máximo 6 imagens.' })
+  @IsString({ each: true })
+  @IsOptional()
+  images?: string[];
 
   @ApiPropertyOptional({ description: 'ID da categoria opcional' })
   @ValidateIf((o) => o.categoryId !== null && o.categoryId !== undefined && o.categoryId !== '')

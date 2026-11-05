@@ -21,6 +21,7 @@ export class Combo {
   name: string;
   description?: string | null;
   imageUrl?: string | null;
+  images?: string[];
   categoryId?: string | null;
   price: number;
   isActive: boolean;

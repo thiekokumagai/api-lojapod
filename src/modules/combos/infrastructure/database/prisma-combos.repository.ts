@@ -13,7 +13,7 @@ export class PrismaCombosRepository implements ICombosRepository {
 
   private static readonly PRODUCT_INCLUDE = {
     category: true,
-    images: true,
+    images: { orderBy: [{ position: 'asc' as const }, { createdAt: 'asc' as const }] },
     variations: {
       include: {
         variation: {
@@ -134,6 +134,12 @@ export class PrismaCombosRepository implements ICombosRepository {
       name: record.name,
       description: record.description,
       imageUrl: record.imageUrl,
+      images:
+        Array.isArray(record.images) && record.images.length > 0
+          ? record.images
+          : record.imageUrl
+          ? [record.imageUrl]
+          : [],
       categoryId: record.categoryId,
       price,
       isActive: record.isActive,
@@ -245,6 +251,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         name: combo.name!,
         description: combo.description,
         imageUrl: combo.imageUrl,
+        images: combo.images ?? [],
         categoryId: combo.categoryId || null,
         price: combo.price!,
         isActive,
@@ -315,6 +322,7 @@ export class PrismaCombosRepository implements ICombosRepository {
         if (combo.name !== undefined) updateData.name = combo.name;
         if (combo.description !== undefined) updateData.description = combo.description;
         if (combo.imageUrl !== undefined) updateData.imageUrl = combo.imageUrl;
+        if (combo.images !== undefined) updateData.images = combo.images;
         if (combo.categoryId !== undefined) updateData.categoryId = combo.categoryId || null;
         if (combo.price !== undefined) updateData.price = combo.price;
         if (combo.isActive !== undefined) updateData.isActive = combo.isActive;

@@ -11,6 +11,22 @@ export class CombosService {
     private readonly combosRepository: ICombosRepository,
   ) {}
 
+  /**
+   * Mantém `imageUrl` (imagem principal, usada em pedidos/dashboard/busca) sincronizado com a galeria `images`.
+   * - `images` enviado: a primeira imagem vira a principal.
+   * - só `imageUrl` enviado (clientes antigos): a galeria vira [imageUrl].
+   */
+  private resolveImages(dto: { imageUrl?: string | null; images?: string[] }): { imageUrl?: string | null; images?: string[] } {
+    if (dto.images !== undefined) {
+      const images = Array.from(new Set((dto.images || []).filter((u) => typeof u === 'string' && u.trim() !== '')));
+      return { images, imageUrl: images[0] ?? null };
+    }
+    if (dto.imageUrl !== undefined) {
+      return { imageUrl: dto.imageUrl || null, images: dto.imageUrl ? [dto.imageUrl] : [] };
+    }
+    return {};
+  }
+
   async create(dto: CreateComboDto): Promise<Combo> {
     if (!dto.items || dto.items.length === 0) {
       throw new BadRequestException('O combo deve conter pelo menos um produto componente.');
@@ -30,7 +46,7 @@ export class CombosService {
       {
         name: dto.name,
         description: dto.description,
-        imageUrl: dto.imageUrl,
+        ...this.resolveImages(dto),
         categoryId: dto.categoryId,
         price: dto.price,
         isActive: dto.isActive,
@@ -58,7 +74,7 @@ export class CombosService {
       {
         name: dto.name,
         description: dto.description,
-        imageUrl: dto.imageUrl,
+        ...this.resolveImages(dto),
         categoryId: dto.categoryId,
         price: dto.price,
         isActive: dto.isActive,
@@ -90,6 +106,7 @@ export class CombosService {
         name: `${existing.name} (Cópia)`,
         description: existing.description,
         imageUrl: existing.imageUrl,
+        images: existing.images ?? (existing.imageUrl ? [existing.imageUrl] : []),
         categoryId: existing.categoryId,
         price: existing.price,
         isActive: false, // Inativo por padrão ao duplicar

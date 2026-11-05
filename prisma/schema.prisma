@@ -277,6 +277,7 @@ model ProductImage {
   id         String   @id @default(uuid())
   url        String
   productId  String
+  position   Int      @default(0)
   createdAt  DateTime @default(now())
   externalId String?
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -820,6 +821,7 @@ model Combo {
   name                      String
   description               String?
   imageUrl                  String?
+  images                    String[]                   @default([])
   categoryId                String?
   price                     Decimal                    @db.Decimal(10, 2)
   isActive                  Boolean                    @default(true)

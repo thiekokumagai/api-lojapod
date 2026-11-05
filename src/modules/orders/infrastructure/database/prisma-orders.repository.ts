@@ -244,7 +244,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             },
             product: {
               include: {
-                images: true,
+                images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                 category: true,
               },
             },
@@ -331,7 +331,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             },
             product: {
               include: {
-                images: true,
+                images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                 category: true,
               },
             },
@@ -411,7 +411,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               },
               product: {
                 include: {
-                  images: true,
+                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                   category: true,
                 },
               },
@@ -448,7 +448,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               },
               product: {
                 include: {
-                  images: true,
+                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                   category: true,
                 },
               },
@@ -889,7 +889,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               },
               product: {
                 include: {
-                  images: true,
+                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                   category: true,
                 },
               },
@@ -1267,7 +1267,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               combo: true,
               product: {
                 include: {
-                  images: true,
+                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                   category: true,
                 },
               },

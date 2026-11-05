@@ -35,7 +35,7 @@ export class OrderBumpsService {
             id: true,
             title: true,
             price: true,
-            images: { take: 1, select: { url: true } },
+            images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
           },
         },
         triggerCategory: {
@@ -51,7 +51,7 @@ export class OrderBumpsService {
             price: true,
             promotionalPrice: true,
             isVisible: true,
-            images: { take: 1, select: { url: true } },
+            images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
             items: {
               select: {
                 id: true,
@@ -117,7 +117,7 @@ export class OrderBumpsService {
             id: true,
             title: true,
             price: true,
-            images: { take: 1, select: { url: true } },
+            images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
           },
         },
         triggerProduct: {
@@ -174,7 +174,7 @@ export class OrderBumpsService {
             id: true,
             title: true,
             price: true,
-            images: { take: 1, select: { url: true } },
+            images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
           },
         },
         triggerProduct: {
@@ -252,7 +252,7 @@ export class OrderBumpsService {
       include: {
         suggestedProduct: {
           include: {
-            images: { take: 2, select: { url: true } },
+            images: { take: 2, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
             category: { select: { id: true, title: true } },
             variations: {
               include: {

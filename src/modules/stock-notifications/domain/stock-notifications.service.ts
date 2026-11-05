@@ -73,7 +73,7 @@ export class StockNotificationsService {
       },
       include: {
         product: {
-          select: { id: true, title: true, images: { take: 1, select: { url: true } } },
+          select: { id: true, title: true, images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } } },
         },
         productItem: {
           include: {
@@ -182,7 +182,7 @@ export class StockNotificationsService {
             id: true,
             title: true,
             isVisible: true,
-            images: { take: 1, select: { url: true } },
+            images: { take: 1, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { url: true } },
             items: {
               select: {
                 id: true,

@@ -302,7 +302,7 @@ export class GetDashboardStatsUseCase {
       include: {
         product: {
           include: {
-            images: true,
+            images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
             category: true,
           },
         },

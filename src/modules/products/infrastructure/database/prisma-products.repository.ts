@@ -98,7 +98,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
-        images: true,
+        images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
         variations: {
           include: {
             variation: {
@@ -189,7 +189,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       where: { id, deletedAt: null },
       include: {
         category: true,
-        images: true,
+        images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
         variations: {
           include: {
             variation: {
@@ -219,12 +219,29 @@ export class PrismaProductsRepository implements IProductsRepository {
   }
 
   async addImages(productId: string, urls: string[]): Promise<void> {
+    const last = await this.prisma.productImage.aggregate({
+      where: { productId },
+      _max: { position: true },
+    });
+    const start = (last._max.position ?? -1) + 1;
     await this.prisma.productImage.createMany({
-      data: urls.map((url) => ({
+      data: urls.map((url, index) => ({
         url,
         productId,
+        position: start + index,
       })),
     });
+  }
+
+  async reorderImages(productId: string, imageIds: string[]): Promise<void> {
+    await this.prisma.$transaction(
+      imageIds.map((id, index) =>
+        this.prisma.productImage.updateMany({
+          where: { id, productId },
+          data: { position: index },
+        }),
+      ),
+    );
   }
 
   async findImageById(imageId: string): Promise<ProductImage | null> {
@@ -556,7 +573,7 @@ export class PrismaProductsRepository implements IProductsRepository {
   async softDelete(id: string): Promise<string[]> {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: { images: true },
+      include: { images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] } },
     });
 
     if (!product) return [];
@@ -637,7 +654,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     const original = await this.prisma.product.findFirst({
       where: { id, deletedAt: null },
       include: {
-        images: true,
+        images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
         variations: true,
         items: {
           include: {
@@ -666,9 +683,10 @@ export class PrismaProductsRepository implements IProductsRepository {
 
       if (original.images.length > 0) {
         await tx.productImage.createMany({
-          data: original.images.map((img) => ({
+          data: original.images.map((img, index) => ({
             url: img.url,
             productId: clone.id,
+            position: index,
           })),
         });
       }

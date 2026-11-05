@@ -59,7 +59,7 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 product: {
                   include: {
                     category: true,
-                    images: true,
+                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                   },
                 },
               },

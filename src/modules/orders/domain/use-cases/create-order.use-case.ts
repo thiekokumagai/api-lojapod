@@ -67,7 +67,7 @@ export class CreateOrderUseCase {
                   include: {
                     product: {
                       include: {
-                        images: true,
+                        images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                         items: true,
                       },
                     },
