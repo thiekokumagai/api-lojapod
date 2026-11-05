@@ -354,8 +354,7 @@ model StoreSettings {
   payOnDeliveryCardDebit        Boolean  @default(false)
   payOnDeliveryCardCredit       Boolean  @default(false)
   paymentRules                  Json?
-  promoPaymentMethods           String[] @default(["pix"])
-  deliveryOriginCep            String?
+  deliveryOriginCep             String?
   deliveryOriginNumber          String?
   deliveryRanges                Json?
   installmentRules              Json?

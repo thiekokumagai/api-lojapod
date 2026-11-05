@@ -60,9 +60,6 @@ export interface StoreSettings {
   payOnDeliveryMealVoucher: boolean;
   payOnDeliveryFoodVoucher: boolean;
 
-  // Formas de pagamento que mantêm o preço promocional (pix, credit, debit, cash, meal_voucher, food_voucher)
-  promoPaymentMethods?: string[];
-
   paymentRules: any; // Mapeado para Array de PaymentRule ou nulo
   paymentGateways?: any; // Configurações de gateways online (InfinitePay, etc.)
 

@@ -209,12 +209,6 @@ export class UpdateSettingsDto {
   @IsOptional()
   pixEnabled?: boolean;
 
-  @ApiProperty({ example: ['pix'], required: false })
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  promoPaymentMethods?: string[];
-
   @ApiProperty({ example: true, required: false })
   @IsBoolean()
   @IsOptional()

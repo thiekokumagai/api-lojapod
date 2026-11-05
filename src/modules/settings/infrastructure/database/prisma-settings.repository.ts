@@ -99,7 +99,6 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       payOnDeliveryMealVoucher: (settings as any).payOnDeliveryMealVoucher ?? false,
       payOnDeliveryFoodVoucher: (settings as any).payOnDeliveryFoodVoucher ?? false,
       paymentRules: settings.paymentRules ?? [],
-      promoPaymentMethods: settings.promoPaymentMethods ?? ['pix'],
       paymentGateways: settings.paymentGateways ?? undefined,
       freeShippingEnabled: settings.freeShippingEnabled ?? false,
       freeShippingMinValue: settings.freeShippingMinValue ?? null,
