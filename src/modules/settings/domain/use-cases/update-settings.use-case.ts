@@ -44,6 +44,7 @@ export interface UpdateSettingsInput {
   payOnDeliveryMealVoucher?: boolean;
   payOnDeliveryFoodVoucher?: boolean;
   paymentRules?: any;
+  promoPaymentMethods?: string[];
   freeShippingEnabled?: boolean;
   freeShippingMinValue?: number | null;
   storePickupEnabled?: boolean;
@@ -224,6 +225,10 @@ export class UpdateSettingsUseCase {
         input.paymentRules !== undefined
           ? input.paymentRules
           : base.paymentRules,
+      promoPaymentMethods:
+        input.promoPaymentMethods !== undefined
+          ? input.promoPaymentMethods
+          : ((base as any).promoPaymentMethods ?? ['pix']),
       businessHours:
         input.businessHours !== undefined
           ? input.businessHours

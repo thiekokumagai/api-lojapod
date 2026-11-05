@@ -39,6 +39,18 @@ export class CreateOrderUseCase {
 
       const storeId = data.storeId || this.tenantContextService.getStoreId() || undefined;
 
+      // Formas de pagamento que mantêm o preço promocional (configurável na loja; padrão: só Pix)
+      let promoPaymentMethods: string[] = ['pix'];
+      try {
+        const storeSettings = await this.settingsRepository.get();
+        if (Array.isArray(storeSettings?.promoPaymentMethods)) {
+          promoPaymentMethods = storeSettings.promoPaymentMethods;
+        }
+      } catch (err) {
+        // Mantém o padrão (apenas Pix)
+      }
+      const orderPaymentMethod = String((data as any).paymentMethod || '').toLowerCase();
+
       // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
@@ -224,6 +236,21 @@ export class CreateOrderUseCase {
 
             if (!prod.items || prod.items.length === 0) {
               throw new BadRequestException(`Produto "${item.productName}" não possui estoque cadastrado.`);
+            }
+
+            // Preço promocional só vale nas formas de pagamento permitidas pela loja
+            const promoPrice = prod.promotionalPrice ? Number(prod.promotionalPrice) : 0;
+            const regularPrice = prod.price ? Number(prod.price) : 0;
+            if (
+              orderPaymentMethod &&
+              promoPrice > 0 &&
+              regularPrice > promoPrice &&
+              Math.abs(Number(item.price) - promoPrice) < 0.005 &&
+              !promoPaymentMethods.map((m) => String(m).toLowerCase()).includes(orderPaymentMethod)
+            ) {
+              throw new BadRequestException(
+                `O preço promocional de "${prod.title}" não é válido para a forma de pagamento escolhida.`,
+              );
             }
 
             let resolvedPi: any = null;
