@@ -387,6 +387,7 @@ model StoreSettings {
   enableStockAlertNotification  Boolean  @default(true)
   paymentGateways               Json?
   showVariationsOnCard          Boolean  @default(true)
+  searchFilters                 Json?
   savedStoreAddresses           Json?
   payOnDeliveryFoodVoucher      Boolean  @default(false)
   payOnDeliveryMealVoucher      Boolean  @default(false)

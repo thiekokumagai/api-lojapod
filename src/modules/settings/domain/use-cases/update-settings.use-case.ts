@@ -73,6 +73,7 @@ export interface UpdateSettingsInput {
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;
   showVariationsOnCard?: boolean;
+  searchFilters?: any;
   paymentGateways?: any;
 }
 
@@ -352,6 +353,10 @@ export class UpdateSettingsUseCase {
           : (base as any).showVariationsOnCard !== undefined
             ? (base as any).showVariationsOnCard
             : true,
+      searchFilters:
+        input.searchFilters !== undefined
+          ? input.searchFilters
+          : ((base as any).searchFilters ?? []),
       paymentGateways:
         input.paymentGateways !== undefined
           ? input.paymentGateways

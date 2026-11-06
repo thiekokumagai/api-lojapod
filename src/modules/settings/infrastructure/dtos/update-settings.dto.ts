@@ -347,6 +347,14 @@ export class UpdateSettingsDto {
   @IsOptional()
   showVariationsOnCard?: boolean;
 
+  @ApiProperty({
+    example: [{ id: 'g1', name: 'Sabor', items: [{ id: 'i1', label: 'Menta', imageUrl: '' }] }],
+    required: false,
+  })
+  @IsArray()
+  @IsOptional()
+  searchFilters?: any[];
+
   @ApiProperty({ example: {}, required: false })
   @IsOptional()
   paymentGateways?: any;

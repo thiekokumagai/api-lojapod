@@ -93,6 +93,7 @@ export interface StoreSettings {
   autoHideOutOfStock?: boolean;
   enableStockAlertNotification?: boolean;
   showVariationsOnCard?: boolean;
+  searchFilters?: any;
 
   createdAt: Date;
   updatedAt: Date;

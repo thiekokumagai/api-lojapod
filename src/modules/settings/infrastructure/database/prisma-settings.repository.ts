@@ -122,6 +122,7 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       autoHideOutOfStock: settings.autoHideOutOfStock ?? true,
       enableStockAlertNotification: settings.enableStockAlertNotification ?? true,
       showVariationsOnCard: settings.showVariationsOnCard ?? true,
+      searchFilters: ((settings as any).searchFilters ?? []) as any,
     };
 
     const result = await this.prisma.storeSettings.upsert({
