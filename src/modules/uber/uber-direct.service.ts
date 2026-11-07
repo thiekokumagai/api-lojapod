@@ -124,6 +124,47 @@ export class UberDirectService {
   }
 
   /**
+   * Consulta a Uber pelo status atual da corrida de um pedido e salva no pedido.
+   * Não altera o status do pedido, só os dados da corrida (status, link, taxa).
+   */
+  async refreshDeliveryStatus(storeId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, storeId } });
+    if (!order || !order.uberDeliveryId) {
+      throw new Error('Pedido sem corrida da Uber Direct.');
+    }
+
+    const config = await this.getStoreUberSettings(storeId);
+    if (!config?.customerId) {
+      throw new Error('Uber Customer ID não configurado.');
+    }
+
+    const token = await this.getUberToken(storeId);
+    const endpoint = `https://api.uber.com/v1/customers/${config.customerId}/deliveries/${order.uberDeliveryId}`;
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.warn(`[UberDirect] Falha ao consultar corrida ${order.uberDeliveryId} (${response.status}): ${errorText}`);
+      throw new Error(`Erro ao consultar a Uber (${response.status})`);
+    }
+
+    const data = await response.json();
+    const status = data.status || order.uberDeliveryStatus;
+    const trackingUrl = data.tracking_url || data.trackingUrl || order.uberTrackingUrl;
+    const fee = data.fee != null ? Number(data.fee) / 100 : order.uberDeliveryFee;
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { uberDeliveryStatus: status, uberTrackingUrl: trackingUrl, uberDeliveryFee: fee },
+    });
+
+    return { status, trackingUrl, fee };
+  }
+
+  /**
    * Geocodificação de endereço (OpenStreetMap Nominatim com fallback)
    */
   async geocodeAddress(addressStr: string): Promise<Coordinates | null> {

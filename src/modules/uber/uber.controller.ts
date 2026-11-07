@@ -70,6 +70,20 @@ export class UberController {
     }
   }
 
+  @Get('orders/:id/status')
+  @ApiOperation({ summary: 'Consulta na Uber o status atual da corrida do pedido e atualiza o pedido' })
+  async refreshStatus(@Param('id') id: string) {
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      throw new BadRequestException('Contexto de loja não informado');
+    }
+    try {
+      return await this.uberService.refreshDeliveryStatus(storeId, id);
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Falha ao consultar a Uber');
+    }
+  }
+
   @Post('orders/:id/dispatch')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Chamar Uber Direct manualmente para um pedido específico' })
