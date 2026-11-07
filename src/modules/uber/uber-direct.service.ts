@@ -405,7 +405,7 @@ export class UberDirectService {
         };
 
         // A Uber exige ao menos 1 item no manifesto; não enviamos os produtos, só um item genérico
-        const manifestItems = [{ name: 'Pedido', quantity: 1 }];
+        const manifestItems = [{ name: storeAddr.storeName ? `Pedido ${storeAddr.storeName}` : 'Pedido', quantity: 1 }];
 
         // Lógica de Pagamento: PIX/Pago (Só ida) vs Dinheiro/Cartão (Cobrar e retornar à loja)
         const isPaid = order.paymentStatus === 'PAID' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('pix'));
