@@ -10,7 +10,26 @@ export class GetCourierUseCase {
       where: { id },
       include: {
         transactions: {
-          orderBy: { date: 'desc' }
+          orderBy: { date: 'desc' },
+          include: {
+            orders: {
+              select: {
+                id: true,
+                orderNumber: true,
+                customerName: true,
+                neighborhood: true,
+                totalOrder: true,
+                totalReceived: true,
+                paymentType: true,
+                paymentMethod: true,
+                paymentStatus: true,
+                amountProvided: true,
+                changeAmount: true,
+                status: true,
+              },
+              orderBy: { orderNumber: 'asc' },
+            },
+          },
         },
       }
     });
