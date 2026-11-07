@@ -44,6 +44,32 @@ export class UberController {
     };
   }
 
+  @Get('test-auth')
+  @ApiOperation({ summary: 'Testa apenas a autenticação OAuth com a Uber (não cria corrida)' })
+  async testAuth() {
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      throw new BadRequestException('Contexto de loja não informado');
+    }
+    const settings = await this.uberService.getStoreUberSettings(storeId);
+    const missing = [
+      !settings?.clientId && 'clientId',
+      !settings?.clientSecret && 'clientSecret',
+      !settings?.customerId && 'customerId',
+    ].filter(Boolean);
+
+    if (missing.length > 0) {
+      return { ok: false, environment: settings?.environment || 'sandbox', error: `Campos não configurados: ${missing.join(', ')}` };
+    }
+
+    try {
+      await this.uberService.getUberToken(storeId);
+      return { ok: true, environment: settings?.environment || 'sandbox', message: 'Autenticação com a Uber OK' };
+    } catch (e: any) {
+      return { ok: false, environment: settings?.environment || 'sandbox', error: e?.message || 'Falha desconhecida' };
+    }
+  }
+
   @Post('orders/:id/dispatch')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Chamar Uber Direct manualmente para um pedido específico' })
@@ -119,7 +145,7 @@ export class UberController {
 
     // Geocodificar a loja
     const storeAddr = `${config.storeAddress.street}, ${config.storeAddress.number}, ${config.storeAddress.neighborhood}, ${config.storeAddress.city} - ${config.storeAddress.state}`;
-    let storeCoords = await this.uberService.geocodeAddress(storeAddr);
+    let storeCoords = await this.uberService.geocodeWithFallbacks(config.storeAddress);
 
     if (!storeCoords) {
       throw new BadRequestException(

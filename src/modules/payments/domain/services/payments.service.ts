@@ -18,6 +18,39 @@ export class PaymentsService {
   ) {}
 
   /**
+   * Testa a conexão com a InfinitePay usando as credenciais salvas na loja.
+   * A InfinitePay não tem endpoint de autenticação: o teste cria um link de R$ 1,00
+   * (nunca cobrado enquanto ninguém pagar) e devolve a URL gerada.
+   */
+  async testInfinitePayConnection(storeId: string, originUrl?: string) {
+    const settings = await this.prisma.storeSettings.findFirst({ where: { storeId } });
+    const credentials = ((settings?.paymentGateways as any) || {}).infinitepay;
+
+    if (!credentials?.handle?.trim()) {
+      return { ok: false, error: 'InfiniteTag (handle) não configurada. Salve a integração antes de testar.' };
+    }
+
+    try {
+      const gateway = this.gatewayFactory.getGateway('INFINITEPAY');
+      const cleanOrigin = (originUrl || process.env.ADMIN_FRONTEND_URL || 'https://lojapod.com').replace(/\/$/, '');
+      const result = await gateway.createCreditCardCheckout({
+        orderId: 'teste-conexao',
+        orderNumber: Date.now(),
+        amount: 1,
+        customerName: 'Teste de Conexão',
+        redirectUrl: `${cleanOrigin}/`,
+        webhookUrl: '',
+        credentials,
+        items: [{ description: 'Teste de conexão Loja Pod', quantity: 1, price: 1 }],
+      });
+      return { ok: true, message: 'Conexão com a InfinitePay OK', checkoutUrl: result.checkoutUrl };
+    } catch (e: any) {
+      const msg = e?.response?.message || e?.message || 'Falha desconhecida';
+      return { ok: false, error: Array.isArray(msg) ? msg.join(', ') : msg };
+    }
+  }
+
+  /**
    * Gera o link de checkout online para um pedido, localizando o gateway ativo na loja
    */
   async createOnlineCheckout(orderId: string, storeId: string, originUrl?: string) {

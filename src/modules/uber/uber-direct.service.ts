@@ -159,6 +159,43 @@ export class UberDirectService {
   }
 
   /**
+   * Tenta geocodificar um endereço com formatos de busca cada vez mais simples
+   * (o Nominatim costuma falhar com bairro/complemento ou numeração exata).
+   */
+  async geocodeWithFallbacks(parts: {
+    street?: string | null;
+    number?: string | null;
+    neighborhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    cep?: string | null;
+  }): Promise<Coordinates | null> {
+    const clean = (v?: string | null) => (v || '').trim();
+    const street = clean(parts.street);
+    const number = clean(parts.number);
+    const neighborhood = clean(parts.neighborhood);
+    const city = clean(parts.city);
+    const state = clean(parts.state);
+    const cep = clean(parts.cep);
+    const join = (...xs: string[]) => xs.filter(Boolean).join(', ');
+
+    const variants = [
+      join(`${street} ${number}`.trim(), neighborhood, city, state),
+      join(`${street} ${number}`.trim(), city, state),
+      join(street, neighborhood, city, state),
+      join(street, city, state),
+      join(cep, city, state),
+      join(neighborhood, city, state),
+    ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+
+    for (const query of variants) {
+      const coords = await this.geocodeAddress(query);
+      if (coords) return coords;
+    }
+    return null;
+  }
+
+  /**
    * Calcula distância euclidiana aproximada / Haversine (km)
    */
   calculateDistance(from: Coordinates, to: Coordinates): number {
@@ -217,8 +254,14 @@ export class UberDirectService {
     }> = [];
 
     for (const ord of orders) {
-      const addressQuery = `${ord.street}, ${ord.number}, ${ord.neighborhood}, ${ord.city} - ${ord.state}, ${ord.cep}`;
-      const coords = await this.geocodeAddress(addressQuery);
+      const coords = await this.geocodeWithFallbacks({
+        street: ord.street,
+        number: ord.number,
+        neighborhood: ord.neighborhood,
+        city: ord.city,
+        state: ord.state,
+        cep: ord.cep,
+      });
       if (coords) {
         const dist = this.calculateDistance(storeCoords, coords);
         const bear = this.calculateBearing(storeCoords, coords);
@@ -320,14 +363,8 @@ export class UberDirectService {
           country: 'BR',
         };
 
-        const manifestItems = (order.items || []).map((it: any) => ({
-          name: it.productName || 'Produto',
-          quantity: it.quantity || 1,
-        }));
-
-        if (manifestItems.length === 0) {
-          manifestItems.push({ name: `Pedido #${order.orderNumber || order.id}`, quantity: 1 });
-        }
+        // A Uber exige ao menos 1 item no manifesto; não enviamos os produtos, só um item genérico
+        const manifestItems = [{ name: 'Pedido', quantity: 1 }];
 
         // Lógica de Pagamento: PIX/Pago (Só ida) vs Dinheiro/Cartão (Cobrar e retornar à loja)
         const isPaid = order.paymentStatus === 'PAID' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('pix'));
@@ -345,21 +382,17 @@ export class UberDirectService {
           driverDropoffInstructions = `[PEDIDO JÁ PAGO VIA ${methodLabel.toUpperCase()}] - Apenas entregar o pacote ao cliente (só ida, não cobrar nada). ` + driverDropoffInstructions;
         }
 
+        // A API da Uber Direct espera os campos de coleta/entrega planos (não aninhados)
         const body: any = {
-          pickup: {
-            name: storeAddr.storeName || 'Loja',
-            address: JSON.stringify(pickupAddress),
-            phone_number: normalizeUberPhone(config.pickupPhone || storeAddr.phone),
-            instructions: driverPickupInstructions.trim(),
-          },
-          dropoff: {
-            name: order.customerName || 'Cliente',
-            address: JSON.stringify(dropoffAddress),
-            phone_number: normalizeUberPhone(order.customerPhone),
-            instructions: driverDropoffInstructions.trim(),
-          },
+          pickup_name: storeAddr.storeName || 'Loja',
+          pickup_address: JSON.stringify(pickupAddress),
+          pickup_phone_number: normalizeUberPhone(config.pickupPhone || storeAddr.phone),
+          pickup_notes: driverPickupInstructions.trim(),
+          dropoff_name: order.customerName || 'Cliente',
+          dropoff_address: JSON.stringify(dropoffAddress),
+          dropoff_phone_number: normalizeUberPhone(order.customerPhone),
+          dropoff_notes: driverDropoffInstructions.trim(),
           manifest_items: manifestItems,
-          manifest_reference: `PEDIDO-${order.orderNumber || order.id}`,
         };
 
         const endpoint = `https://api.uber.com/v1/customers/${config.customerId}/deliveries`;
@@ -382,13 +415,16 @@ export class UberDirectService {
 
         const entrega = await response.json();
 
-        // Atualiza o pedido no banco: STATUS VIRA 'DISPATCHED' (ENVIADO)
+        // Atualiza o pedido no banco: ao receber o link de rastreio da Uber, salva e marca como DISPATCHED (ENVIADO).
+        // Pedidos já concluídos/cancelados/enviados não têm o status alterado.
+        const trackingUrl = entrega.tracking_url || entrega.trackingUrl;
+        const canMoveToDispatched = order.status === 'PENDING' || order.status === 'CONFIRMED';
         const updatedOrder = await this.prisma.order.update({
           where: { id: order.id },
           data: {
-            status: 'DISPATCHED',
+            status: trackingUrl && canMoveToDispatched ? 'DISPATCHED' : order.status,
             uberDeliveryId: entrega.id,
-            uberTrackingUrl: entrega.tracking_url || entrega.trackingUrl,
+            uberTrackingUrl: trackingUrl,
             uberDeliveryStatus: entrega.status || 'processing',
             uberDeliveryFee: entrega.fee ? Number(entrega.fee) / 100 : null,
             uberBatchId: batchId,
@@ -473,12 +509,13 @@ export class UberDirectService {
     }
 
     // 3. Obter coordenadas da loja para cálculo dos rumos/azimutes
-    const storeAddr = `${config.storeAddress.street || ''}, ${config.storeAddress.number || ''}, ${config.storeAddress.neighborhood || ''}, ${config.storeAddress.city || ''} - ${config.storeAddress.state || ''}`;
-    const storeCoords = await this.geocodeAddress(storeAddr);
+    const storeCoords = await this.geocodeWithFallbacks(config.storeAddress);
     if (!storeCoords) {
-      throw new Error(
-        `Não foi possível localizar o endereço da loja para agrupar as entregas: ${storeAddr}. Verifique o endereço cadastrado nas configurações.`,
+      // Sem coordenadas da loja não dá para agrupar por rumo: despacha só o pedido gatilho, sem abortar.
+      this.logger.warn(
+        '[UberDirect Auto] Não foi possível localizar o endereço da loja no mapa; enviando o pedido sem agrupar rotas.',
       );
+      return await this.dispatchUberDelivery(storeId, [triggeringOrder]);
     }
 
     // 4. Agrupar todos os pedidos pendentes em rotas contínuas na mesma linha reta
