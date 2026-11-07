@@ -339,6 +339,10 @@ export class UpdateSettingsUseCase {
         input.uberDirectMaxAngleDelta !== undefined
           ? input.uberDirectMaxAngleDelta
           : (base as any).uberDirectMaxAngleDelta ?? 45,
+      uberDirectDispatchDelayMinutes:
+        input.uberDirectDispatchDelayMinutes !== undefined
+          ? input.uberDirectDispatchDelayMinutes
+          : (base as any).uberDirectDispatchDelayMinutes ?? 0,
       autoHideOutOfStock:
         input.autoHideOutOfStock !== undefined
           ? input.autoHideOutOfStock
