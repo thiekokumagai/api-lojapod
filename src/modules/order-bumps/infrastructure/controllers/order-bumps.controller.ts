@@ -5,10 +5,13 @@ import { OrderBumpsService } from '../../domain/order-bumps.service';
 import { CreateOrderBumpDto } from '../../dto/create-order-bump.dto';
 import { UpdateOrderBumpDto } from '../../dto/update-order-bump.dto';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Admin Order Bumps')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('order-bumps')
+@RequirePermissions('order_bumps')
 export class OrderBumpsController {
   constructor(private readonly service: OrderBumpsService) {}
 

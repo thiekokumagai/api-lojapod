@@ -56,10 +56,13 @@ import { DeleteProductVariationOptionUseCase } from '../../domain/use-cases/dele
 import { DuplicateProductUseCase } from '../../domain/use-cases/duplicate-product.use-case';
 
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Products')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('products')
+@RequireWritePermissions('products')
 export class ProductsController {
   constructor(
     private readonly listProductsUseCase: ListProductsUseCase,

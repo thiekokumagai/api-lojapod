@@ -10,10 +10,13 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 import { GetDashboardStatsUseCase } from '../../domain/use-cases/get-dashboard-stats.use-case';
 import { GetStockOpportunitiesUseCase } from '../../domain/use-cases/get-stock-opportunities.use-case';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Dashboard')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('dashboard')
+@RequirePermissions('dashboard')
 export class DashboardController {
   constructor(
     private readonly getDashboardStatsUseCase: GetDashboardStatsUseCase,

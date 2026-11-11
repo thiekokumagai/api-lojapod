@@ -22,7 +22,10 @@ import { PayFixedCostDto } from '../dto/pay-fixed-cost.dto';
 import { CreateCashTransactionDto } from '../dto/create-cash-transaction.dto';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @Controller('fixed-costs')
+@RequirePermissions('fixed_costs')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class FixedCostsController {

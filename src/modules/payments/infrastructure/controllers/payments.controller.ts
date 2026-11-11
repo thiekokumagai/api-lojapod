@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Param, Query, Headers, HttpCode, HttpStatus, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
 import { PaymentsService } from '../../domain/services/payments.service';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 
@@ -27,6 +28,7 @@ export class PaymentsController {
   @Post('test-infinitepay')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Testa a conexão com a InfinitePay (gera um link de teste de R$ 1,00)' })
   async testInfinitePay(@Headers('origin') headerOrigin?: string) {

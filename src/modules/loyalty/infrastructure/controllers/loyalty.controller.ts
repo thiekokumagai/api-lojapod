@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { LoyaltyService } from '../../domain/loyalty.service';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { UpdateLoyaltyProgramDto } from '../../application/dto/update-loyalty-program.dto';
 import { ManualAdjustStampDto } from '../../application/dto/manual-adjust-stamp.dto';
 
+import { RequirePermissions, RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @Controller('loyalty')
-@UseGuards(AuthGuard('jwt'))
+@RequirePermissions('loyalty', 'orders')
+@RequireWritePermissions('loyalty')
+@UseGuards(JwtAuthGuard)
 export class LoyaltyController {
   constructor(private readonly loyaltyService: LoyaltyService) {}
 

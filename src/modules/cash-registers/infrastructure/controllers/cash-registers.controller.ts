@@ -17,7 +17,10 @@ import { GetCashRegisterSummaryUseCase } from '../../domain/use-cases/get-cash-r
 import { CreateCashTransactionUseCase } from '../../domain/use-cases/create-cash-transaction.use-case';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @Controller('cash-registers')
+@RequirePermissions('cash_current', 'cash_history', 'investments', 'fixed_costs')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class CashRegistersController {

@@ -35,6 +35,7 @@ export class LoginUseCase {
         email: user.email,
         role: user.role,
         storeId: user.storeId,
+        permissions: user.role === 'USER' ? user.permissions : [],
       },
     };
   }

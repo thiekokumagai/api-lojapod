@@ -3,10 +3,13 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { StockNotificationsService } from '../../domain/stock-notifications.service';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Admin Stock Notifications')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('stock-notifications')
+@RequirePermissions('stock_notifications')
 export class StockNotificationsController {
   constructor(private readonly service: StockNotificationsService) {}
 

@@ -10,6 +10,7 @@ import { CreatePlanDto } from './infrastructure/dtos/create-plan.dto';
 import { UpdatePlanDto } from './infrastructure/dtos/update-plan.dto';
 import { UpdateStoreSubscriptionDto } from './infrastructure/dtos/update-store-subscription.dto';
 import { SuperAdminGuard } from './infrastructure/guards/super-admin.guard';
+import { AdminOnly } from '../auth/infrastructure/decorators/permissions.decorator';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -43,6 +44,7 @@ export class BillingController {
   @Get('checkout')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @AllowInactive()
   checkout(
     @Req() req: Request & { user: { storeId?: string } },

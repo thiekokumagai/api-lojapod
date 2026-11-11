@@ -39,10 +39,13 @@ import { UpdateCategoryUseCase } from '../../domain/use-cases/update-category.us
 import { UpdateBatchOrderUseCase } from '../../domain/use-cases/update-batch-order.use-case';
 import { DeleteCategoryUseCase } from '../../domain/use-cases/delete-category.use-case';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Categories')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('categories')
+@RequireWritePermissions('categories')
 export class CategoriesController {
   constructor(
     private readonly listCategoriesUseCase: ListCategoriesUseCase,

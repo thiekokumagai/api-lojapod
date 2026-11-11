@@ -15,10 +15,13 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { UberDirectService } from './uber-direct.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 
+import { RequirePermissions } from '../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Uber Direct')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('uber')
+@RequirePermissions('orders', 'delivery_map', 'settings')
 export class UberController {
   constructor(
     private readonly uberService: UberDirectService,

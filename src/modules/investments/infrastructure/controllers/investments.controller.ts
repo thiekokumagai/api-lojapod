@@ -22,10 +22,13 @@ import { AddInvestmentDto } from './dtos/add-investment.dto';
 import { RegisterPurchaseDto } from './dtos/register-purchase.dto';
 import { AnalyzePurchaseUseCase } from '../../domain/use-cases/analyze-purchase.use-case';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('investments')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('investments')
+@RequirePermissions('investments')
 export class InvestmentsController {
   constructor(
     private readonly addInvestmentUseCase: AddInvestmentUseCase,

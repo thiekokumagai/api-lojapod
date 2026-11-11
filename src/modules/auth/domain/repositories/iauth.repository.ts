@@ -6,6 +6,7 @@ export interface AuthUserRecord {
   email: string;
   password: string;
   role: Role;
+  permissions: string[];
   storeId?: string | null;
   refreshToken: string | null;
 }

@@ -33,10 +33,14 @@ import { UpdateOrderUseCase } from '../../domain/use-cases/update-order.use-case
 import { OrderStatus, PaymentStatus } from '../../domain/entities/order.entity';
 import { ReceiveOrderDto } from '../dtos/receive-order.dto';
 
+import { RequirePermissions, RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Orders')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
+@RequirePermissions('orders', 'delivery_map', 'dashboard', 'customers', 'couriers', 'cash_current', 'cash_history')
+@RequireWritePermissions('orders')
 export class OrdersController {
   constructor(
     private readonly listOrdersUseCase: ListOrdersUseCase,
@@ -109,6 +113,7 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
+  @RequireWritePermissions('orders', 'delivery_map')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Atualizar status do pedido' })
   @ApiResponse({ status: 200, description: 'Status atualizado com sucesso' })

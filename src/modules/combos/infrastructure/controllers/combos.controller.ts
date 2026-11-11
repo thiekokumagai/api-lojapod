@@ -22,10 +22,13 @@ import { CreateComboDto } from '../dtos/create-combo.dto';
 import { UpdateComboDto } from '../dtos/update-combo.dto';
 import { UploadedFile as UploadedFileType } from '../../../../common/types/uploaded-file.type';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Combos')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('combos')
+@RequireWritePermissions('combos')
 export class CombosController {
   constructor(
     private readonly combosService: CombosService,

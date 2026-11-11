@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Patch, ForbiddenException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -11,10 +11,14 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { UserResponseDto } from '../dtos/user-response.dto';
 import { DeleteUserDto } from '../dtos/delete-user.dto';
+import { UpdateUserDto } from '../dtos/update-user.dto';
 
 import { ListUsersUseCase } from '../../domain/use-cases/list-users.use-case';
 import { CreateUserUseCase } from '../../domain/use-cases/create-user.use-case';
 import { DeleteUserUseCase } from '../../domain/use-cases/delete-user.use-case';
+import { UpdateUserUseCase } from '../../domain/use-cases/update-user.use-case';
+import { AdminOnly } from '../../../auth/infrastructure/decorators/permissions.decorator';
+import { SCREEN_PERMISSIONS } from '../../../auth/permissions/screen-permissions';
 import { UpdatePushTokenUseCase } from '../../domain/use-cases/update-push-token.use-case';
 import { UpdateWebPushSubscriptionUseCase } from '../../domain/use-cases/update-web-push-subscription.use-case';
 import { TestPushNotificationUseCase } from '../../domain/use-cases/test-push-notification.use-case';
@@ -34,6 +38,7 @@ export class UsersController {
     private readonly listUsersUseCase: ListUsersUseCase,
     private readonly createUserUseCase: CreateUserUseCase,
     private readonly deleteUserUseCase: DeleteUserUseCase,
+    private readonly updateUserUseCase: UpdateUserUseCase,
     private readonly updatePushTokenUseCase: UpdatePushTokenUseCase,
     private readonly updateWebPushSubscriptionUseCase: UpdateWebPushSubscriptionUseCase,
     private readonly testPushNotificationUseCase: TestPushNotificationUseCase,
@@ -54,36 +59,62 @@ export class UsersController {
     return { success: true };
   }
 
+  @Get('permissions')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Catálogo de permissões (telas) que podem ser liberadas para funcionários' })
+  listPermissions() {
+    return SCREEN_PERMISSIONS;
+  }
+
   @Get()
-  @ApiOperation({ summary: 'Listar usuários' })
+  @AdminOnly()
+  @ApiOperation({ summary: 'Listar usuários da loja' })
   @ApiResponse({
     status: 200,
-    description: 'Lista de usuários',
+    description: 'Lista de usuários da loja',
     type: [UserResponseDto],
   })
-  findAll() {
-    return this.listUsersUseCase.execute();
+  findAll(@CurrentUser() user: JwtPayload) {
+    return this.listUsersUseCase.execute(this.requireStoreId(user));
   }
 
   @Post()
-  @ApiOperation({ summary: 'Criar usuário' })
+  @AdminOnly()
+  @ApiOperation({ summary: 'Criar funcionário da loja com permissões de tela' })
   @ApiResponse({
     status: 201,
     description: 'Usuário criado com sucesso',
     type: UserResponseDto,
   })
-  create(@Body() dto: CreateUserDto) {
-    return this.createUserUseCase.execute(dto);
+  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateUserDto) {
+    return this.createUserUseCase.execute(this.requireStoreId(user), dto);
+  }
+
+  @Patch(':id')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Atualizar funcionário da loja (dados e permissões)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuário atualizado',
+    type: UserResponseDto,
+  })
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param() params: DeleteUserDto,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.updateUserUseCase.execute(this.requireStoreId(user), params.id, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Deletar usuário' })
+  @AdminOnly()
+  @ApiOperation({ summary: 'Remover funcionário da loja' })
   @ApiResponse({
     status: 200,
     description: 'Usuário removido',
   })
-  delete(@Param() params: DeleteUserDto) {
-    return this.deleteUserUseCase.execute(params.id);
+  delete(@CurrentUser() user: JwtPayload, @Param() params: DeleteUserDto) {
+    return this.deleteUserUseCase.execute(this.requireStoreId(user), params.id);
   }
 
   @Post('push-token')
@@ -125,5 +156,12 @@ export class UsersController {
   ) {
     await this.testPushNotificationUseCase.execute(user.sub);
     return { success: true };
+  }
+
+  private requireStoreId(user: JwtPayload): string {
+    if (!user?.storeId) {
+      throw new ForbiddenException('Gestão de usuários disponível apenas para lojas');
+    }
+    return user.storeId;
   }
 }

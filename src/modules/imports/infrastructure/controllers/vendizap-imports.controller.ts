@@ -24,10 +24,13 @@ import { ImportOrdersFromSheetUseCase } from '../../domain/use-cases/import-orde
 import { ClearDatabaseUseCase } from '../../domain/use-cases/clear-database.use-case';
 import { FixProductCategoriesUseCase } from '../../domain/use-cases/fix-product-categories.use-case';
 
+import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Imports')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('imports')
+@RequirePermissions('settings')
 export class VendizapImportsController {
   constructor(
     private readonly importCategoriesUseCase: ImportCategoriesUseCase,

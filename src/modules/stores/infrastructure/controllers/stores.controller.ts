@@ -9,12 +9,17 @@ import {
   Param,
   UseGuards,
   Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StoresService } from '../../domain/services/stores.service';
 import { CreateStoreDto } from '../dtos/create-store.dto';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
+import { AdminOnly, RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/current-user.decorator';
+import type { JwtPayload } from '../../../auth/infrastructure/types/jwt-payload.type';
+import { STAFF_ROLE } from '../../../auth/permissions/screen-permissions';
 
 @ApiTags('Stores')
 @Controller('stores')
@@ -37,6 +42,7 @@ export class StoresController {
   @Get(':id/print-token')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Obtém o token de impressão da loja' })
   async getPrintToken(@Param('id') id: string) {
     return this.storesService.getPrintTokenForStore(id);
@@ -45,6 +51,7 @@ export class StoresController {
   @Post(':id/print-token/rotate')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Gera um novo token de impressão para a loja' })
   async rotatePrintToken(@Param('id') id: string) {
     return this.storesService.rotatePrintToken(id);
@@ -61,6 +68,7 @@ export class StoresController {
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @ApiOperation({ summary: 'Cadastra uma nova loja (Super Admin)' })
   @ApiResponse({ status: 201, description: 'Loja criada com sucesso' })
   async createStore(@Body() dto: CreateStoreDto) {
@@ -70,6 +78,7 @@ export class StoresController {
   @Put(':id')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @ApiOperation({ summary: 'Atualiza título, subdomínio, domínio próprio, e-mail admin e senha da loja' })
   async updateStore(
     @Param('id') id: string,
@@ -81,6 +90,7 @@ export class StoresController {
   @Post(':id/domain')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Cadastra o domínio próprio da loja e provisiona zona na Cloudflare' })
   async connectDomain(@Param('id') id: string, @Body() body: { domain: string }) {
     return this.storesService.connectDomain(id, body.domain);
@@ -89,6 +99,7 @@ export class StoresController {
   @Get(':id/domain/status')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Obtém o status da zona Cloudflare e os Name Servers da loja' })
   async getDomainStatus(@Param('id') id: string) {
     return this.storesService.getDomainStatus(id);
@@ -97,6 +108,7 @@ export class StoresController {
   @Delete(':id/domain')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Remove o domínio próprio e a zona Cloudflare da loja' })
   async removeDomain(@Param('id') id: string) {
     return this.storesService.removeDomain(id);
@@ -105,6 +117,7 @@ export class StoresController {
   @Post(':id/verify-dns')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @RequirePermissions('settings')
   @ApiOperation({ summary: 'Testa e verifica se o DNS do domínio próprio da loja está apontando corretamente' })
   async verifyDns(@Param('id') id: string) {
     return this.storesService.getDomainStatus(id);
@@ -113,6 +126,7 @@ export class StoresController {
   @Get()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @ApiOperation({ summary: 'Lista todas as lojas cadastradas no sistema (Super Admin)' })
   async listStores() {
     return this.storesService.listStores();
@@ -122,12 +136,17 @@ export class StoresController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Obtém detalhes de uma loja específica por ID (Super Admin)' })
-  async getStoreById(@Param('id') id: string) {
+  async getStoreById(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    // Funcionários só enxergam a própria loja
+    if (user?.role === STAFF_ROLE && user.storeId !== id) {
+      throw new ForbiddenException('Acesso restrito à sua loja');
+    }
     return this.storesService.getStoreById(id);
   }
   @Patch(':id/toggle-active')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @ApiOperation({ summary: 'Ativa ou desativa uma loja (Super Admin)' })
   async toggleActive(@Param('id') id: string) {
     return this.storesService.toggleActive(id);
@@ -136,6 +155,7 @@ export class StoresController {
   @Delete(':id')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @AdminOnly()
   @ApiOperation({ summary: 'Exclui uma loja permanentemente (Super Admin)' })
   async deleteStore(@Param('id') id: string) {
     return this.storesService.deleteStore(id);

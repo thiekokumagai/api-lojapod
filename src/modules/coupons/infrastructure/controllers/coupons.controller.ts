@@ -20,10 +20,13 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Coupons')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('coupons')
+@RequireWritePermissions('coupons')
 export class CouponsController {
   constructor(
     private readonly createCouponUseCase: CreateCouponUseCase,

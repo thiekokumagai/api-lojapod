@@ -27,8 +27,12 @@ import { CreateCustomerDto } from '../dtos/create-customer.dto';
 import { UpdateCustomerAddressDto } from '../dtos/update-customer-address.dto';
 import { UpdateCustomerAddressUseCase } from '../../domain/use-cases/update-customer-address.use-case';
 
+import { RequirePermissions, RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('customers')
 @Controller('customers')
+@RequirePermissions('customers', 'orders', 'loyalty', 'delivery_map')
+@RequireWritePermissions('customers', 'orders')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class CustomersController {

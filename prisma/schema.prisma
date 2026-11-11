@@ -71,6 +71,7 @@ model User {
   email               String          @unique
   password            String
   role                Role            @default(USER)
+  permissions         String[]        @default([])
   refreshToken        String?
   expoPushToken       String?
   webPushSubscription Json?

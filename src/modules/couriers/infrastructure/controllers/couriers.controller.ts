@@ -9,10 +9,13 @@ import { PayCourierUseCase } from '../../domain/use-cases/pay-courier.use-case';
 import { GetCourierUseCase } from '../../domain/use-cases/get-courier.use-case';
 import { DeleteCourierTransactionUseCase } from '../../domain/use-cases/delete-courier-transaction.use-case';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Couriers')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('couriers')
+@RequireWritePermissions('couriers', 'delivery_map')
 export class CouriersController {
   constructor(
     private readonly createCourierUseCase: CreateCourierUseCase,

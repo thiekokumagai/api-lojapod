@@ -29,10 +29,13 @@ import { UpdateSettingsDto } from '../dtos/update-settings.dto';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 import { UpdateSettingsUseCase } from '../../domain/use-cases/update-settings.use-case';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Settings')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('settings')
+@RequireWritePermissions('settings', 'links')
 export class SettingsController {
   constructor(
     private readonly getSettingsUseCase: GetSettingsUseCase,

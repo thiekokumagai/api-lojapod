@@ -30,10 +30,13 @@ import { UpdateVariationUseCase } from '../../domain/use-cases/update-variation.
 import { UpdateBatchOrderUseCase } from '../../domain/use-cases/update-batch-order.use-case';
 import { DeleteVariationUseCase } from '../../domain/use-cases/delete-variation.use-case';
 
+import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
 @ApiTags('Variations')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('variations')
+@RequireWritePermissions('variations', 'products')
 export class VariationsController {
   constructor(
     private readonly listVariationsUseCase: ListVariationsUseCase,
