@@ -2,6 +2,39 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/com
 import { PrismaClient } from '@prisma/client';
 import { TenantContextService } from '../src/modules/tenant/tenant-context.service';
 
+// Operações só de leitura: repetir é seguro, pois não alteram nada no banco
+const READ_ACTIONS = new Set([
+  'findUnique',
+  'findUniqueOrThrow',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'count',
+  'aggregate',
+  'groupBy',
+]);
+
+// O banco às vezes fecha conexões ociosas do pool; a primeira consulta que pega
+// uma conexão dessas falha com "Server has closed the connection" (P1017)
+function isClosedConnectionError(error: any): boolean {
+  return (
+    error?.code === 'P1017' ||
+    /Server has closed the connection|Connection (reset|closed)/i.test(error?.message ?? '')
+  );
+}
+
+async function runWithConnectionRetry(params: any, next: (params: any) => Promise<any>) {
+  try {
+    return await next(params);
+  } catch (error) {
+    // Dentro de transação a conexão inteira caiu, então repetir só esta consulta não adianta
+    if (!params.runInTransaction && READ_ACTIONS.has(params.action) && isClosedConnectionError(error)) {
+      return next(params);
+    }
+    throw error;
+  }
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -58,7 +91,7 @@ export class PrismaService
         }
       }
 
-      return next(params);
+      return runWithConnectionRetry(params, next);
     });
   }
 
