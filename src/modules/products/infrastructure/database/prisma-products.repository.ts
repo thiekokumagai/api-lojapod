@@ -478,6 +478,11 @@ export class PrismaProductsRepository implements IProductsRepository {
     observation?: string,
   ): Promise<any> {
     return this.prisma.$transaction(async (tx) => {
+      // Trava a linha do item até o fim da transação: requisições simultâneas
+      // (ex.: cliques rápidos em +/-) passam a ser aplicadas em fila, sem uma
+      // sobrescrever a outra com um estoque lido desatualizado
+      await tx.$queryRaw`SELECT id FROM product_items WHERE id = ${itemId} FOR UPDATE`;
+
       const item = await tx.productItem.findUnique({ where: { id: itemId } });
       if (!item) throw new NotFoundException('Item não encontrado');
 
