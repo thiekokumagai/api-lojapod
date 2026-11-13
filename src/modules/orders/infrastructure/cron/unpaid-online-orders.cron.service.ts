@@ -6,10 +6,11 @@ import {
   AWAITING_ONLINE_PAYMENT_WHERE,
   UNPAID_ONLINE_CARD_TIMEOUT_MINUTES,
 } from '../../domain/utils/awaiting-online-payment';
+import { EventsGateway } from '../../../events/events.gateway';
 
 /**
  * Cancela pedidos de cartão online que não foram pagos dentro do prazo e devolve o estoque.
- * Esses pedidos nunca apareceram para a loja, então o cancelamento é silencioso.
+ * O pedido aparece no painel desde a criação, então o cancelamento é avisado ao painel.
  */
 @Injectable()
 export class UnpaidOnlineOrdersCronService {
@@ -19,6 +20,7 @@ export class UnpaidOnlineOrdersCronService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersRepository: IOrdersRepository,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -54,7 +56,13 @@ export class UnpaidOnlineOrdersCronService {
           )
             continue;
 
-          await this.ordersRepository.cancelAndRestoreStock(order.id);
+          const cancelled = await this.ordersRepository.cancelAndRestoreStock(order.id);
+          try {
+            this.eventsGateway.notifyOrderUpdated(cancelled);
+            this.eventsGateway.server?.emit('products.refresh');
+          } catch (wsErr) {
+            this.logger.error('Erro ao avisar painel do cancelamento automático:', wsErr);
+          }
           this.logger.log(
             `Pedido #${order.orderNumber} cancelado: cartão online sem pagamento em ${UNPAID_ONLINE_CARD_TIMEOUT_MINUTES} min`,
           );

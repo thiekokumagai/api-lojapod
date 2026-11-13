@@ -1,10 +1,6 @@
 /**
- * Pedidos do catálogo pagos com cartão online só passam a existir para a loja
- * depois que o pagamento é aprovado. Até lá ficam escondidos do painel, do dashboard,
- * da fila de impressão e do histórico do cliente, e não disparam push nem impressão.
- *
- * Só o cartão online é afetado: Pix, dinheiro, débito, crédito na entrega e vales
- * continuam aparecendo na hora, como sempre.
+ * Pedidos do catálogo pagos com cartão online aparecem para a loja na hora, com
+ * pagamento pendente. Se não forem pagos no prazo, o cron cancela e devolve o estoque.
  */
 
 /** Minutos sem pagamento até o pedido de cartão online ser cancelado e o estoque devolvido. */

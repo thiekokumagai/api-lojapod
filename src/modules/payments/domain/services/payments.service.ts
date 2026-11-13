@@ -401,7 +401,7 @@ export class PaymentsService {
   }
 
   /**
-   * Marca o pedido como pago e anuncia para a loja (painel, push, impressão e fidelidade).
+   * Marca o pedido como pago e avisa a loja (atualização no painel, push e fidelidade).
    * O webhook e a verificação ativa podem chegar ao mesmo tempo: a atualização condicional
    * (paymentStatus = PENDING) garante que só um deles anuncia, então nada sai duplicado.
    */
@@ -431,27 +431,14 @@ export class PaymentsService {
     const storeId = order.storeId || '1';
     const wasCancelled = order.status === 'CANCELLED';
 
-    // Painel: o pedido de cartão online aparece agora pela primeira vez
+    // Painel: o pedido já apareceu (e foi impresso) na criação; aqui só atualiza o status de pagamento
     try {
-      this.eventsGateway.notifyNewOrder(order);
       this.eventsGateway.server?.emit('orders.updated', order);
     } catch (wsErr) {
       this.logger.error(
         'Erro ao emitir eventos websocket após pagamento online:',
         wsErr,
       );
-    }
-
-    // Impressão: uma única vez, e só se ainda não foi impresso
-    if (!order.isPrinted && !wasCancelled) {
-      try {
-        this.printGateway.emitNovoPedido(storeId, order);
-      } catch (printErr) {
-        this.logger.error(
-          'Erro ao enviar pedido pago para impressão:',
-          printErr,
-        );
-      }
     }
 
     // Push para os usuários da loja
@@ -477,7 +464,7 @@ export class PaymentsService {
         }).format(Number(order.totalOrder || 0));
         const title = wasCancelled
           ? `⚠️ Pagamento recebido de pedido cancelado #${order.orderNumber}`
-          : `(${value}) Oba! Chegou pedido pago no cartão 🤩`;
+          : `(${value}) Pagamento no cartão aprovado ✅`;
         const body = wasCancelled
           ? `${order.customerName} pagou depois do prazo. Verifique o pedido.`
           : `Pedido nº #${order.orderNumber} - ${order.customerName}`;

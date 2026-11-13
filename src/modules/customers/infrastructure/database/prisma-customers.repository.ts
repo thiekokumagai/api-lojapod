@@ -89,8 +89,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       where: { id },
       include: {
         addresses: true,
-        orders: {
-          where: HIDE_AWAITING_ONLINE_PAYMENT,
+        orders: {
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -208,7 +207,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       where: { id },
       include: {
         addresses: true,
-        orders: { where: HIDE_AWAITING_ONLINE_PAYMENT, orderBy: { createdAt: 'desc' } },
+        orders: { orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -234,7 +233,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       where: { id: customerId },
       include: {
         addresses: true,
-        orders: { where: HIDE_AWAITING_ONLINE_PAYMENT, orderBy: { createdAt: 'desc' } },
+        orders: { orderBy: { createdAt: 'desc' } },
       },
     });
 

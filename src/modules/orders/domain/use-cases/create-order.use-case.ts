@@ -11,7 +11,6 @@ import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
-import { isAwaitingOnlinePayment } from '../utils/awaiting-online-payment';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -532,12 +531,8 @@ export class CreateOrderUseCase {
         console.error('[Loyalty] Erro ao processar resgate de fidelidade no pedido:', err);
       }
 
-      // Cartão online não pago fica escondido: sem push, impressão ou aviso de novo pedido.
-      // Tudo isso é disparado uma única vez quando o pagamento é aprovado (PaymentsService).
-      const awaitingOnlinePayment = isAwaitingOnlinePayment(savedOrder);
-
       // Disparar Notificação Push
-      if (!awaitingOnlinePayment) try {
+      try {
         const admins = await this.usersRepository.findAll();
         const tokens: string[] = [];
         const webSubscriptions: any[] = [];
@@ -653,7 +648,7 @@ export class CreateOrderUseCase {
 
       // Disparar WebSocket para impressão
       try {
-        if (savedOrder.status !== 'CANCELLED' && !awaitingOnlinePayment) {
+        if (savedOrder.status !== 'CANCELLED') {
           const orderForPrint = { ...savedOrder, showProductPrices: data.showProductPrices };
           const targetPrintStoreId = savedOrder.storeId || storeId || '1';
           this.printGateway.emitNovoPedido(targetPrintStoreId, orderForPrint);
@@ -664,9 +659,7 @@ export class CreateOrderUseCase {
 
       // Disparar Eventos WebSocket (Admin e Client)
       try {
-        if (!awaitingOnlinePayment) {
-          this.eventsGateway.notifyNewOrder(savedOrder);
-        }
+        this.eventsGateway.notifyNewOrder(savedOrder);
         // Também disparamos um evento genérico para atualizar o catálogo no front cliente
         this.eventsGateway.server.emit('products.refresh');
       } catch (err) {

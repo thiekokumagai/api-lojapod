@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
-import { HIDE_AWAITING_ONLINE_PAYMENT } from '../../../orders/domain/utils/awaiting-online-payment';
 
 import { getZonedStartAndEndDates } from '../../../../common/utils/date.utils';
 
@@ -43,8 +42,6 @@ export class GetDashboardStatsUseCase {
         status: {
           not: 'CANCELLED',
         },
-        // Cartão online não pago não conta como venda
-        ...HIDE_AWAITING_ONLINE_PAYMENT,
       },
       include: {
         items: true,

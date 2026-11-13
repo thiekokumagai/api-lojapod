@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
-import { HIDE_AWAITING_ONLINE_PAYMENT } from '../../domain/utils/awaiting-online-payment';
 import {
   Order,
   OrderStatus,
@@ -219,8 +218,6 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
     }
 
-    // Cartão online só aparece no painel depois de pago
-    where.AND = [...(where.AND || []), HIDE_AWAITING_ONLINE_PAYMENT];
 
     // Default pagination params
     const page = filters.page ? Math.max(1, Number(filters.page)) : 1;
