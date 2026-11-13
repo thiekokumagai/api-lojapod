@@ -7,24 +7,72 @@ import {
   PaymentCheckOutput,
 } from '../../domain/interfaces/payment-gateway.interface';
 
+const UF_BY_NAME: Record<string, string> = {
+  acre: 'AC',
+  alagoas: 'AL',
+  amapa: 'AP',
+  amazonas: 'AM',
+  bahia: 'BA',
+  ceara: 'CE',
+  'distrito federal': 'DF',
+  'espirito santo': 'ES',
+  goias: 'GO',
+  maranhao: 'MA',
+  'mato grosso': 'MT',
+  'mato grosso do sul': 'MS',
+  'minas gerais': 'MG',
+  para: 'PA',
+  paraiba: 'PB',
+  parana: 'PR',
+  pernambuco: 'PE',
+  piaui: 'PI',
+  'rio de janeiro': 'RJ',
+  'rio grande do norte': 'RN',
+  'rio grande do sul': 'RS',
+  rondonia: 'RO',
+  roraima: 'RR',
+  'santa catarina': 'SC',
+  'sao paulo': 'SP',
+  sergipe: 'SE',
+  tocantins: 'TO',
+};
+
+/** Converte "MS", "ms" ou "Mato Grosso do Sul" para a sigla da UF ("MS"). */
+function toUf(state?: string): string | undefined {
+  const value = state?.trim();
+  if (!value) return undefined;
+  if (/^[a-z]{2}$/i.test(value)) return value.toUpperCase();
+  const key = value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return UF_BY_NAME[key];
+}
+
 @Injectable()
 export class InfinitePayAdapter implements IPaymentGateway {
   readonly provider = 'INFINITEPAY';
   private readonly logger = new Logger(InfinitePayAdapter.name);
   private readonly baseUrl = 'https://api.checkout.infinitepay.io';
 
-  async createCreditCardCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutOutput> {
-    const { credentials, orderNumber, amount, items, redirectUrl, webhookUrl } = input;
+  async createCreditCardCheckout(
+    input: CreateCheckoutInput,
+  ): Promise<CreateCheckoutOutput> {
+    const { credentials, orderNumber, amount, items, redirectUrl, webhookUrl } =
+      input;
     const handle = credentials?.handle?.trim();
     const apiKey = credentials?.apiKey?.trim();
 
     if (!handle) {
-      throw new BadRequestException('A tag/handle da loja na InfinitePay não foi configurada.');
+      throw new BadRequestException(
+        'A tag/handle da loja na InfinitePay não foi configurada.',
+      );
     }
 
     const totalCents = Math.round(amount * 100);
 
-    let formattedItems: Array<{ description: string; quantity: number; price: number }> = [];
+    let formattedItems: Array<{
+      description: string;
+      quantity: number;
+      price: number;
+    }> = [];
 
     if (items && items.length > 0) {
       formattedItems = items.map((item) => ({
@@ -33,7 +81,10 @@ export class InfinitePayAdapter implements IPaymentGateway {
         price: Math.round(item.price * 100),
       }));
 
-      const itemsSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+      const itemsSum = formattedItems.reduce(
+        (acc, curr) => acc + curr.price * curr.quantity,
+        0,
+      );
 
       // Se a soma não bater com o total (ex: cupom de desconto aplicado no total)
       if (itemsSum !== totalCents) {
@@ -44,7 +95,10 @@ export class InfinitePayAdapter implements IPaymentGateway {
           formattedItems = formattedItems.map((item, index) => {
             if (index === formattedItems.length - 1) {
               const remaining = totalCents - distributedSum;
-              const unitPrice = Math.max(1, Math.round(remaining / item.quantity));
+              const unitPrice = Math.max(
+                1,
+                Math.round(remaining / item.quantity),
+              );
               return {
                 ...item,
                 price: unitPrice,
@@ -58,14 +112,20 @@ export class InfinitePayAdapter implements IPaymentGateway {
             };
           });
 
-          const finalSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+          const finalSum = formattedItems.reduce(
+            (acc, curr) => acc + curr.price * curr.quantity,
+            0,
+          );
           if (finalSum !== totalCents && formattedItems.length > 0) {
             const diff = totalCents - finalSum;
             formattedItems[0].price += diff;
           }
         }
 
-        const verifiedSum = formattedItems.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+        const verifiedSum = formattedItems.reduce(
+          (acc, curr) => acc + curr.price * curr.quantity,
+          0,
+        );
         const hasInvalidPrice = formattedItems.some((item) => item.price <= 0);
 
         if (verifiedSum !== totalCents || hasInvalidPrice) {
@@ -93,7 +153,9 @@ export class InfinitePayAdapter implements IPaymentGateway {
     if (input.customerPhone) {
       const cleanDigits = input.customerPhone.replace(/\D/g, '');
       if (cleanDigits.length >= 10) {
-        formattedPhone = cleanDigits.startsWith('55') ? `+${cleanDigits}` : `+55${cleanDigits}`;
+        formattedPhone = cleanDigits.startsWith('55')
+          ? `+${cleanDigits}`
+          : `+55${cleanDigits}`;
       }
     }
 
@@ -125,14 +187,24 @@ export class InfinitePayAdapter implements IPaymentGateway {
     };
 
     if (input.address) {
-      const cleanCep = input.address.cep ? input.address.cep.replace(/\D/g, '') : '';
+      const cleanCep = input.address.cep
+        ? input.address.cep.replace(/\D/g, '')
+        : '';
       if (cleanCep && cleanCep.length === 8 && cleanCep !== '00000000') {
+        // Endereço completo no formato da documentação da InfinitePay (inclui cidade e UF);
+        // sem cidade/UF o checkout abre o formulário de endereço para o cliente completar.
+        const city = input.address.city?.trim();
+        const state = toUf(input.address.state);
         payload.address = {
           cep: cleanCep,
           street: input.address.street || '',
-          neighborhood: input.address.neighborhood || '',
           number: input.address.number || 'S/N',
-          ...(input.address.complement?.trim() ? { complement: input.address.complement.trim() } : {}),
+          neighborhood: input.address.neighborhood || '',
+          ...(city ? { city } : {}),
+          ...(state ? { state } : {}),
+          ...(input.address.complement?.trim()
+            ? { complement: input.address.complement.trim() }
+            : {}),
         };
       }
     }
@@ -166,15 +238,22 @@ export class InfinitePayAdapter implements IPaymentGateway {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        this.logger.error(`Erro ao criar link na InfinitePay (${response.status}):`, data);
+        this.logger.error(
+          `Erro ao criar link na InfinitePay (${response.status}):`,
+          data,
+        );
         throw new BadRequestException(
-          data?.message || data?.error || 'Erro ao gerar link de pagamento na InfinitePay.',
+          data?.message ||
+            data?.error ||
+            'Erro ao gerar link de pagamento na InfinitePay.',
         );
       }
 
       const checkoutUrl = data?.url || data?.link_url || data?.checkout_url;
       if (!checkoutUrl) {
-        throw new BadRequestException('InfinitePay não retornou uma URL de checkout válida.');
+        throw new BadRequestException(
+          'InfinitePay não retornou uma URL de checkout válida.',
+        );
       }
 
       return {
@@ -182,9 +261,14 @@ export class InfinitePayAdapter implements IPaymentGateway {
         transactionId: data?.id || data?.slug || data?.transaction_nsu,
       };
     } catch (err: any) {
-      this.logger.error(`Falha na requisição para InfinitePay: ${err.message}`, err.stack);
+      this.logger.error(
+        `Falha na requisição para InfinitePay: ${err.message}`,
+        err.stack,
+      );
       if (err instanceof BadRequestException) throw err;
-      throw new BadRequestException(`Falha ao se comunicar com a InfinitePay: ${err.message}`);
+      throw new BadRequestException(
+        `Falha ao se comunicar com a InfinitePay: ${err.message}`,
+      );
     }
   }
 
@@ -201,7 +285,9 @@ export class InfinitePayAdapter implements IPaymentGateway {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(credentials?.apiKey ? { 'X-Api-Key': credentials.apiKey.trim() } : {}),
+          ...(credentials?.apiKey
+            ? { 'X-Api-Key': credentials.apiKey.trim() }
+            : {}),
         },
         body: JSON.stringify({
           handle,
@@ -225,7 +311,9 @@ export class InfinitePayAdapter implements IPaymentGateway {
         transactionId: data?.transaction_nsu || data?.slug || data?.id,
       };
     } catch (err: any) {
-      this.logger.error(`Erro ao verificar status na InfinitePay: ${err.message}`);
+      this.logger.error(
+        `Erro ao verificar status na InfinitePay: ${err.message}`,
+      );
       return { paid: false };
     }
   }
