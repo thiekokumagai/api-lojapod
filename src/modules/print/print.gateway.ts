@@ -1,6 +1,7 @@
 import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { HIDE_AWAITING_ONLINE_PAYMENT } from '../orders/domain/utils/awaiting-online-payment';
 
 @WebSocketGateway({ cors: true })
 export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -51,7 +52,8 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Auto-recuperação: Buscar pedidos da loja que não foram impressos
       try {
         const pedidosPendentes = await this.prisma.order.findMany({
-          where: { storeId, isPrinted: false },
+          // Cartão online só imprime depois de pago
+          where: { storeId, isPrinted: false, ...HIDE_AWAITING_ONLINE_PAYMENT },
           include: {
             items: {
               include: {

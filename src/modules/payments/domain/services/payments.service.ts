@@ -1,9 +1,15 @@
-import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { PaymentGatewayFactory } from './payment-gateway.factory';
 import { EventsGateway } from '../../../events/events.gateway';
 import { PrintGateway } from '../../../print/print.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
+import { PushNotificationService } from '../../../../shared/services/push-notification.service';
 
 @Injectable()
 export class PaymentsService {
@@ -15,6 +21,7 @@ export class PaymentsService {
     private readonly eventsGateway: EventsGateway,
     private readonly printGateway: PrintGateway,
     private readonly loyaltyService: LoyaltyService,
+    private readonly pushNotificationService: PushNotificationService,
   ) {}
 
   /**
@@ -23,16 +30,26 @@ export class PaymentsService {
    * (nunca cobrado enquanto ninguém pagar) e devolve a URL gerada.
    */
   async testInfinitePayConnection(storeId: string, originUrl?: string) {
-    const settings = await this.prisma.storeSettings.findFirst({ where: { storeId } });
+    const settings = await this.prisma.storeSettings.findFirst({
+      where: { storeId },
+    });
     const credentials = ((settings?.paymentGateways as any) || {}).infinitepay;
 
     if (!credentials?.handle?.trim()) {
-      return { ok: false, error: 'InfiniteTag (handle) não configurada. Salve a integração antes de testar.' };
+      return {
+        ok: false,
+        error:
+          'InfiniteTag (handle) não configurada. Salve a integração antes de testar.',
+      };
     }
 
     try {
       const gateway = this.gatewayFactory.getGateway('INFINITEPAY');
-      const cleanOrigin = (originUrl || process.env.ADMIN_FRONTEND_URL || 'https://lojapod.com').replace(/\/$/, '');
+      const cleanOrigin = (
+        originUrl ||
+        process.env.ADMIN_FRONTEND_URL ||
+        'https://lojapod.com'
+      ).replace(/\/$/, '');
       const result = await gateway.createCreditCardCheckout({
         orderId: 'teste-conexao',
         orderNumber: Date.now(),
@@ -41,9 +58,15 @@ export class PaymentsService {
         redirectUrl: `${cleanOrigin}/`,
         webhookUrl: '',
         credentials,
-        items: [{ description: 'Teste de conexão Loja Pod', quantity: 1, price: 1 }],
+        items: [
+          { description: 'Teste de conexão Loja Pod', quantity: 1, price: 1 },
+        ],
       });
-      return { ok: true, message: 'Conexão com a InfinitePay OK', checkoutUrl: result.checkoutUrl };
+      return {
+        ok: true,
+        message: 'Conexão com a InfinitePay OK',
+        checkoutUrl: result.checkoutUrl,
+      };
     } catch (e: any) {
       const msg = e?.response?.message || e?.message || 'Falha desconhecida';
       return { ok: false, error: Array.isArray(msg) ? msg.join(', ') : msg };
@@ -53,7 +76,11 @@ export class PaymentsService {
   /**
    * Gera o link de checkout online para um pedido, localizando o gateway ativo na loja
    */
-  async createOnlineCheckout(orderId: string, storeId: string, originUrl?: string) {
+  async createOnlineCheckout(
+    orderId: string,
+    storeId: string,
+    originUrl?: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -71,15 +98,21 @@ export class PaymentsService {
     });
 
     const gateways = (settings?.paymentGateways as any) || {};
-    
+
     // Identificar qual gateway está configurado e habilitado para cartão de crédito
     let selectedProvider: string | null = null;
     let credentials: any = null;
 
-    if (gateways.infinitepay?.enabled && gateways.infinitepay?.acceptCreditCard) {
+    if (
+      gateways.infinitepay?.enabled &&
+      gateways.infinitepay?.acceptCreditCard
+    ) {
       selectedProvider = 'INFINITEPAY';
       credentials = gateways.infinitepay;
-    } else if (gateways.mercadopago?.enabled && gateways.mercadopago?.acceptCreditCard) {
+    } else if (
+      gateways.mercadopago?.enabled &&
+      gateways.mercadopago?.acceptCreditCard
+    ) {
       selectedProvider = 'MERCADOPAGO';
       credentials = gateways.mercadopago;
     } else if (gateways.asaas?.enabled && gateways.asaas?.acceptCreditCard) {
@@ -88,7 +121,9 @@ export class PaymentsService {
     }
 
     if (!selectedProvider || !credentials) {
-      throw new BadRequestException('Nenhum gateway de pagamento online com cartão está configurado nesta loja.');
+      throw new BadRequestException(
+        'Nenhum gateway de pagamento online com cartão está configurado nesta loja.',
+      );
     }
 
     const gateway = this.gatewayFactory.getGateway(selectedProvider);
@@ -98,7 +133,10 @@ export class PaymentsService {
     const redirectUrl = `${cleanOrigin}/pedido/${order.id}/sucesso`;
 
     // Montar webhook URL pública se configurada na env
-    let apiBaseUrl = process.env.API_PUBLIC_URL || process.env.VITE_ADMIN_API || 'https://ecommerce-core-api-production-3cc7.up.railway.app';
+    let apiBaseUrl =
+      process.env.API_PUBLIC_URL ||
+      process.env.VITE_ADMIN_API ||
+      'https://ecommerce-core-api-production-3cc7.up.railway.app';
     apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
     if (!apiBaseUrl.endsWith('/api')) {
       apiBaseUrl = `${apiBaseUrl}/api`;
@@ -106,7 +144,11 @@ export class PaymentsService {
     const webhookUrl = `${apiBaseUrl}/payments/webhook/${selectedProvider.toLowerCase()}?storeId=${effectiveStoreId}&orderId=${order.id}`;
 
     // Montar lista completa de itens (produtos com variação, frete e acréscimos)
-    const itemsList: Array<{ description: string; quantity: number; price: number }> = (order.items || []).map((item) => {
+    const itemsList: Array<{
+      description: string;
+      quantity: number;
+      price: number;
+    }> = (order.items || []).map((item) => {
       let desc = item.productName || 'Produto';
       if (item.variation) {
         desc += ` (${item.variation})`;
@@ -127,7 +169,10 @@ export class PaymentsService {
       });
     }
 
-    const surchargeNum = Number(order.cardFee || 0) + Number(order.receiptSurcharge || 0) + Number(order.installmentSurcharge || 0);
+    const surchargeNum =
+      Number(order.cardFee || 0) +
+      Number(order.receiptSurcharge || 0) +
+      Number(order.installmentSurcharge || 0);
     if (surchargeNum > 0) {
       itemsList.push({
         description: 'Taxa de Pagamento / Acréscimo',
@@ -174,9 +219,13 @@ export class PaymentsService {
    * Processa notificação recebida de webhook de pagamento
    */
   async handleWebhook(provider: string, payload: any, query: any) {
-    this.logger.log(`Webhook recebido para provedor ${provider}:`, { payload, query });
+    this.logger.log(`Webhook recebido para provedor ${provider}:`, {
+      payload,
+      query,
+    });
 
-    const orderId = query?.orderId || payload?.order_nsu_id || payload?.metadata?.orderId;
+    const orderId =
+      query?.orderId || payload?.order_nsu_id || payload?.metadata?.orderId;
     const orderNumber = query?.orderNumber || payload?.order_nsu;
 
     let order: any = null;
@@ -232,9 +281,7 @@ export class PaymentsService {
         payload?.data?.installments ||
         payload?.metadata?.installments;
       const transactionId =
-        payload?.transaction_nsu ||
-        payload?.id ||
-        payload?.invoice_slug;
+        payload?.transaction_nsu || payload?.id || payload?.invoice_slug;
 
       const updateData: any = {
         paymentStatus: 'PAID',
@@ -249,44 +296,30 @@ export class PaymentsService {
         updateData.gatewayTransactionId = String(transactionId);
       }
 
-      const updatedOrder = await this.prisma.order.update({
-        where: { id: order.id },
-        data: updateData,
-      });
-
-      this.logger.log(`Pedido #${order.orderNumber} atualizado para PAID via Webhook ${provider}`);
-
-      // Notificar Admin e Frente de Caixa via WebSocket
-      try {
-        this.eventsGateway.server?.emit('orders.updated', updatedOrder);
-        this.printGateway.emitNovoPedido(order.storeId || '1', updatedOrder);
-      } catch (wsErr) {
-        this.logger.error('Erro ao emitir eventos websocket após pagamento online:', wsErr);
-      }
-
-      // Processar fidelidade
-      try {
-        await this.loyaltyService.processOrderCompleted({
-          id: order.id,
-          storeId: order.storeId || '1',
-          customerPhone: order.customerPhone,
-          customerName: order.customerName,
-          totalOrder: order.totalOrder,
-        });
-      } catch (loyaltyErr) {
-        this.logger.error('Erro ao processar fidelidade após pagamento:', loyaltyErr);
-      }
+      await this.markPaidAndAnnounce(
+        order.id,
+        updateData,
+        `Webhook ${provider}`,
+      );
 
       return { success: true, orderId: order.id, status: 'PAID' };
     }
 
-    return { success: true, message: 'Evento processado sem alteração de status' };
+    return {
+      success: true,
+      message: 'Evento processado sem alteração de status',
+    };
   }
 
   /**
    * Verificação ativa de status (ex: quando o cliente volta à tela de sucesso)
    */
-  async checkOrderStatus(orderId: string, storeId: string, transactionNsu?: string, slug?: string) {
+  async checkOrderStatus(
+    orderId: string,
+    storeId: string,
+    transactionNsu?: string,
+    slug?: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -299,7 +332,12 @@ export class PaymentsService {
     }
 
     if (order.paymentStatus === 'PAID') {
-      return { paid: true, status: order.status, paymentStatus: order.paymentStatus, order };
+      return {
+        paid: true,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        order,
+      };
     }
 
     if (!order.onlineGateway) {
@@ -340,21 +378,164 @@ export class PaymentsService {
         updateData.gatewayTransactionId = String(result.transactionId);
       }
 
-      const updatedOrder = await this.prisma.order.update({
-        where: { id: order.id },
-        data: updateData,
-        include: {
-          items: true,
-        },
-      });
+      const updatedOrder = await this.markPaidAndAnnounce(
+        order.id,
+        updateData,
+        'verificação ativa',
+      );
 
-      try {
-        this.eventsGateway.server?.emit('orders.updated', updatedOrder);
-      } catch (e) {}
-
-      return { paid: true, status: updatedOrder.status, paymentStatus: updatedOrder.paymentStatus, order: updatedOrder };
+      return {
+        paid: true,
+        status: updatedOrder.status,
+        paymentStatus: updatedOrder.paymentStatus,
+        order: updatedOrder,
+      };
     }
 
-    return { paid: false, status: order.status, paymentStatus: order.paymentStatus, order };
+    return {
+      paid: false,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      order,
+    };
+  }
+
+  /**
+   * Marca o pedido como pago e anuncia para a loja (painel, push, impressão e fidelidade).
+   * O webhook e a verificação ativa podem chegar ao mesmo tempo: a atualização condicional
+   * (paymentStatus = PENDING) garante que só um deles anuncia, então nada sai duplicado.
+   */
+  private async markPaidAndAnnounce(
+    orderId: string,
+    updateData: any,
+    source: string,
+  ) {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, paymentStatus: 'PENDING' },
+      data: updateData,
+    });
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: ORDER_PRINT_INCLUDE,
+    });
+
+    if (!order || count === 0) {
+      // Outro processo já marcou como pago e anunciou
+      return order as any;
+    }
+
+    this.logger.log(
+      `Pedido #${order.orderNumber} atualizado para PAID via ${source}`,
+    );
+    const storeId = order.storeId || '1';
+    const wasCancelled = order.status === 'CANCELLED';
+
+    // Painel: o pedido de cartão online aparece agora pela primeira vez
+    try {
+      this.eventsGateway.notifyNewOrder(order);
+      this.eventsGateway.server?.emit('orders.updated', order);
+    } catch (wsErr) {
+      this.logger.error(
+        'Erro ao emitir eventos websocket após pagamento online:',
+        wsErr,
+      );
+    }
+
+    // Impressão: uma única vez, e só se ainda não foi impresso
+    if (!order.isPrinted && !wasCancelled) {
+      try {
+        this.printGateway.emitNovoPedido(storeId, order);
+      } catch (printErr) {
+        this.logger.error(
+          'Erro ao enviar pedido pago para impressão:',
+          printErr,
+        );
+      }
+    }
+
+    // Push para os usuários da loja
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { storeId: order.storeId },
+      });
+      const tokens: string[] = [];
+      const webSubscriptions: any[] = [];
+      for (const u of users) {
+        if (u.expoPushToken)
+          tokens.push(...u.expoPushToken.split(',').filter(Boolean));
+        if (u.webPushSubscription) {
+          if (Array.isArray(u.webPushSubscription))
+            webSubscriptions.push(...u.webPushSubscription);
+          else webSubscriptions.push(u.webPushSubscription);
+        }
+      }
+      if (tokens.length > 0 || webSubscriptions.length > 0) {
+        const value = new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(Number(order.totalOrder || 0));
+        const title = wasCancelled
+          ? `⚠️ Pagamento recebido de pedido cancelado #${order.orderNumber}`
+          : `(${value}) Oba! Chegou pedido pago no cartão 🤩`;
+        const body = wasCancelled
+          ? `${order.customerName} pagou depois do prazo. Verifique o pedido.`
+          : `Pedido nº #${order.orderNumber} - ${order.customerName}`;
+        this.pushNotificationService
+          .sendNotifications(
+            tokens,
+            title,
+            body,
+            { orderId: order.id },
+            webSubscriptions,
+          )
+          .catch((e) =>
+            this.logger.error('Erro ao enviar push de pedido pago:', e),
+          );
+      }
+    } catch (pushErr) {
+      this.logger.error(
+        'Erro ao buscar tokens para push de pedido pago:',
+        pushErr,
+      );
+    }
+
+    // Fidelidade
+    try {
+      await this.loyaltyService.processOrderCompleted({
+        id: order.id,
+        storeId,
+        customerPhone: order.customerPhone,
+        customerName: order.customerName,
+        totalOrder: order.totalOrder,
+      });
+    } catch (loyaltyErr) {
+      this.logger.error(
+        'Erro ao processar fidelidade após pagamento:',
+        loyaltyErr,
+      );
+    }
+
+    return order as any;
   }
 }
+
+/** Mesmo formato que a fila de impressão usa para reimprimir pedidos pendentes. */
+const ORDER_PRINT_INCLUDE = {
+  items: {
+    include: {
+      combo: true,
+      product: {
+        include: {
+          category: true,
+          images: {
+            orderBy: [
+              { position: 'asc' as const },
+              { createdAt: 'asc' as const },
+            ],
+          },
+        },
+      },
+    },
+  },
+};

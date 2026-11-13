@@ -21,6 +21,7 @@ import { PrintModule } from '../print/print.module';
 import { PushNotificationService } from '../../shared/services/push-notification.service';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { UberModule } from '../uber/uber.module';
+import { UnpaidOnlineOrdersCronService } from './infrastructure/cron/unpaid-online-orders.cron.service';
 
 @Module({
   imports: [SettingsModule, CouponsModule, UsersModule, PrintModule, LoyaltyModule, UberModule],
@@ -37,6 +38,7 @@ import { UberModule } from '../uber/uber.module';
     MarkOrderPrintedUseCase,
     ReprintOrderUseCase,
     UpdateOrderUseCase,
+    UnpaidOnlineOrdersCronService,
     {
       provide: IOrdersRepository,
       useClass: PrismaOrdersRepository,

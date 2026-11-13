@@ -6,14 +6,17 @@ import { InfinitePayAdapter } from './infrastructure/adapters/infinitepay.adapte
 import { EventsModule } from '../events/events.module';
 import { PrintModule } from '../print/print.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { SettingsModule } from '../settings/settings.module';
+import { PushNotificationService } from '../../shared/services/push-notification.service';
 
 @Module({
-  imports: [EventsModule, PrintModule, LoyaltyModule],
+  imports: [EventsModule, PrintModule, LoyaltyModule, SettingsModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,
     PaymentGatewayFactory,
     InfinitePayAdapter,
+    PushNotificationService,
   ],
   exports: [PaymentsService, PaymentGatewayFactory],
 })

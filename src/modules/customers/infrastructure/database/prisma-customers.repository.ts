@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { HIDE_AWAITING_ONLINE_PAYMENT } from '../../../orders/domain/utils/awaiting-online-payment';
 import {
   Customer,
   CustomerAddress,
@@ -89,6 +90,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       include: {
         addresses: true,
         orders: {
+          where: HIDE_AWAITING_ONLINE_PAYMENT,
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -206,7 +208,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       where: { id },
       include: {
         addresses: true,
-        orders: { orderBy: { createdAt: 'desc' } },
+        orders: { where: HIDE_AWAITING_ONLINE_PAYMENT, orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -232,7 +234,7 @@ export class PrismaCustomersRepository implements ICustomersRepository {
       where: { id: customerId },
       include: {
         addresses: true,
-        orders: { orderBy: { createdAt: 'desc' } },
+        orders: { where: HIDE_AWAITING_ONLINE_PAYMENT, orderBy: { createdAt: 'desc' } },
       },
     });
 
