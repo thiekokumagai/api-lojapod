@@ -50,6 +50,7 @@ export class GetStoreDiagnosisUseCase {
           startDate: filters.startDate,
           endDate: filters.endDate,
           sortBy: 'quantity',
+          withComparison: false,
         }),
         this.prisma.order.findMany({
           where: {

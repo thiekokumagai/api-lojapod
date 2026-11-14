@@ -180,4 +180,56 @@ describe('GetDashboardStatsUseCase - lucro e ranking', () => {
     expect(res.bestSellers.map((b) => b.id)).toEqual(['B']);
     expect(res.stats.lucroBruto).toBe(100);
   });
+  describe('comparacao com o período anterior', () => {
+    const orders = [
+      {
+        ...baseOrder,
+        id: 'o1',
+        totalOrder: 120,
+        cardFee: 5,
+        items: [
+          item({ id: 'i1', productId: 'p1', productName: 'p1', price: 50, quantity: 2, product: product('p1', 20) }),
+        ],
+      },
+    ];
+
+    it('busca o período anterior antes do início e devolve os mesmos KPIs', async () => {
+      const prisma = buildPrisma(orders);
+      const res = await new GetDashboardStatsUseCase(prisma).execute({
+        storeId: 's1',
+        startDate: '2026-01-10',
+        endDate: '2026-01-16',
+      });
+
+      const prevWhere = prisma.order.findMany.mock.calls[1][0].where;
+      expect(prevWhere.storeId).toBe('s1');
+      expect(prevWhere.status).toEqual({ not: 'CANCELLED' });
+      expect(prevWhere.createdAt.lte.getTime()).toBeLessThan(
+        prisma.order.findMany.mock.calls[0][0].where.createdAt.gte.getTime(),
+      );
+
+      // itens 100, taxa 5, custo 40 => lucro 55; margem 55/100
+      expect(res.comparacao).toMatchObject({
+        totalVendas: 120,
+        totalPedidos: 1,
+        ticketMedio: 120,
+        totalProdutosVendidos: 2,
+        lucroBruto: 55,
+        margemBruta: 55,
+        visitas: 0,
+        conversao: 0,
+        abandonos: 0,
+      });
+    });
+
+    it('withComparison=false não faz a consulta extra', async () => {
+      const prisma = buildPrisma(orders);
+      const res = await new GetDashboardStatsUseCase(prisma).execute({
+        storeId: 's1',
+        withComparison: false,
+      });
+      expect(res.comparacao).toBeNull();
+      expect(prisma.order.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
 });

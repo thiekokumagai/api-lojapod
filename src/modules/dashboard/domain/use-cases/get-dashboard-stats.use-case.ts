@@ -1,7 +1,10 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
-import { resolveDashboardPeriod } from '../utils/period.util';
+import {
+  resolveDashboardPeriod,
+  resolvePreviousPeriod,
+} from '../utils/period.util';
 import {
   RankingSortBy,
   calculateOrderItemsProfit,
@@ -14,6 +17,8 @@ export interface DashboardStatsFilters {
   endDate?: string;
   categoryId?: string;
   sortBy?: RankingSortBy;
+  /** false = não calcula `comparacao` (consulta extra). Padrão: true. */
+  withComparison?: boolean;
 }
 
 const RANKING_LIMIT = 5;
@@ -459,7 +464,15 @@ export class GetDashboardStatsUseCase {
       })
       .slice(0, RANKING_LIMIT);
 
+    const previous =
+      filters.withComparison === false ? null : resolvePreviousPeriod(start, end);
+    const comparacao = previous
+      ? await this.summarizePeriod(filters.storeId, previous.start, previous.end)
+      : null;
+
     return {
+      // Mesmas métricas no período anterior equivalente (ver resolvePreviousPeriod).
+      comparacao,
       stats: {
         totalVendas,
         totalPedidos,
@@ -494,6 +507,100 @@ export class GetDashboardStatsUseCase {
       },
       chartData,
       bestSellers,
+    };
+  }
+
+  /**
+   * KPIs de vendas e comportamento de um período, para comparação. Mesmas regras dos
+   * cards (CANCELLED fora, lucro só de itens com custo), sem ranking nem estoque.
+   */
+  private async summarizePeriod(storeId: string, start: Date, end: Date) {
+    const [orders, sessions] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          storeId,
+          createdAt: { gte: start, lte: end },
+          status: { not: 'CANCELLED' },
+        },
+        select: {
+          totalOrder: true,
+          couponDiscount: true,
+          paymentDiscount: true,
+          receiptDiscount: true,
+          cardFee: true,
+          items: {
+            select: {
+              price: true,
+              quantity: true,
+              isCombo: true,
+              comboId: true,
+              comboSnapshot: true,
+              product: { select: { costPrice: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.storeSession.findMany({
+        where: { storeId, createdAt: { gte: start, lte: end } },
+        select: { sessionId: true },
+      }),
+    ]);
+
+    let totalVendas = 0;
+    let totalProdutosVendidos = 0;
+    let lucroBruto = 0;
+    let receitaComCusto = 0;
+
+    for (const order of orders) {
+      totalVendas += Number(order.totalOrder);
+      const items = order.items ?? [];
+      const profits = calculateOrderItemsProfit({
+        discounts:
+          Number(order.couponDiscount || 0) +
+          Number(order.paymentDiscount || 0) +
+          Number(order.receiptDiscount || 0),
+        cardFee: Number(order.cardFee || 0),
+        items: items.map((item) => ({
+          price: Number(item.price),
+          quantity: item.quantity,
+          unitCost: resolveItemUnitCost(item),
+        })),
+      });
+      items.forEach((item, idx) => {
+        totalProdutosVendidos += item.quantity;
+        const calc = profits[idx];
+        if (calc.profit !== null && calc.cost !== null) {
+          lucroBruto += calc.profit;
+          receitaComCusto += calc.netRevenue;
+        }
+      });
+    }
+
+    const totalPedidos = orders.length;
+    const visitas = sessions.length;
+    const abandonos =
+      visitas === 0
+        ? 0
+        : await this.prisma.cartDraft.count({
+            where: {
+              sessionId: { in: sessions.map((s) => s.sessionId) },
+              updatedAt: { gte: start, lte: end },
+            },
+          });
+
+    return {
+      inicio: start.toISOString(),
+      fim: end.toISOString(),
+      totalVendas: round2(totalVendas),
+      totalPedidos,
+      ticketMedio: totalPedidos > 0 ? round2(totalVendas / totalPedidos) : 0,
+      totalProdutosVendidos,
+      lucroBruto: round2(lucroBruto),
+      margemBruta: marginOf(lucroBruto, receitaComCusto),
+      visitas,
+      conversao:
+        visitas > 0 ? Number(((totalPedidos / visitas) * 100).toFixed(1)) : 0,
+      abandonos,
     };
   }
 }

@@ -27,3 +27,23 @@ export function countPeriodDays(start: Date, end: Date): number {
   const diff = end.getTime() - start.getTime();
   return Math.max(1, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 }
+
+/**
+ * Período anterior para comparação: mesmo tamanho, imediatamente antes, e cortado no
+ * mesmo ponto em que o atual está agora. "Hoje" às 14h compara com "ontem até 14h";
+ * "7 dias" (com hoje pela metade) compara com os 7 dias anteriores cortados igual.
+ * null quando o período atual ainda nem começou.
+ */
+export function resolvePreviousPeriod(
+  start: Date,
+  end: Date,
+  now: Date = new Date(),
+): { start: Date; end: Date } | null {
+  const cutoff = Math.min(end.getTime(), now.getTime());
+  if (cutoff < start.getTime()) return null;
+
+  const length = end.getTime() - start.getTime() + 1;
+  const prevStart = new Date(start.getTime() - length);
+  const prevEnd = new Date(prevStart.getTime() + (cutoff - start.getTime()));
+  return { start: prevStart, end: prevEnd };
+}
