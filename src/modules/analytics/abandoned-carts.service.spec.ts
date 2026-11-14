@@ -86,7 +86,11 @@ describe('AbandonedCartsService.list', () => {
     const calledAt = minutesAgo(120);
     const { service } = build('store-A', [
       draft({ id: 'novo', updatedAt: minutesAgo(20), contactedAt: null }),
-      draft({ id: 'chamado', updatedAt: minutesAgo(200), contactedAt: calledAt }),
+      draft({
+        id: 'chamado',
+        updatedAt: minutesAgo(200),
+        contactedAt: calledAt,
+      }),
     ]);
 
     const result = await service.list(NOW);

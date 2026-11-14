@@ -70,7 +70,8 @@ export class AbandonedCartsService {
       const key = phoneKey(d.customerPhone);
       if (!key || !d.contactedAt) continue;
       const known = lastContactByPhone.get(key);
-      if (!known || d.contactedAt > known) lastContactByPhone.set(key, d.contactedAt);
+      if (!known || d.contactedAt > known)
+        lastContactByPhone.set(key, d.contactedAt);
     }
 
     const since = drafts.reduce((oldest, d) => {
