@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 import { GetDashboardStatsUseCase } from '../../domain/use-cases/get-dashboard-stats.use-case';
 import { parseRankingSortBy } from '../../domain/utils/sales-profit.util';
 import { GetStockOpportunitiesUseCase } from '../../domain/use-cases/get-stock-opportunities.use-case';
+import { GetStoreDiagnosisUseCase } from '../../domain/use-cases/get-store-diagnosis.use-case';
 
 import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
 
@@ -22,6 +23,7 @@ export class DashboardController {
   constructor(
     private readonly getDashboardStatsUseCase: GetDashboardStatsUseCase,
     private readonly getStockOpportunitiesUseCase: GetStockOpportunitiesUseCase,
+    private readonly getStoreDiagnosisUseCase: GetStoreDiagnosisUseCase,
   ) {}
 
   @Get('stats')
@@ -46,6 +48,27 @@ export class DashboardController {
       endDate,
       categoryId,
       sortBy: parseRankingSortBy(sortBy),
+    });
+  }
+
+  @Get('diagnosis')
+  @ApiOperation({
+    summary:
+      'Diagnóstico da loja: resultado do período (lucro líquido, ponto de equilíbrio) e lista de vazamentos por R$',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Diagnóstico obtido com sucesso',
+  })
+  async getDiagnosis(
+    @Req() req: Request & { user: { storeId?: string } },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.getStoreDiagnosisUseCase.execute({
+      storeId: req.user?.storeId,
+      startDate,
+      endDate,
     });
   }
 

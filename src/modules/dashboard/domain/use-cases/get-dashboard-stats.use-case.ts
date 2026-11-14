@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
-import { getZonedStartAndEndDates } from '../../../../common/utils/date.utils';
+import { resolveDashboardPeriod } from '../utils/period.util';
 import {
   RankingSortBy,
   calculateOrderItemsProfit,
@@ -44,6 +44,8 @@ function toRankingItem(e: RankingEntry) {
     categoryTitle: e.categoryTitle,
     quantity: e.quantity,
     totalRevenue: round2(e.totalRevenue),
+    // Receita líquida (após descontos) das vendas com custo; base da margem.
+    receitaLiquida: round2(e.costedNetRevenue),
     imageUrl: e.imageUrl,
     // lucro/margem null = nenhuma venda com custo cadastrado (não é 100%).
     lucro: e.hasCostedSales ? round2(e.profit) : null,
@@ -80,21 +82,10 @@ export class GetDashboardStatsUseCase {
       );
     }
 
-    let start: Date;
-    let end: Date;
-
-    if (filters.startDate && filters.endDate) {
-      const dates = getZonedStartAndEndDates(filters.startDate, filters.endDate);
-      start = dates.startOfDay;
-      end = dates.endOfDay;
-    } else {
-      const todayStr = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/Campo_Grande',
-      }).format(new Date());
-      const dates = getZonedStartAndEndDates(todayStr, todayStr);
-      start = dates.startOfDay;
-      end = dates.endOfDay;
-    }
+    const { start, end } = resolveDashboardPeriod(
+      filters.startDate,
+      filters.endDate,
+    );
 
     // 1. Fetch Orders within range that are not CANCELLED
     const orders = await this.prisma.order.findMany({
@@ -491,6 +482,7 @@ export class GetDashboardStatsUseCase {
         descontosConcedidos: round2(totalDescontos),
         taxaCartao: round2(totalTaxaCartao),
         receitaItens: round2(receitaItens),
+        receitaComCusto: round2(receitaComCusto),
       },
       semCusto: {
         count: semCustoMap.size,
