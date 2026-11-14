@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { GetDashboardStatsUseCase } from '../../domain/use-cases/get-dashboard-stats.use-case';
+import { parseRankingSortBy } from '../../domain/utils/sales-profit.util';
 import { GetStockOpportunitiesUseCase } from '../../domain/use-cases/get-stock-opportunities.use-case';
 
 import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
@@ -25,7 +26,8 @@ export class DashboardController {
 
   @Get('stats')
   @ApiOperation({
-    summary: 'Obter estatísticas consolidadas e detalhadas para o dashboard',
+    summary:
+      'Obter estatísticas consolidadas (lucro bruto, margem e ranking ordenável por quantity|revenue|profit|margin)',
   })
   @ApiResponse({
     status: 200,
@@ -36,12 +38,14 @@ export class DashboardController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('sortBy') sortBy?: string,
   ) {
     return this.getDashboardStatsUseCase.execute({
       storeId: req.user?.storeId,
       startDate,
       endDate,
       categoryId,
+      sortBy: parseRankingSortBy(sortBy),
     });
   }
 

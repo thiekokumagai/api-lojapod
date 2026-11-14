@@ -1,13 +1,71 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 
 import { getZonedStartAndEndDates } from '../../../../common/utils/date.utils';
+import {
+  RankingSortBy,
+  calculateOrderItemsProfit,
+  resolveItemUnitCost,
+} from '../utils/sales-profit.util';
 
 export interface DashboardStatsFilters {
   storeId?: string;
   startDate?: string;
   endDate?: string;
   categoryId?: string;
+  sortBy?: RankingSortBy;
+}
+
+const RANKING_LIMIT = 5;
+const MISSING_COST_LIST_LIMIT = 20;
+
+interface RankingEntry {
+  id: string;
+  title: string;
+  categoryTitle: string;
+  quantity: number;
+  totalRevenue: number;
+  imageUrl?: string;
+  /** Receita líquida (após descontos) só das vendas com custo; base da margem. */
+  costedNetRevenue: number;
+  profit: number;
+  hasCostedSales: boolean;
+  missingCost: boolean;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const marginOf = (profit: number, base: number) =>
+  base > 0 ? Number(((profit / base) * 100).toFixed(1)) : null;
+
+function toRankingItem(e: RankingEntry) {
+  return {
+    id: e.id,
+    title: e.title,
+    categoryTitle: e.categoryTitle,
+    quantity: e.quantity,
+    totalRevenue: round2(e.totalRevenue),
+    imageUrl: e.imageUrl,
+    // lucro/margem null = nenhuma venda com custo cadastrado (não é 100%).
+    lucro: e.hasCostedSales ? round2(e.profit) : null,
+    margem: e.hasCostedSales ? marginOf(e.profit, e.costedNetRevenue) : null,
+    semCusto: e.missingCost,
+  };
+}
+
+function rankingValue(
+  e: ReturnType<typeof toRankingItem>,
+  sortBy: RankingSortBy,
+): number | null {
+  switch (sortBy) {
+    case 'revenue':
+      return e.totalRevenue;
+    case 'profit':
+      return e.lucro;
+    case 'margin':
+      return e.margem;
+    default:
+      return e.quantity;
+  }
 }
 
 @Injectable()
@@ -15,6 +73,13 @@ export class GetDashboardStatsUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(filters: DashboardStatsFilters) {
+    // Sem loja o filtro some e os números somariam todas as lojas.
+    if (!filters.storeId) {
+      throw new ForbiddenException(
+        'Usuário sem loja vinculada não pode consultar o dashboard.',
+      );
+    }
+
     let start: Date;
     let end: Date;
 
@@ -44,7 +109,20 @@ export class GetDashboardStatsUseCase {
         },
       },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              include: {
+                images: {
+                  orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                  take: 1,
+                },
+                category: true,
+              },
+            },
+            combo: { include: { category: true } },
+          },
+        },
       },
     });
 
@@ -278,95 +356,117 @@ export class GetDashboardStatsUseCase {
         .map(({ name, vendas }) => ({ name, vendas }));
     }
 
-    // 4. Best-Selling Products (Optionally filtered by categoryId)
-    const orderItems = orders.length === 0 ? [] : await this.prisma.orderItem.findMany({
-      where: {
-        orderId: {
-          in: orders.map(o => o.id),
-        },
-        ...(filters.categoryId && {
-          OR: [
-            {
-              product: {
-                categoryId: filters.categoryId,
-              },
-            },
-            {
-              combo: {
-                categoryId: filters.categoryId,
-              },
-            },
-          ],
-        }),
-      },
-      include: {
-        product: {
-          include: {
-            images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
-            category: true,
-          },
-        },
-        combo: {
-          include: {
-            category: true,
-          },
-        },
-      },
-    });
+    // 4. Lucro bruto (cards) e ranking de produtos.
+    // Cards: todas as vendas do período. Ranking: respeita categoryId.
+    let totalDescontos = 0;
+    let totalTaxaCartao = 0;
+    let receitaItens = 0;
+    let custoTotal = 0;
+    let lucroBruto = 0;
+    let receitaComCusto = 0;
+    let receitaSemCusto = 0;
+    const semCustoMap = new Map<string, string>();
+    const productSalesMap = new Map<string, RankingEntry>();
 
-    const productSalesMap = new Map<
-      string,
-      {
-        id: string;
-        title: string;
-        categoryTitle: string;
-        quantity: number;
-        totalRevenue: number;
-        imageUrl?: string;
-      }
-    >();
+    for (const order of orders) {
+      const items = order.items ?? [];
+      const profits = calculateOrderItemsProfit({
+        discounts:
+          Number(order.couponDiscount || 0) +
+          Number(order.paymentDiscount || 0) +
+          Number(order.receiptDiscount || 0),
+        cardFee: Number(order.cardFee || 0),
+        items: items.map((item) => ({
+          price: Number(item.price),
+          quantity: item.quantity,
+          unitCost: resolveItemUnitCost(item),
+        })),
+      });
 
-    for (const item of orderItems) {
-      const isCombo = item.isCombo || !!item.comboId;
-      const itemId = (isCombo ? item.comboId : item.productId) || item.productId || item.productName || 'removed';
-      const existing = productSalesMap.get(itemId);
-      const quantity = item.quantity;
-      const revenue = Number(item.price) * quantity;
+      items.forEach((item, idx) => {
+        const calc = profits[idx];
+        const isCombo = item.isCombo || !!item.comboId;
+        const itemId =
+          (isCombo ? item.comboId : item.productId) ||
+          item.productId ||
+          item.productName ||
+          'removed';
+        const title =
+          item.productName ||
+          (isCombo ? item.combo?.name : item.product?.title) ||
+          'Produto Removido';
 
-      if (existing) {
-        existing.quantity += quantity;
-        existing.totalRevenue += revenue;
-      } else {
-        let mainImage: string | undefined = undefined;
-        let categoryTitle = 'Sem Categoria';
-
-        if (isCombo && item.combo) {
-          mainImage = item.combo.imageUrl || undefined;
-          categoryTitle = item.combo.category?.title || 'Sem Categoria';
-        } else if (item.product) {
-          mainImage =
-            item.product.images && item.product.images.length > 0
-              ? item.product.images[0].url
-              : undefined;
-          categoryTitle = item.product.category?.title || 'Sem Categoria';
+        totalDescontos += calc.discount;
+        receitaItens += calc.revenue;
+        if (calc.profit === null || calc.cost === null) {
+          receitaSemCusto += calc.netRevenue;
+          semCustoMap.set(itemId, title);
+        } else {
+          totalTaxaCartao += calc.cardFee;
+          custoTotal += calc.cost;
+          lucroBruto += calc.profit;
+          receitaComCusto += calc.netRevenue;
         }
 
-        const title = item.productName || (isCombo ? item.combo?.name : item.product?.title) || 'Produto Removido';
+        const inCategory =
+          !filters.categoryId ||
+          item.product?.categoryId === filters.categoryId ||
+          item.combo?.categoryId === filters.categoryId;
+        if (!inCategory) return;
 
-        productSalesMap.set(itemId, {
-          id: itemId,
-          title,
-          categoryTitle,
-          quantity,
-          totalRevenue: revenue,
-          imageUrl: mainImage,
-        });
-      }
+        let entry = productSalesMap.get(itemId);
+        if (!entry) {
+          let mainImage: string | undefined = undefined;
+          let categoryTitle = 'Sem Categoria';
+
+          if (isCombo && item.combo) {
+            mainImage = item.combo.imageUrl || undefined;
+            categoryTitle = item.combo.category?.title || 'Sem Categoria';
+          } else if (item.product) {
+            mainImage = item.product.images?.[0]?.url;
+            categoryTitle = item.product.category?.title || 'Sem Categoria';
+          }
+
+          entry = {
+            id: itemId,
+            title,
+            categoryTitle,
+            quantity: 0,
+            totalRevenue: 0,
+            imageUrl: mainImage,
+            costedNetRevenue: 0,
+            profit: 0,
+            hasCostedSales: false,
+            missingCost: false,
+          };
+          productSalesMap.set(itemId, entry);
+        }
+
+        entry.quantity += item.quantity;
+        entry.totalRevenue += calc.revenue;
+        if (calc.profit === null) {
+          entry.missingCost = true;
+        } else {
+          entry.hasCostedSales = true;
+          entry.profit += calc.profit;
+          entry.costedNetRevenue += calc.netRevenue;
+        }
+      });
     }
 
+    const sortBy = filters.sortBy ?? 'quantity';
     const bestSellers = Array.from(productSalesMap.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
+      .map(toRankingItem)
+      .sort((a, b) => {
+        const va = rankingValue(a, sortBy);
+        const vb = rankingValue(b, sortBy);
+        // Sem valor (sem custo) vai para o fim nos critérios de lucro/margem.
+        if (va === null && vb === null) return b.quantity - a.quantity;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return vb - va || b.quantity - a.quantity;
+      })
+      .slice(0, RANKING_LIMIT);
 
     return {
       stats: {
@@ -383,6 +483,22 @@ export class GetDashboardStatsUseCase {
         conversao,
         tempoMedio,
         abandonos,
+        // Lucro bruto = itens - descontos - custo - taxa de cartão. Frete fora.
+        // Considera só os itens com custo cadastrado (ver semCusto).
+        lucroBruto: round2(lucroBruto),
+        margemBruta: marginOf(lucroBruto, receitaComCusto),
+        custoProdutosVendidos: round2(custoTotal),
+        descontosConcedidos: round2(totalDescontos),
+        taxaCartao: round2(totalTaxaCartao),
+        receitaItens: round2(receitaItens),
+      },
+      semCusto: {
+        count: semCustoMap.size,
+        receitaLiquida: round2(receitaSemCusto),
+        produtos: Array.from(semCustoMap, ([id, title]) => ({ id, title })).slice(
+          0,
+          MISSING_COST_LIST_LIMIT,
+        ),
       },
       chartData,
       bestSellers,
