@@ -5,6 +5,7 @@ import {
   resolveDashboardPeriod,
   resolvePreviousPeriod,
 } from '../utils/period.util';
+import { buildSalesChart, withPreviousSales } from '../utils/sales-chart.util';
 import {
   RankingSortBy,
   calculateOrderItemsProfit,
@@ -19,9 +20,12 @@ export interface DashboardStatsFilters {
   sortBy?: RankingSortBy;
   /** false = não calcula `comparacao` (consulta extra). Padrão: true. */
   withComparison?: boolean;
+  /** Quantos produtos o ranking devolve (1 a RANKING_MAX_LIMIT). Padrão: 5. */
+  limit?: number;
 }
 
-const RANKING_LIMIT = 5;
+export const RANKING_DEFAULT_LIMIT = 5;
+export const RANKING_MAX_LIMIT = 100;
 const MISSING_COST_LIST_LIMIT = 20;
 
 interface RankingEntry {
@@ -212,146 +216,6 @@ export class GetDashboardStatsUseCase {
       }
     });
 
-    // 3. Dynamic Chart Data based on time range
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    let chartData: { name: string; vendas: number }[] = [];
-
-    // Local timezone for date string representation formatting
-    const timeZone = 'America/Campo_Grande';
-
-    if (diffDays <= 1) {
-      // "Hoje" -> Group by Hour (24h)
-      chartData = Array.from({ length: 24 }, (_, i) => ({
-        name: `${String(i).padStart(2, '0')}h`,
-        vendas: 0,
-      }));
-
-      const hourFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hour: 'numeric',
-        hourCycle: 'h23',
-      });
-
-      for (const order of orders) {
-        const localHour = parseInt(hourFormatter.format(order.createdAt), 10);
-        if (localHour >= 0 && localHour < 24) {
-          chartData[localHour].vendas += Number(order.totalOrder);
-        }
-      }
-    } else if (diffDays <= 7) {
-      // "7 dias" -> Group by Day of the week
-      const dateMap = new Map<string, { name: string; vendas: number }>();
-
-      const current = new Date(start);
-      const endTimestamp = end.getTime();
-      while (current.getTime() <= endTimestamp + 60000) {
-        const dateStr = current.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          timeZone,
-        });
-        const rawWeekday = current.toLocaleDateString('pt-BR', {
-          weekday: 'short',
-          timeZone,
-        });
-        const cleanWeekday = rawWeekday.replace('.', '');
-        const weekday =
-          cleanWeekday.charAt(0).toUpperCase() + cleanWeekday.slice(1);
-        const name = `${weekday} (${dateStr})`;
-
-        dateMap.set(dateStr, { name, vendas: 0 });
-        current.setDate(current.getDate() + 1);
-      }
-
-      for (const order of orders) {
-        const dateStr = order.createdAt.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          timeZone,
-        });
-        const item = dateMap.get(dateStr);
-        if (item) {
-          item.vendas += Number(order.totalOrder);
-        }
-      }
-
-      chartData = Array.from(dateMap.values());
-    } else if (diffDays <= 31) {
-      // "30 dias" -> Group by Days of Month
-      const dateMap = new Map<string, { name: string; vendas: number }>();
-
-      const current = new Date(start);
-      const endTimestamp = end.getTime();
-      while (current.getTime() <= endTimestamp + 60000) {
-        const dateStr = current.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          timeZone,
-        });
-        dateMap.set(dateStr, { name: dateStr, vendas: 0 });
-        current.setDate(current.getDate() + 1);
-      }
-
-      for (const order of orders) {
-        const dateStr = order.createdAt.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          timeZone,
-        });
-        const item = dateMap.get(dateStr);
-        if (item) {
-          item.vendas += Number(order.totalOrder);
-        }
-      }
-
-      chartData = Array.from(dateMap.values());
-    } else {
-      // "6 meses" / "Ano" -> Group by Month
-      const monthMap = new Map<
-        string,
-        { name: string; vendas: number; sortKey: string }
-      >();
-
-      const yearFormatter = new Intl.DateTimeFormat('en-US', {
-        year: 'numeric',
-        timeZone,
-      });
-      const monthFormatter = new Intl.DateTimeFormat('en-US', {
-        month: '2-digit',
-        timeZone,
-      });
-
-      const current = new Date(start);
-      const endTimestamp = end.getTime();
-      while (current.getTime() <= endTimestamp + 60000) {
-        const monthStr = current
-          .toLocaleDateString('pt-BR', {
-            month: 'short',
-            year: '2-digit',
-            timeZone,
-          })
-          .replace('.', '');
-        const sortKey = `${yearFormatter.format(current)}-${monthFormatter.format(current)}`;
-        if (!monthMap.has(sortKey)) {
-          monthMap.set(sortKey, { name: monthStr, vendas: 0, sortKey });
-        }
-        current.setMonth(current.getMonth() + 1);
-      }
-
-      for (const order of orders) {
-        const sortKey = `${yearFormatter.format(order.createdAt)}-${monthFormatter.format(order.createdAt)}`;
-        const item = monthMap.get(sortKey);
-        if (item) {
-          item.vendas += Number(order.totalOrder);
-        }
-      }
-
-      chartData = Array.from(monthMap.values())
-        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-        .map(({ name, vendas }) => ({ name, vendas }));
-    }
-
     // 4. Lucro bruto (cards) e ranking de produtos.
     // Cards: todas as vendas do período. Ranking: respeita categoryId.
     let totalDescontos = 0;
@@ -363,9 +227,11 @@ export class GetDashboardStatsUseCase {
     let receitaSemCusto = 0;
     const semCustoMap = new Map<string, string>();
     const productSalesMap = new Map<string, RankingEntry>();
+    const chartOrders: { createdAt: Date; vendas: number; lucro: number }[] = [];
 
     for (const order of orders) {
       const items = order.items ?? [];
+      let orderLucro = 0;
       const profits = calculateOrderItemsProfit({
         discounts:
           Number(order.couponDiscount || 0) +
@@ -401,6 +267,7 @@ export class GetDashboardStatsUseCase {
           totalTaxaCartao += calc.cardFee;
           custoTotal += calc.cost;
           lucroBruto += calc.profit;
+          orderLucro += calc.profit;
           receitaComCusto += calc.netRevenue;
         }
 
@@ -448,9 +315,19 @@ export class GetDashboardStatsUseCase {
           entry.costedNetRevenue += calc.netRevenue;
         }
       });
+
+      chartOrders.push({
+        createdAt: order.createdAt,
+        vendas: Number(order.totalOrder),
+        lucro: orderLucro,
+      });
     }
 
     const sortBy = filters.sortBy ?? 'quantity';
+    const rankingLimit = Math.min(
+      RANKING_MAX_LIMIT,
+      Math.max(1, Math.floor(filters.limit ?? RANKING_DEFAULT_LIMIT)),
+    );
     const bestSellers = Array.from(productSalesMap.values())
       .map(toRankingItem)
       .sort((a, b) => {
@@ -462,13 +339,23 @@ export class GetDashboardStatsUseCase {
         if (vb === null) return -1;
         return vb - va || b.quantity - a.quantity;
       })
-      .slice(0, RANKING_LIMIT);
+      .slice(0, rankingLimit);
 
     const previous =
       filters.withComparison === false ? null : resolvePreviousPeriod(start, end);
-    const comparacao = previous
+    const previousPeriod = previous
       ? await this.summarizePeriod(filters.storeId, previous.start, previous.end)
       : null;
+    const comparacao = previousPeriod?.summary ?? null;
+
+    // Gráfico: faturamento e lucro de cada ponto, mais o faturamento do ponto
+    // equivalente no período anterior (linha pontilhada na tela).
+    const chartData = withPreviousSales(
+      buildSalesChart(chartOrders, start, end),
+      previous && previousPeriod
+        ? buildSalesChart(previousPeriod.serie, previous.start, previous.end)
+        : null,
+    );
 
     return {
       // Mesmas métricas no período anterior equivalente (ver resolvePreviousPeriod).
@@ -523,6 +410,7 @@ export class GetDashboardStatsUseCase {
           status: { not: 'CANCELLED' },
         },
         select: {
+          createdAt: true,
           totalOrder: true,
           couponDiscount: true,
           paymentDiscount: true,
@@ -550,10 +438,12 @@ export class GetDashboardStatsUseCase {
     let totalProdutosVendidos = 0;
     let lucroBruto = 0;
     let receitaComCusto = 0;
+    const serie: { createdAt: Date; vendas: number; lucro: number }[] = [];
 
     for (const order of orders) {
       totalVendas += Number(order.totalOrder);
       const items = order.items ?? [];
+      let orderLucro = 0;
       const profits = calculateOrderItemsProfit({
         discounts:
           Number(order.couponDiscount || 0) +
@@ -571,8 +461,14 @@ export class GetDashboardStatsUseCase {
         const calc = profits[idx];
         if (calc.profit !== null && calc.cost !== null) {
           lucroBruto += calc.profit;
+          orderLucro += calc.profit;
           receitaComCusto += calc.netRevenue;
         }
+      });
+      serie.push({
+        createdAt: order.createdAt,
+        vendas: Number(order.totalOrder),
+        lucro: orderLucro,
       });
     }
 
@@ -588,7 +484,7 @@ export class GetDashboardStatsUseCase {
             },
           });
 
-    return {
+    const summary = {
       inicio: start.toISOString(),
       fim: end.toISOString(),
       totalVendas: round2(totalVendas),
@@ -602,5 +498,8 @@ export class GetDashboardStatsUseCase {
         visitas > 0 ? Number(((totalPedidos / visitas) * 100).toFixed(1)) : 0,
       abandonos,
     };
+
+    // `serie` só alimenta o gráfico; não vai na resposta.
+    return { summary, serie };
   }
 }

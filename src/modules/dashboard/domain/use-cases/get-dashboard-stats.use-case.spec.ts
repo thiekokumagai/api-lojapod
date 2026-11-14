@@ -232,4 +232,63 @@ describe('GetDashboardStatsUseCase - lucro e ranking', () => {
       expect(prisma.order.findMany).toHaveBeenCalledTimes(1);
     });
   });
+  describe('gráfico (faturamento x lucro) e ranking com limite', () => {
+    const at = (iso: string, id: string, qty: number, productId = 'p1', cost = 20) => ({
+      ...baseOrder,
+      id,
+      createdAt: new Date(iso),
+      totalOrder: 50 * qty,
+      items: [
+        item({ id: `i-${id}`, productId, productName: productId, price: 50, quantity: qty, product: product(productId, cost) }),
+      ],
+    });
+
+    it('cada ponto do gráfico traz faturamento e lucro', async () => {
+      const prisma = buildPrisma([at('2026-11-14T14:30:00.000Z', 'o1', 2)]);
+      const res = await new GetDashboardStatsUseCase(prisma).execute({
+        storeId: 's1',
+        startDate: '2026-11-14',
+        endDate: '2026-11-14',
+        withComparison: false,
+      });
+      // 10h local: 2 x 50 = 100 de vendas; lucro 100 - 2 x 20 = 60
+      expect(res.chartData[10]).toMatchObject({ name: '10h', vendas: 100, lucro: 60 });
+      expect(res.chartData[10]).not.toHaveProperty('vendasAnterior');
+    });
+
+    it('vendasAnterior vem do período anterior, ponto a ponto', async () => {
+      const prisma = {
+        ...buildPrisma([]),
+        order: {
+          findMany: jest
+            .fn()
+            .mockResolvedValueOnce([at('2026-11-14T14:30:00.000Z', 'o1', 2)]) // atual
+            .mockResolvedValueOnce([at('2026-11-13T14:10:00.000Z', 'o0', 1)]), // ontem, 10h local
+        },
+      } as any;
+      const res = await new GetDashboardStatsUseCase(prisma).execute({
+        storeId: 's1',
+        startDate: '2026-11-14',
+        endDate: '2026-11-14',
+      });
+      expect(res.chartData[10]).toMatchObject({ vendas: 100, vendasAnterior: 50 });
+      expect(res.comparacao?.totalVendas).toBe(50);
+    });
+
+    it('limit amplia o ranking e é limitado entre 1 e 100', async () => {
+      const many = Array.from({ length: 12 }, (_, n) =>
+        at('2026-11-14T14:30:00.000Z', `o${n}`, n + 1, `P${n}`),
+      );
+      const run2 = (limit?: number) =>
+        new GetDashboardStatsUseCase(buildPrisma(many)).execute({
+          storeId: 's1',
+          withComparison: false,
+          limit,
+        });
+      expect((await run2()).bestSellers).toHaveLength(5);
+      expect((await run2(10)).bestSellers).toHaveLength(10);
+      expect((await run2(500)).bestSellers).toHaveLength(12);
+      expect((await run2(0)).bestSellers).toHaveLength(1);
+    });
+  });
 });

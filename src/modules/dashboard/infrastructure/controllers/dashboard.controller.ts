@@ -41,6 +41,8 @@ export class DashboardController {
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('limit') limit?: string,
+    @Query('compare') compare?: string,
   ) {
     return this.getDashboardStatsUseCase.execute({
       storeId: req.user?.storeId,
@@ -48,6 +50,9 @@ export class DashboardController {
       endDate,
       categoryId,
       sortBy: parseRankingSortBy(sortBy),
+      limit: limit ? Number(limit) || undefined : undefined,
+      // compare=false pula a consulta do período anterior (ranking por categoria/ordenação).
+      withComparison: compare !== 'false',
     });
   }
 
