@@ -9,6 +9,8 @@ import { ISettingsRepository } from '../../../settings/domain/repositories/isett
 import { EventsGateway } from '../../../events/events.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 import { UberDirectService } from '../../../uber/uber-direct.service';
+import { isOrderPaid } from '../utils/order-paid';
+import { pixTerminalPaymentType } from '../utils/pix-terminal';
 
 @Injectable()
 export class UpdateOrderStatusUseCase {
@@ -296,6 +298,10 @@ export class UpdateOrderStatusUseCase {
           order.paymentDate = null as any; // Prisma requires null or undefined based on schema
           order.totalReceived = 0;
           order.cardFee = 0;
+
+          // Pix na maquininha: voltar para pendente não deixa o Pix `online` (seria tratado como já pago)
+          const storeSettings = await this.settingsRepository.get().catch(() => null);
+          order.paymentType = pixTerminalPaymentType(order, storeSettings) ?? order.paymentType;
         }
       }
 
@@ -335,8 +341,7 @@ export class UpdateOrderStatusUseCase {
         !savedOrder.uberDeliveryId
       ) {
         // Apenas disparar Uber automático se for PIX ou Cartão já pago online (só ida)
-        const isPaidOrder = savedOrder.paymentStatus === PaymentStatus.PAID || 
-                            (savedOrder.paymentMethod && savedOrder.paymentMethod.toLowerCase().includes('pix'));
+        const isPaidOrder = isOrderPaid(savedOrder);
 
         if (!isPaidOrder) {
           // Pedidos com pagamento na entrega (dinheiro / maquininha de cartão) não chamam Uber automático,

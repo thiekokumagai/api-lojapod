@@ -6,6 +6,8 @@ import type { ICouponsRepository } from '../../../coupons/domain/repositories/ic
 import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
+import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
+import { pixTerminalPaymentType } from '../utils/pix-terminal';
 
 @Injectable()
 export class UpdateOrderUseCase {
@@ -17,6 +19,7 @@ export class UpdateOrderUseCase {
     private readonly printGateway: PrintGateway,
     private readonly eventsGateway: EventsGateway,
     private readonly tenantContextService: TenantContextService,
+    private readonly settingsRepository: ISettingsRepository,
   ) {}
 
   async execute(
@@ -60,6 +63,14 @@ export class UpdateOrderUseCase {
         couponFreightDiscount: couponFreightDiscountValue,
         couponId: couponId,
       });
+
+      // Pix na maquininha: Pix não pago nunca fica `online` (seria tratado como já pago)
+      const storeSettings = await this.settingsRepository
+        .get()
+        .catch(() => null);
+      orderToUpdate.paymentType =
+        pixTerminalPaymentType(orderToUpdate, storeSettings) ??
+        orderToUpdate.paymentType;
 
       const itemsTotal = Number(orderToUpdate.itemsTotal) || 0;
       const freight = Number(orderToUpdate.freight) > 0 ? Number(orderToUpdate.freight) : 0;

@@ -73,6 +73,73 @@ describe('getPaymentNotAllowedReason', () => {
     ).toBeNull();
   });
 
+  describe('Pix na maquininha (paymentGateways.pixOnTerminal)', () => {
+    const terminal = {
+      ...baseSettings,
+      pixEnabled: true,
+      paymentGateways: { pixOnTerminal: true },
+    };
+
+    it('recusa Pix online com a flag ligada', () => {
+      expect(getPaymentNotAllowedReason(terminal, 'online', 'pix')).toMatch(
+        /maquininha/,
+      );
+      expect(getPaymentNotAllowedReason(terminal, 'Online', 'PIX')).toMatch(
+        /maquininha/,
+      );
+    });
+
+    it('aceita Pix na entrega com a flag ligada', () => {
+      expect(getPaymentNotAllowedReason(terminal, 'entrega', 'pix')).toBeNull();
+    });
+
+    it('com a flag desligada ou ausente o Pix online segue aceito', () => {
+      const enabled = { ...baseSettings, pixEnabled: true };
+      expect(getPaymentNotAllowedReason(enabled, 'online', 'pix')).toBeNull();
+      expect(
+        getPaymentNotAllowedReason(
+          { ...enabled, paymentGateways: { pixOnTerminal: false } },
+          'online',
+          'pix',
+        ),
+      ).toBeNull();
+      expect(
+        getPaymentNotAllowedReason(
+          { ...enabled, paymentGateways: { pixOnTerminal: 'true' } },
+          'online',
+          'pix',
+        ),
+      ).toBeNull();
+    });
+
+    it('a flag não libera Pix quando o Pix está desativado', () => {
+      expect(
+        getPaymentNotAllowedReason(
+          { ...terminal, pixEnabled: false },
+          'entrega',
+          'pix',
+        ),
+      ).not.toBeNull();
+    });
+
+    it('a flag não muda cartão online nem pagamento na entrega', () => {
+      const settings = {
+        ...terminal,
+        payOnDeliveryCash: true,
+        paymentGateways: {
+          pixOnTerminal: true,
+          infinitepay: { enabled: true, acceptCreditCard: true },
+        },
+      };
+      expect(
+        getPaymentNotAllowedReason(settings, 'online', 'credit'),
+      ).toBeNull();
+      expect(
+        getPaymentNotAllowedReason(settings, 'entrega', 'cash'),
+      ).toBeNull();
+    });
+  });
+
   it('aceita nomes em português enviados por clientes antigos', () => {
     const settings = { ...baseSettings, payOnDeliveryCash: true };
     expect(

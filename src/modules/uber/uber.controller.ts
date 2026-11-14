@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/infrastructure/guards/jwt-auth.guard';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { UberDirectService } from './uber-direct.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { isOrderPaid } from '../orders/domain/utils/order-paid';
 
 import { RequirePermissions } from '../auth/infrastructure/decorators/permissions.decorator';
 
@@ -149,7 +150,7 @@ export class UberController {
 
     // Se nenhum pedido foi selecionado manualmente, incluir apenas pedidos pagos (PIX ou Cartão online)
     if (!body.orderIds || body.orderIds.length === 0) {
-      orders = orders.filter((o) => o.paymentStatus === 'PAID' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('pix')));
+      orders = orders.filter((o) => isOrderPaid(o));
     }
 
     if (orders.length === 0) {

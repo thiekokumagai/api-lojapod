@@ -7,6 +7,8 @@ import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order, PaymentStatus } from '../entities/order.entity';
 import { EventsGateway } from '../../../events/events.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
+import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
+import { pixTerminalPaymentType } from '../utils/pix-terminal';
 
 @Injectable()
 export class RevertReceiveOrderUseCase {
@@ -14,6 +16,7 @@ export class RevertReceiveOrderUseCase {
     private readonly ordersRepository: IOrdersRepository,
     private readonly eventsGateway: EventsGateway,
     private readonly loyaltyService: LoyaltyService,
+    private readonly settingsRepository: ISettingsRepository,
   ) {}
 
   async execute(id: string): Promise<Order> {
@@ -30,6 +33,11 @@ export class RevertReceiveOrderUseCase {
     order.paymentDiscount = 0;
     order.installmentSurcharge = 0;
     order.cardFee = 0;
+
+    // Pix na maquininha: desfazer o recebimento não deixa o Pix `online` (seria tratado como já pago)
+    const storeSettings = await this.settingsRepository.get().catch(() => null);
+    order.paymentType =
+      pixTerminalPaymentType(order, storeSettings) ?? order.paymentType;
 
     const savedOrder = await this.ordersRepository.save(order);
     this.eventsGateway.notifyOrderUpdated(savedOrder);

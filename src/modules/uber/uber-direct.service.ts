@@ -15,6 +15,7 @@ export function normalizeUberPhone(phoneStr?: string | null): string {
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
+import { isOrderPaid } from '../orders/domain/utils/order-paid';
 
 export interface Coordinates {
   lat: number;
@@ -408,7 +409,7 @@ export class UberDirectService {
         const manifestItems = [{ name: storeAddr.storeName ? `Pedido ${storeAddr.storeName}` : 'Pedido', quantity: 1 }];
 
         // Lógica de Pagamento: PIX/Pago (Só ida) vs Dinheiro/Cartão (Cobrar e retornar à loja)
-        const isPaid = order.paymentStatus === 'PAID' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('pix'));
+        const isPaid = isOrderPaid(order);
         const totalFormatted = Number(order.totalOrder || order.totalReceived || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const methodLabel = order.paymentMethod || 'Não informado';
 
@@ -521,8 +522,7 @@ export class UberDirectService {
     }
 
     // 2. Verificar se o pedido é elegível: APENAS PEDIDOS PAGOS (PIX ou Cartão Pago)
-    const isPaid = triggeringOrder.paymentStatus === 'PAID' || 
-                   (triggeringOrder.paymentMethod && triggeringOrder.paymentMethod.toLowerCase().includes('pix'));
+    const isPaid = isOrderPaid(triggeringOrder);
 
     if (!isPaid) {
       this.logger.log(`[UberDirect Auto] Pedido #${triggeringOrder.orderNumber} não foi enviado para a Uber automaticamente pois o pagamento (${triggeringOrder.paymentMethod || 'não informado'}) é na entrega e exige retorno de maquininha/dinheiro à loja.`);
@@ -540,9 +540,7 @@ export class UberDirectService {
       include: { items: true },
     });
 
-    const pendingOrders = rawPendingOrders.filter((o) => {
-      return o.paymentStatus === 'PAID' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('pix'));
-    });
+    const pendingOrders = rawPendingOrders.filter((o) => isOrderPaid(o));
 
     // Se só tem 1 pedido (ou nenhum outro), despacha individualmente
     if (pendingOrders.length <= 1) {

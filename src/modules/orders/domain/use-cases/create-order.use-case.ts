@@ -9,6 +9,8 @@ import { PrintGateway } from '../../../print/print.gateway';
 import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
+import type { StoreSettings } from '../../../settings/domain/entities/store-settings.entity';
+import { pixTerminalPaymentType } from '../utils/pix-terminal';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 
@@ -41,8 +43,9 @@ export class CreateOrderUseCase {
 
       // Formas de pagamento que mantêm o preço promocional (configurável na loja; padrão: só Pix)
       let promoPaymentMethods: string[] = ['pix'];
+      let storeSettings: StoreSettings | null = null;
       try {
-        const storeSettings = await this.settingsRepository.get();
+        storeSettings = await this.settingsRepository.get();
         if (Array.isArray(storeSettings?.promoPaymentMethods)) {
           promoPaymentMethods = storeSettings.promoPaymentMethods;
         }
@@ -345,6 +348,9 @@ export class CreateOrderUseCase {
         couponId: couponId,
         status: data.status || undefined,
         paymentDate: data.paymentStatus === 'PAID' ? new Date() : undefined,
+        // Pix na maquininha: Pix não pago nunca fica `online` (seria tratado como já pago)
+        paymentType:
+          pixTerminalPaymentType(data, storeSettings) ?? data.paymentType,
       });
 
       // Recalcular o totalOrder para garantir a precisão no backend

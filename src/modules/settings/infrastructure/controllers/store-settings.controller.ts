@@ -19,8 +19,13 @@ export class StoreSettingsController {
     // Sanitizar credenciais sensíveis de gateways de pagamento para a vitrine pública
     const rawGateways = settings.paymentGateways as any;
     const publicGateways: any = {};
+    // Pix na maquininha: o cliente não recebe chave, titular nem copia e cola
+    const pixOnTerminal = rawGateways?.pixOnTerminal === true;
 
     if (rawGateways && typeof rawGateways === 'object') {
+      if (pixOnTerminal) {
+        publicGateways.pixOnTerminal = true;
+      }
       if (rawGateways.infinitepay) {
         publicGateways.infinitepay = {
           enabled: !!rawGateways.infinitepay.enabled,
@@ -43,6 +48,9 @@ export class StoreSettingsController {
 
     return {
       ...settings,
+      ...(pixOnTerminal
+        ? { pixKey: null, pixKeyType: null, pixHolder: null }
+        : {}),
       vendizapAuthSecret: undefined,
       paymentGateways: publicGateways,
     };

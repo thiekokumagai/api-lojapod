@@ -1,4 +1,5 @@
 import type { StoreSettings } from '../../../settings/domain/entities/store-settings.entity';
+import { isPixOnTerminal } from './pix-terminal';
 
 type CanonicalMethod =
   | 'pix'
@@ -74,6 +75,10 @@ export function getPaymentNotAllowedReason(
   let allowed: boolean;
   switch (method) {
     case 'pix':
+      // Pix na maquininha: o pedido é pago na entrega, nunca como Pix online
+      if (isOnline && isPixOnTerminal(settings)) {
+        return 'Esta loja recebe o Pix na maquininha, na entrega ou retirada. Atualize a página e escolha o Pix novamente.';
+      }
       allowed = !!settings.pixEnabled;
       break;
     case 'credit':
