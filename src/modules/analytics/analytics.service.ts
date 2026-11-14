@@ -9,14 +9,26 @@ export class AnalyticsService {
     private readonly tenantContextService: TenantContextService
   ) {}
 
+  /**
+   * Registra a sessão da loja atual. Devolve `null` (sem gravar nada) quando a loja não foi
+   * identificada ou quando o `sessionId` já pertence a outra loja: uma sessão nunca muda de loja.
+   */
   async trackSession(sessionId: string) {
     const now = new Date();
     const storeId = this.tenantContextService.getStoreId();
-    
+    if (!storeId) return null;
+
+    // findUnique não passa pelo filtro automático de loja, então enxerga o dono real da sessão
+    const owner = await this.prisma.storeSession.findUnique({
+      where: { sessionId },
+      select: { storeId: true },
+    });
+    if (owner?.storeId && owner.storeId !== storeId) return null;
+
     const session = await this.prisma.storeSession.upsert({
       where: { sessionId },
       create: { sessionId, startedAt: now, lastHeartbeatAt: now, storeId },
-      update: { lastHeartbeatAt: now, ...(storeId && { storeId }) }
+      update: { lastHeartbeatAt: now, storeId }
     });
 
     const diffSeconds = Math.floor((now.getTime() - session.startedAt.getTime()) / 1000);
@@ -32,7 +44,9 @@ export class AnalyticsService {
   }
 
   async trackCart(sessionId: string, cartItems: any[], totalAmount: number) {
-    await this.trackSession(sessionId);
+    // O rascunho é da loja dona da sessão: sessão de outra loja ou sem loja não grava nem apaga nada
+    const session = await this.trackSession(sessionId);
+    if (!session) return;
 
     if (!cartItems || cartItems.length === 0) {
       const existing = await this.prisma.cartDraft.findUnique({ where: { sessionId } });
