@@ -20,6 +20,7 @@ export const SCREEN_PERMISSIONS = [
 
   { key: 'orders', label: 'Pedidos', group: 'Vendas' },
   { key: 'loyalty', label: 'Cartão Fidelidade', group: 'Vendas' },
+  { key: 'abandoned_carts', label: 'Carrinhos abandonados', group: 'Vendas' },
   { key: 'delivery_map', label: 'Mapa de Entregas', group: 'Vendas' },
   { key: 'couriers', label: 'Motoboys', group: 'Vendas' },
   { key: 'customers', label: 'Clientes', group: 'Vendas' },

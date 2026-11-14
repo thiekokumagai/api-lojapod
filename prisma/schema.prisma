@@ -19,6 +19,7 @@ model Store {
   customDomain              String?                    @unique
   adminAuditLogs            AdminAuditLog[]
   billingPayments           BillingPayment[]
+  cartDrafts                CartDraft[]
   cashRegisters             CashRegister[]
   cashTransactions          CashTransaction[]
   categories                Category[]
@@ -681,15 +682,23 @@ model StoreSession {
 }
 
 model CartDraft {
-  id          String       @id @default(uuid())
-  sessionId   String       @unique
-  cartItems   Json
-  totalAmount Decimal      @db.Decimal(10, 2)
-  isAbandoned Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  session     StoreSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  id                String       @id @default(uuid())
+  sessionId         String       @unique
+  cartItems         Json
+  totalAmount       Decimal      @db.Decimal(10, 2)
+  isAbandoned       Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  storeId           String?
+  // Contato informado pelo cliente no checkout (lista "Carrinhos abandonados" do admin)
+  customerName      String?
+  customerPhone     String?
+  contactCapturedAt DateTime?
+  contactedAt       DateTime?
+  session           StoreSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  store             Store?       @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, updatedAt])
   @@map("cart_drafts")
 }
 

@@ -1,5 +1,6 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
+import { CartContactDto } from './dto/cart-contact.dto';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -20,6 +21,13 @@ export class AnalyticsController {
   ) {
     if (!sessionId) return { success: false };
     await this.analyticsService.trackCart(sessionId, cartItems, totalAmount || 0);
+    return { success: true };
+  }
+
+  /** Contato informado no checkout. A resposta é sempre a mesma, tenha gravado ou não. */
+  @Post('cart/contact')
+  async saveContact(@Body() dto: CartContactDto) {
+    await this.analyticsService.saveContact(dto.sessionId, dto.name, dto.phone);
     return { success: true };
   }
 }
