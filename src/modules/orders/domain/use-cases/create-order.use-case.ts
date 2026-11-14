@@ -607,7 +607,11 @@ export class CreateOrderUseCase {
               : `⚠️ Estoque Crítico: ${product.title}`;
             const alertBody = isOutOfStock
               ? 'O estoque deste produto acabou de zerar.'
-              : `Restam apenas ${totalStock} un (mínimo: ${minStock}). Cobertura estimada: ${product.coverageDays ?? 1} dias.`;
+              : `Restam apenas ${totalStock} un (mínimo: ${minStock}). ${
+                  product.coverageDays !== null && product.coverageDays < 999
+                    ? `Cobertura estimada: ${product.coverageDays} dias.`
+                    : 'Sem histórico de vendas recentes.'
+                }`;
 
             const admins = await this.usersRepository.findAll();
             const alertTokens: string[] = [];

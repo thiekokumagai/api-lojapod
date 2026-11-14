@@ -119,11 +119,11 @@ export class ComputeStockIntelligenceUseCase {
           let coverageDays: number | null = null;
           if (dailyRunRate > 0) {
             coverageDays = Math.round(totalStock / dailyRunRate);
-          } else if (totalStock > 0) {
-            coverageDays = 999;
-          } else {
+          } else if (totalStock === 0) {
             coverageDays = 0;
           }
+          // Sem vendas nos últimos 30 dias mas com estoque → cobertura desconhecida (null),
+          // não 999, para não exibir "999 dias" em notificações e ordenações.
 
           const lastSale = lastSaleDateMap.get(prod.id) || prod.createdAt;
           const daysWithoutSales = Math.max(
