@@ -147,8 +147,10 @@ export interface DiagnosisInput {
     total: number;
     byMethod: { method: string; amount: number }[];
   };
-  freight: { loss: number; ordersWithLoss: number; ordersChecked: number };
-  abandoned: { count: number; amount: number };
+  /** Opcional: só existe onde há custo de entrega registrado. */
+  freight?: { loss: number; ordersWithLoss: number; ordersChecked: number };
+  /** Opcional: só existe onde o carrinho guarda o contato do cliente. */
+  abandoned?: { count: number; amount: number };
   cancelled: { count: number; amount: number; validCount: number };
   stock: {
     stagnantCapital: number;
@@ -303,25 +305,26 @@ export function buildDiagnosisItems(input: DiagnosisInput): DiagnosisItem[] {
   });
 
   // 5. Frete cobrado menor que o pago
-  if (input.freight.ordersChecked > 0) {
-    const freightPct = pct(input.freight.loss, input.receitaItens);
+  const { freight } = input;
+  if (freight && freight.ordersChecked > 0) {
+    const freightPct = pct(freight.loss, input.receitaItens);
     items.push({
       id: 'frete',
       severity:
-        input.freight.loss <= 0
+        freight.loss <= 0
           ? 'ok'
           : freightPct >= T.freightCriticalPct
             ? 'critical'
             : 'warning',
       title:
-        input.freight.loss > 0
+        freight.loss > 0
           ? 'Frete cobrado menor que o frete pago'
           : 'Frete cobrado cobre o frete pago',
       detail:
-        input.freight.loss > 0
-          ? `${input.freight.ordersWithLoss} de ${input.freight.ordersChecked} entregas com custo registrado (Uber ou motoboy) saíram mais caras do que o frete cobrado do cliente. Valor = soma da diferença.`
-          : `${input.freight.ordersChecked} entregas com custo registrado, nenhuma no prejuízo.`,
-      amount: input.freight.loss > 0 ? round2(input.freight.loss) : null,
+        freight.loss > 0
+          ? `${freight.ordersWithLoss} de ${freight.ordersChecked} entregas com custo registrado (Uber ou motoboy) saíram mais caras do que o frete cobrado do cliente. Valor = soma da diferença.`
+          : `${freight.ordersChecked} entregas com custo registrado, nenhuma no prejuízo.`,
+      amount: freight.loss > 0 ? round2(freight.loss) : null,
       estimated: false,
       actionLabel: 'Rever taxa de entrega',
       actionUrl: '/configuracoes',
@@ -329,14 +332,15 @@ export function buildDiagnosisItems(input: DiagnosisInput): DiagnosisItem[] {
   }
 
   // 6. Carrinhos abandonados com contato
-  if (input.abandoned.count > 0) {
+  const { abandoned } = input;
+  if (abandoned && abandoned.count > 0) {
     items.push({
       id: 'carrinhos-abandonados',
       severity: 'warning',
-      title: `${input.abandoned.count} ${input.abandoned.count === 1 ? 'carrinho abandonado' : 'carrinhos abandonados'} com contato`,
+      title: `${abandoned.count} ${abandoned.count === 1 ? 'carrinho abandonado' : 'carrinhos abandonados'} com contato`,
       detail:
         'Clientes que deixaram o telefone e ainda não foram chamados. Valor = soma dos carrinhos (potencial, não é perda certa).',
-      amount: round2(input.abandoned.amount),
+      amount: round2(abandoned.amount),
       estimated: true,
       actionLabel: 'Chamar no WhatsApp',
       actionUrl: '/carrinhos-abandonados',
