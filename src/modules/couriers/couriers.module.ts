@@ -8,6 +8,8 @@ import { RegisterCourierFeeUseCase } from './domain/use-cases/register-courier-f
 import { PayCourierUseCase } from './domain/use-cases/pay-courier.use-case';
 import { GetCourierUseCase } from './domain/use-cases/get-courier.use-case';
 import { DeleteCourierTransactionUseCase } from './domain/use-cases/delete-courier-transaction.use-case';
+import { AdjustCourierFeeUseCase } from './domain/use-cases/adjust-courier-fee.use-case';
+import { GetCourierRoutesUseCase } from './domain/use-cases/get-courier-routes.use-case';
 
 @Module({
   imports: [PrismaModule],
@@ -20,6 +22,8 @@ import { DeleteCourierTransactionUseCase } from './domain/use-cases/delete-couri
     PayCourierUseCase,
     GetCourierUseCase,
     DeleteCourierTransactionUseCase,
+    AdjustCourierFeeUseCase,
+    GetCourierRoutesUseCase,
   ],
 })
 export class CouriersModule {}

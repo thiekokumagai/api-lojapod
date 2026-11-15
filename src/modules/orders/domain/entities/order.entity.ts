@@ -1,3 +1,5 @@
+import type { CourierImpact } from '../../../couriers/domain/utils/courier-fee';
+
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -103,6 +105,12 @@ export class Order {
     id: string;
     name: string;
   } | null;
+
+  /**
+   * Só na resposta de cancelar/reativar (não vai para o banco nem para o socket): como a taxa da rota
+   * do motoboy foi afetada, para o admin oferecer o ajuste.
+   */
+  courierImpact?: CourierImpact | null;
 
   loyaltyRedemption?: {
     id: string;

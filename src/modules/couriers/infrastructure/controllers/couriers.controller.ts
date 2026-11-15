@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, UseGuards, Param, Delete, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { CreateCourierUseCase } from '../../domain/use-cases/create-courier.use-case';
@@ -8,6 +9,8 @@ import { RegisterCourierFeeUseCase } from '../../domain/use-cases/register-couri
 import { PayCourierUseCase } from '../../domain/use-cases/pay-courier.use-case';
 import { GetCourierUseCase } from '../../domain/use-cases/get-courier.use-case';
 import { DeleteCourierTransactionUseCase } from '../../domain/use-cases/delete-courier-transaction.use-case';
+import { AdjustCourierFeeUseCase } from '../../domain/use-cases/adjust-courier-fee.use-case';
+import { GetCourierRoutesUseCase } from '../../domain/use-cases/get-courier-routes.use-case';
 
 import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
 
@@ -25,6 +28,8 @@ export class CouriersController {
     private readonly payCourierUseCase: PayCourierUseCase,
     private readonly getCourierUseCase: GetCourierUseCase,
     private readonly deleteCourierTransactionUseCase: DeleteCourierTransactionUseCase,
+    private readonly adjustCourierFeeUseCase: AdjustCourierFeeUseCase,
+    private readonly getCourierRoutesUseCase: GetCourierRoutesUseCase,
   ) {}
 
   @Get()
@@ -55,13 +60,38 @@ export class CouriersController {
     return this.payCourierUseCase.execute(data);
   }
 
+  // Precisa vir ANTES de `:id`, senão "routes" seria lido como id de motoboy.
+  @Get('routes')
+  async getRoutes(
+    @Query('ids') ids: string | undefined,
+    @Req() req: Request & { user?: { storeId?: string } },
+  ) {
+    return this.getCourierRoutesUseCase.execute(ids, req.user?.storeId);
+  }
+
   @Get(':id')
   async getCourier(@Param('id') id: string) {
     return this.getCourierUseCase.execute(id);
   }
 
+  @Patch('transactions/:id')
+  async adjustFee(
+    @Param('id') id: string,
+    @Body() body: { amount: number },
+    @Req() req: Request & { user?: { storeId?: string } },
+  ) {
+    return this.adjustCourierFeeUseCase.execute({
+      transactionId: id,
+      amount: body?.amount,
+      storeId: req.user?.storeId,
+    });
+  }
+
   @Delete('transactions/:id')
-  async deleteTransaction(@Param('id') id: string) {
-    return this.deleteCourierTransactionUseCase.execute(id);
+  async deleteTransaction(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: { storeId?: string } },
+  ) {
+    return this.deleteCourierTransactionUseCase.execute(id, req.user?.storeId);
   }
 }

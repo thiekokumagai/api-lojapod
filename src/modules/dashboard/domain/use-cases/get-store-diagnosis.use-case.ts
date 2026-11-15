@@ -72,7 +72,12 @@ export class GetStoreDiagnosisUseCase {
               select: {
                 type: true,
                 amount: true,
-                _count: { select: { orders: true } },
+                // Só pedidos não cancelados dividem o custo da rota
+                _count: {
+                  select: {
+                    orders: { where: { status: { not: 'CANCELLED' } } },
+                  },
+                },
               },
             },
           },

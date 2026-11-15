@@ -128,6 +128,23 @@ describe('GetStoreDiagnosisUseCase', () => {
     expect(r.itens.find((i) => i.id === 'frete')).toMatchObject({ amount: 8 });
   });
 
+  it('frete do motoboy: a taxa da rota é dividida só pelos pedidos não cancelados', async () => {
+    // Rota de 2 pedidos, taxa 20, um deles cancelado: a contagem filtrada devolve 1 => 20 para o pedido que ficou.
+    const { uc, prisma } = build({
+      orders: [
+        { couponDiscount: '0', paymentDiscount: '0', receiptDiscount: '0', cardFee: '0', paymentMethod: 'PIX', freight: '15', couponFreightDiscount: '0', uberDeliveryFee: null, coupon: null, courierTransaction: { type: 'FEE', amount: '20', _count: { orders: 1 } } },
+      ],
+    });
+    const r = await uc.execute({ storeId: 's1' });
+
+    // a consulta pede a contagem sem os cancelados (é isso que o banco aplica)
+    const countSelect =
+      prisma.order.findMany.mock.calls[0][0].select.courierTransaction.select._count.select;
+    expect(countSelect.orders).toEqual({ where: { status: { not: 'CANCELLED' } } });
+    // custo 20 sobre frete cobrado 15 => perda 5 (dividindo por 2 daria 10 e nenhuma perda)
+    expect(r.itens.find((i) => i.id === 'frete')).toMatchObject({ amount: 5 });
+  });
+
   it('carrinhos abandonados: só os com contato, ainda não chamados e não convertidos', async () => {
     const { uc, prisma } = build({ carts: [{ totalAmount: '100' }, { totalAmount: '50.5' }] });
     const r = await uc.execute({ storeId: 's1' });

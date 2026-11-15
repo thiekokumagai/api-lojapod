@@ -2,7 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
+import { PrismaService } from '../../../../../prisma/prisma.service';
+import {
+  buildCancelImpact,
+  buildReactivationImpact,
+  loadOrderRoute,
+  OrderRouteInfo,
+} from '../../../couriers/domain/utils/courier-fee';
 import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
@@ -20,9 +28,46 @@ export class UpdateOrderStatusUseCase {
     private readonly eventsGateway: EventsGateway,
     private readonly loyaltyService: LoyaltyService,
     private readonly uberDirectService: UberDirectService,
+    // Opcional só para os testes que montam o use case à mão; no app o Nest sempre injeta.
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
+  /**
+   * Muda status/pagamento. Quando o pedido está numa rota de motoboy e é cancelado ou reativado,
+   * a resposta traz `courierImpact` para o admin ajustar a taxa da rota (nada é alterado sozinho).
+   */
   async execute(
+    id: string,
+    payload: { status?: OrderStatus; paymentStatus?: PaymentStatus },
+  ): Promise<Order> {
+    if (!this.prisma || !payload.status) {
+      return this.changeStatus(id, payload);
+    }
+
+    // Rota lida ANTES: a parte do pedido na taxa depende de quantos pedidos ativos a rota tinha.
+    let routeBefore: OrderRouteInfo | null = null;
+    try {
+      routeBefore = await loadOrderRoute(this.prisma, id);
+    } catch (routeErr) {
+      console.error('[UpdateOrderStatus] Erro ao ler a rota do motoboy do pedido:', routeErr);
+    }
+
+    const result = await this.changeStatus(id, payload);
+
+    try {
+      const wasCancelled = routeBefore?.orderStatus === OrderStatus.CANCELLED;
+      if (payload.status === OrderStatus.CANCELLED && !wasCancelled) {
+        result.courierImpact = buildCancelImpact(routeBefore);
+      } else if (wasCancelled && payload.status !== OrderStatus.CANCELLED && routeBefore?.tx) {
+        result.courierImpact = buildReactivationImpact(await loadOrderRoute(this.prisma, id));
+      }
+    } catch (impactErr) {
+      console.error('[UpdateOrderStatus] Erro ao calcular o impacto na taxa do motoboy:', impactErr);
+    }
+    return result;
+  }
+
+  private async changeStatus(
     id: string,
     payload: { status?: OrderStatus; paymentStatus?: PaymentStatus },
   ): Promise<Order> {
