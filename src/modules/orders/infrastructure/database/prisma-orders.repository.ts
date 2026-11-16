@@ -312,34 +312,66 @@ export class PrismaOrdersRepository implements IOrdersRepository {
     return records.map((record) => this.mapToDomain(record));
   }
 
-  async findById(id: string): Promise<Order | null> {
-    const record = await this.prisma.order.findUnique({
-      where: { id },
-      include: {
-        coupon: true,
-        loyaltyRedemption: true,
-        courierTransaction: {
+  async findById(id: string, storeId?: string): Promise<Order | null> {
+    const where: any = { id };
+    if (storeId) {
+      where.storeId = storeId;
+    }
+    const record = storeId
+      ? await this.prisma.order.findFirst({
+          where,
           include: {
-            courier: true,
-          }
-        },
-        items: {
-          include: {
-            combo: {
+            coupon: true,
+            loyaltyRedemption: true,
+            courierTransaction: {
               include: {
-                category: true,
-              },
+                courier: true,
+              }
             },
-            product: {
+            items: {
               include: {
-                images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
-                category: true,
+                combo: {
+                  include: {
+                    category: true,
+                  },
+                },
+                product: {
+                  include: {
+                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                    category: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        })
+      : await this.prisma.order.findUnique({
+          where: { id },
+          include: {
+            coupon: true,
+            loyaltyRedemption: true,
+            courierTransaction: {
+              include: {
+                courier: true,
+              }
+            },
+            items: {
+              include: {
+                combo: {
+                  include: {
+                    category: true,
+                  },
+                },
+                product: {
+                  include: {
+                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        });
 
     if (!record) return null;
     return this.mapToDomain(record);

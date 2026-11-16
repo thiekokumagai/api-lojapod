@@ -23,7 +23,7 @@ export interface PaginatedOrders {
 
 export abstract class IOrdersRepository {
   abstract findMany(filters: OrderFilters): Promise<PaginatedOrders>;
-  abstract findById(id: string): Promise<Order | null>;
+  abstract findById(id: string, storeId?: string): Promise<Order | null>;
   abstract findPaidOrdersByPaymentDateRange(
     startDate: Date,
     endDate: Date,

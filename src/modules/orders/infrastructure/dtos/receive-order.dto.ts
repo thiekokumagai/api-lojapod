@@ -1,9 +1,32 @@
-import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, Max, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export const ALLOWED_PAYMENT_METHODS = [
+  'pix',
+  'credit',
+  'debit',
+  'cash',
+  'meal_voucher',
+  'food_voucher',
+  'PIX',
+  'Cartão de Crédito',
+  'credito',
+  'Cartão de Débito',
+  'debito',
+  'Dinheiro',
+  'dinheiro',
+  'Vale Refeição',
+  'vale refeição',
+  'vale_refeicao',
+  'Vale Alimentação',
+  'vale alimentação',
+  'vale_alimentacao',
+];
 
 export class ReceiveOrderDto {
   @ApiPropertyOptional({ example: 'PIX' })
   @IsString()
+  @IsIn(ALLOWED_PAYMENT_METHODS, { message: 'Forma de pagamento inválida' })
   @IsOptional()
   paymentMethod?: string;
 
@@ -55,6 +78,8 @@ export class ReceiveOrderDto {
 
   @ApiPropertyOptional({ example: 1 })
   @IsNumber()
+  @Min(1, { message: 'Número de parcelas deve ser no mínimo 1' })
+  @Max(12, { message: 'Número de parcelas deve ser no máximo 12' })
   @IsOptional()
   installments?: number;
 

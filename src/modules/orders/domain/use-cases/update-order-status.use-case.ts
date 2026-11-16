@@ -39,9 +39,25 @@ export class UpdateOrderStatusUseCase {
   async execute(
     id: string,
     payload: { status?: OrderStatus; paymentStatus?: PaymentStatus },
+    currentUser?: { storeId?: string | null; role?: string } | null,
   ): Promise<Order> {
+    const storeFilter =
+      currentUser && currentUser.role !== 'SUPER_ADMIN'
+        ? currentUser.storeId ?? '__NO_STORE__'
+        : undefined;
+
+    const existingOrder = await this.ordersRepository.findById(id, storeFilter);
+    if (
+      !existingOrder ||
+      (currentUser &&
+        currentUser.role !== 'SUPER_ADMIN' &&
+        (!currentUser.storeId || existingOrder.storeId !== currentUser.storeId))
+    ) {
+      throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
     if (!this.prisma || !payload.status) {
-      return this.changeStatus(id, payload);
+      return this.changeStatus(id, payload, existingOrder);
     }
 
     // Rota lida ANTES: a parte do pedido na taxa depende de quantos pedidos ativos a rota tinha.
@@ -52,7 +68,7 @@ export class UpdateOrderStatusUseCase {
       console.error('[UpdateOrderStatus] Erro ao ler a rota do motoboy do pedido:', routeErr);
     }
 
-    const result = await this.changeStatus(id, payload);
+    const result = await this.changeStatus(id, payload, existingOrder);
 
     try {
       const wasCancelled = routeBefore?.orderStatus === OrderStatus.CANCELLED;
@@ -70,8 +86,9 @@ export class UpdateOrderStatusUseCase {
   private async changeStatus(
     id: string,
     payload: { status?: OrderStatus; paymentStatus?: PaymentStatus },
+    existingOrder?: Order,
   ): Promise<Order> {
-    const order = await this.ordersRepository.findById(id);
+    const order = existingOrder || (await this.ordersRepository.findById(id));
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }

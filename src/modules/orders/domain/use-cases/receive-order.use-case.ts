@@ -2,12 +2,14 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { EventsGateway } from '../../../events/events.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
+import { ALLOWED_PAYMENT_METHODS } from '../../infrastructure/dtos/receive-order.dto';
 
 @Injectable()
 export class ReceiveOrderUseCase {
@@ -33,14 +35,90 @@ export class ReceiveOrderUseCase {
       totalReceived: number;
       installments?: number;
     },
+    currentUser?: { storeId?: string | null; role?: string } | null,
   ): Promise<Order> {
-    const order = await this.ordersRepository.findById(id);
-    if (!order) {
+    const storeFilter =
+      currentUser && currentUser.role !== 'SUPER_ADMIN'
+        ? currentUser.storeId ?? '__NO_STORE__'
+        : undefined;
+
+    const order = await this.ordersRepository.findById(id, storeFilter);
+    if (
+      !order ||
+      (currentUser &&
+        currentUser.role !== 'SUPER_ADMIN' &&
+        (!currentUser.storeId || order.storeId !== currentUser.storeId))
+    ) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
     if (order.status === OrderStatus.CANCELLED) {
       throw new BadRequestException('Cannot receive a cancelled order');
+    }
+
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      throw new ConflictException('Pedido já recebido');
+    }
+
+    if (payload.installments !== undefined) {
+      if (payload.installments < 1 || payload.installments > 12) {
+        throw new BadRequestException('Número de parcelas deve ser entre 1 e 12');
+      }
+    }
+
+    if (payload.paymentMethod && !ALLOWED_PAYMENT_METHODS.includes(payload.paymentMethod)) {
+      throw new BadRequestException(`Forma de pagamento inválida: ${payload.paymentMethod}`);
+    }
+
+    const itemsTotal = Number(order.itemsTotal) || 0;
+    const freight = Number(order.freight) || 0;
+    const maxDiscount = Math.round((itemsTotal + freight) * 100);
+
+    const pDiscount =
+      Number(payload.paymentDiscount !== undefined ? payload.paymentDiscount : order.paymentDiscount) || 0;
+    const rDiscount =
+      Number(payload.receiptDiscount !== undefined ? payload.receiptDiscount : order.receiptDiscount) || 0;
+    const cDiscount =
+      Number(payload.couponDiscount !== undefined ? payload.couponDiscount : order.couponDiscount) || 0;
+    const cFDiscount =
+      Number(
+        payload.couponFreightDiscount !== undefined
+          ? payload.couponFreightDiscount
+          : order.couponFreightDiscount,
+      ) || 0;
+
+    const totalDiscounts = Math.round((pDiscount + rDiscount + cDiscount + cFDiscount) * 100);
+    if (totalDiscounts > maxDiscount) {
+      throw new BadRequestException('Descontos não podem ultrapassar o valor dos itens mais frete');
+    }
+
+    const iSurcharge =
+      Number(
+        payload.installmentSurcharge !== undefined
+          ? payload.installmentSurcharge
+          : order.installmentSurcharge,
+      ) || 0;
+    const rSurcharge =
+      Number(payload.receiptSurcharge !== undefined ? payload.receiptSurcharge : order.receiptSurcharge) || 0;
+
+    const calculatedTotalOrder =
+      Math.round(
+        (itemsTotal +
+          freight +
+          iSurcharge +
+          rSurcharge -
+          pDiscount -
+          rDiscount -
+          cDiscount -
+          cFDiscount) *
+          100,
+      ) / 100;
+
+    const receivedCents = Math.round(Number(payload.totalReceived) * 100);
+    const calculatedCents = Math.round(calculatedTotalOrder * 100);
+
+    if (receivedCents < calculatedCents) {
+      throw new BadRequestException('Valor recebido não pode ser menor que o total calculado do pedido');
     }
 
     order.paymentMethod = payload.paymentMethod || order.paymentMethod;
@@ -63,28 +141,7 @@ export class ReceiveOrderUseCase {
       order.receiptSurcharge = payload.receiptSurcharge;
 
     order.totalReceived = payload.totalReceived;
-
-    const itemsTotal = Number(order.itemsTotal) || 0;
-    const freight = Number(order.freight) || 0;
-    const pDiscount = Number(order.paymentDiscount) || 0;
-    const rDiscount = Number(order.receiptDiscount) || 0;
-    const cDiscount = Number(order.couponDiscount) || 0;
-    const cFDiscount = Number(order.couponFreightDiscount) || 0;
-    const iSurcharge = Number(order.installmentSurcharge) || 0;
-    const rSurcharge = Number(order.receiptSurcharge) || 0;
-
-    order.totalOrder =
-      Math.round(
-        (itemsTotal +
-          freight +
-          iSurcharge +
-          rSurcharge -
-          pDiscount -
-          rDiscount -
-          cDiscount -
-          cFDiscount) *
-          100,
-      ) / 100;
+    order.totalOrder = calculatedTotalOrder;
 
     order.paymentStatus = PaymentStatus.PAID;
     order.paymentDate = new Date();
