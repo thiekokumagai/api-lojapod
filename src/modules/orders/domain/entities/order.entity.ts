@@ -1,5 +1,9 @@
 import type { CourierImpact } from '../../../couriers/domain/utils/courier-fee';
 
+// Mensagem mostrada ao admin quando tenta cancelar um pedido já entregue.
+export const CANNOT_CANCEL_COMPLETED_ORDER_MESSAGE =
+  'Este pedido já foi entregue e não pode ser cancelado.';
+
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -127,7 +131,7 @@ export class Order {
 
   cancel(): void {
     if (this.status === OrderStatus.COMPLETED) {
-      throw new Error('Cannot cancel a completed order');
+      throw new Error(CANNOT_CANCEL_COMPLETED_ORDER_MESSAGE);
     }
     this.status = OrderStatus.CANCELLED;
   }
