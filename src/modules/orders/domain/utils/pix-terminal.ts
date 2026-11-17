@@ -17,8 +17,8 @@ export function isPixOnTerminal(
 
 /**
  * Com "Pix na maquininha" ligado, Pix ainda não pago é pagamento na entrega:
- * nunca pode ficar `online` + PENDING, senão `isOrderPaid()` o trata como pago
- * (Uber "só ida", mapa sem cobrança). Devolve `'entrega'` quando o tipo deve ser
+ * nunca pode ficar `online` + PENDING (seria tratado como Pix pago online: QR/gateway, tela de
+ * pagamento, avisos). `isOrderPaid()` já olha só `paymentStatus`. Devolve `'entrega'` quando o tipo deve ser
  * forçado e `undefined` quando nada muda (flag desligada, outro método ou pedido PAID).
  */
 export function pixTerminalPaymentType(

@@ -10,6 +10,13 @@ import { EventsGateway } from '../../../events/events.gateway';
 import { PrintGateway } from '../../../print/print.gateway';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 import { PushNotificationService } from '../../../../shared/services/push-notification.service';
+import { sameAmount } from '../utils/order-amount';
+
+/** Provedores que notificam por webhook sem assinatura e por isso são sempre reconsultados. */
+const WEBHOOK_PROVIDERS = ['infinitepay'];
+
+const asNonEmptyString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
 @Injectable()
 export class PaymentsService {
@@ -109,12 +116,6 @@ export class PaymentsService {
     ) {
       selectedProvider = 'INFINITEPAY';
       credentials = gateways.infinitepay;
-    } else if (
-      gateways.mercadopago?.enabled &&
-      gateways.mercadopago?.acceptCreditCard
-    ) {
-      selectedProvider = 'MERCADOPAGO';
-      credentials = gateways.mercadopago;
     } else if (gateways.asaas?.enabled && gateways.asaas?.acceptCreditCard) {
       selectedProvider = 'ASAAS';
       credentials = gateways.asaas;
@@ -216,95 +217,67 @@ export class PaymentsService {
   }
 
   /**
-   * Processa notificação recebida de webhook de pagamento
+   * Webhook de pagamento (hoje só a InfinitePay usa este caminho; o Mercado Pago tem endpoint próprio com assinatura).
+   *
+   * O corpo da notificação NÃO é confiável: não há assinatura. Por isso ele só serve para achar o pedido
+   * e as dicas (`transaction_nsu`, `invoice_slug`). Quem decide se foi pago é a própria InfinitePay, consultada
+   * de novo com as credenciais da loja (`payment_check`), e o valor confere com o do pedido.
+   *
+   * Como a InfinitePay notifica: o link de pagamento é criado com `webhook_url` contendo `storeId` e `orderId`
+   * (ver `createOnlineCheckout`). O pedido é buscado por id + loja, nunca por número solto.
    */
   async handleWebhook(provider: string, payload: any, query: any) {
-    this.logger.log(`Webhook recebido para provedor ${provider}:`, {
-      payload,
-      query,
-    });
-
-    const orderId =
-      query?.orderId || payload?.order_nsu_id || payload?.metadata?.orderId;
-    const orderNumber = query?.orderNumber || payload?.order_nsu;
-
-    let order: any = null;
-    if (orderId) {
-      order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    } else if (orderNumber) {
-      order = await this.prisma.order.findFirst({
-        where: { orderNumber: Number(orderNumber) },
-      });
+    const normalizedProvider = (provider || '').toLowerCase();
+    if (normalizedProvider === 'mercadopago') {
+      throw new BadRequestException(
+        'Webhook do Mercado Pago deve usar o endpoint validado.',
+      );
     }
+    if (!WEBHOOK_PROVIDERS.includes(normalizedProvider)) {
+      throw new NotFoundException('Provedor de webhook não suportado.');
+    }
+
+    const storeId = typeof query?.storeId === 'string' ? query.storeId : '';
+    const orderId = typeof query?.orderId === 'string' ? query.orderId : '';
+    // Plano B se a InfinitePay não devolver o orderId: número do pedido, mas sempre preso à loja
+    const orderNumber = Number(query?.orderNumber ?? payload?.order_nsu);
+
+    if (!storeId || (!orderId && !Number.isInteger(orderNumber))) {
+      this.logger.warn(`Webhook ${provider} sem loja ou pedido identificáveis. Ignorado.`);
+      return { success: false, message: 'Notificação incompleta' };
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: orderId ? { id: orderId, storeId } : { orderNumber, storeId },
+    });
 
     if (!order) {
       this.logger.warn(`Pedido não encontrado para webhook ${provider}`);
       return { success: false, message: 'Pedido não encontrado' };
     }
 
-    // Se já estiver pago, ignora para idempotência (mas atualiza parcelas se vieram na notificação)
     if (order.paymentStatus === 'PAID') {
-      const incomingInstallments =
-        payload?.installments ||
-        payload?.data?.installments ||
-        payload?.metadata?.installments;
-      if (
-        incomingInstallments &&
-        Number(incomingInstallments) > 0 &&
-        order.installments !== Number(incomingInstallments)
-      ) {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: { installments: Number(incomingInstallments) },
-        });
-      }
       return { success: true, message: 'Pedido já marcado como pago' };
     }
 
-    // Verificar se o payload indica pagamento aprovado
-    const isPaid =
-      payload?.paid === true ||
-      payload?.status === 'paid' ||
-      payload?.status === 'approved' ||
-      payload?.status === 'succeeded' ||
-      payload?.status === 'captured' ||
-      payload?.event === 'paid' ||
-      payload?.event === 'payment.paid' ||
-      payload?.event === 'charge.paid' ||
-      payload?.event === 'transaction.paid' ||
-      payload?.data?.status === 'paid' ||
-      payload?.data?.status === 'approved';
-
-    if (isPaid) {
-      const incomingInstallments =
-        payload?.installments ||
-        payload?.data?.installments ||
-        payload?.metadata?.installments;
-      const transactionId =
-        payload?.transaction_nsu || payload?.id || payload?.invoice_slug;
-
-      const updateData: any = {
-        paymentStatus: 'PAID',
-        paymentDate: new Date(),
-      };
-
-      if (incomingInstallments && Number(incomingInstallments) > 0) {
-        updateData.installments = Number(incomingInstallments);
-      }
-
-      if (transactionId && !order.gatewayTransactionId) {
-        updateData.gatewayTransactionId = String(transactionId);
-      }
-
-      await this.markPaidAndAnnounce(
-        order.id,
-        updateData,
-        `Webhook ${provider}`,
+    // Pedido que não escolheu este provedor não é pago por ele
+    if (order.onlineGateway && order.onlineGateway.toLowerCase() !== normalizedProvider) {
+      this.logger.warn(
+        `Webhook ${provider} para o pedido ${order.id}, que usa ${order.onlineGateway}. Ignorado.`,
       );
-
-      return { success: true, orderId: order.id, status: 'PAID' };
+      return { success: false, message: 'Provedor diferente do pedido' };
     }
 
+    const confirmed = await this.confirmWithProvider(order, {
+      provider: normalizedProvider.toUpperCase(),
+      transactionNsu: asNonEmptyString(payload?.transaction_nsu),
+      slug: asNonEmptyString(payload?.invoice_slug),
+      source: `Webhook ${provider}`,
+    });
+
+    if (confirmed) {
+      return { success: true, orderId: order.id, status: 'PAID' };
+    }
     return {
       success: true,
       message: 'Evento processado sem alteração de status',
@@ -327,7 +300,8 @@ export class PaymentsService {
       },
     });
 
-    if (!order) {
+    // Pedido de outra loja responde como inexistente
+    if (!order || (storeId && order.storeId && order.storeId !== storeId)) {
       throw new NotFoundException('Pedido não encontrado.');
     }
 
@@ -344,51 +318,19 @@ export class PaymentsService {
       return { paid: false, paymentStatus: order.paymentStatus, order };
     }
 
-    const settings = await this.prisma.storeSettings.findFirst({
-      where: { storeId },
-    });
-
-    const gateways = (settings?.paymentGateways as any) || {};
-    const credentials = gateways[order.onlineGateway.toLowerCase()];
-
-    if (!credentials) {
-      return { paid: false, paymentStatus: order.paymentStatus, order };
-    }
-
-    const gateway = this.gatewayFactory.getGateway(order.onlineGateway);
-    const result = await gateway.checkPayment({
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      transactionNsu: transactionNsu || order.gatewayTransactionId || undefined,
+    const confirmed = await this.confirmWithProvider(order, {
+      provider: order.onlineGateway,
+      transactionNsu,
       slug,
-      credentials,
+      source: 'verificação ativa',
     });
 
-    if (result.paid) {
-      const updateData: any = {
-        paymentStatus: 'PAID',
-        paymentDate: new Date(),
-      };
-
-      if (result.installments && Number(result.installments) > 0) {
-        updateData.installments = Number(result.installments);
-      }
-
-      if (result.transactionId && !order.gatewayTransactionId) {
-        updateData.gatewayTransactionId = String(result.transactionId);
-      }
-
-      const updatedOrder = await this.markPaidAndAnnounce(
-        order.id,
-        updateData,
-        'verificação ativa',
-      );
-
+    if (confirmed) {
       return {
         paid: true,
-        status: updatedOrder.status,
-        paymentStatus: updatedOrder.paymentStatus,
-        order: updatedOrder,
+        status: confirmed.status,
+        paymentStatus: confirmed.paymentStatus,
+        order: confirmed,
       };
     }
 
@@ -401,11 +343,76 @@ export class PaymentsService {
   }
 
   /**
+   * Pergunta ao provedor se o pedido foi pago (com as credenciais da LOJA DO PEDIDO) e confere o valor.
+   * Só marca como pago se o provedor confirmar. Devolve o pedido atualizado, ou `null` se não confirmou.
+   */
+  private async confirmWithProvider(
+    order: {
+      id: string;
+      orderNumber: number;
+      storeId: string | null;
+      totalOrder: unknown;
+      gatewayTransactionId: string | null;
+    },
+    hints: {
+      provider: string;
+      transactionNsu?: string;
+      slug?: string;
+      source: string;
+    },
+  ) {
+    const settings = await this.prisma.storeSettings.findFirst({
+      where: { storeId: order.storeId },
+    });
+    const gateways = (settings?.paymentGateways as any) || {};
+    const credentials = gateways[hints.provider.toLowerCase()];
+    if (!credentials) return null;
+
+    const gateway = this.gatewayFactory.getGateway(hints.provider);
+    const result = await gateway.checkPayment({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      transactionNsu:
+        hints.transactionNsu || order.gatewayTransactionId || undefined,
+      slug: hints.slug,
+      credentials,
+      expectedAmount: Number(order.totalOrder),
+    });
+
+    if (!result.paid) return null;
+
+    // `amount` é o valor do pedido (sem juros de parcelamento); `paidAmount` pode ser maior. Se o provedor
+    // informou o valor e ele não bate com o pedido, não marca como pago.
+    if (
+      result.amount !== undefined &&
+      !sameAmount(result.amount, order.totalOrder)
+    ) {
+      this.logger.error(
+        `Provedor ${hints.provider} confirmou pagamento do pedido #${order.orderNumber} com valor ${result.amount}, mas o pedido vale ${Number(order.totalOrder)}. NÃO marcado como pago; confira no provedor.`,
+      );
+      return null;
+    }
+
+    const updateData: any = {
+      paymentStatus: 'PAID',
+      paymentDate: new Date(),
+    };
+    if (result.installments && Number(result.installments) > 0) {
+      updateData.installments = Number(result.installments);
+    }
+    if (result.transactionId && !order.gatewayTransactionId) {
+      updateData.gatewayTransactionId = String(result.transactionId);
+    }
+
+    return this.markPaidAndAnnounce(order.id, updateData, hints.source);
+  }
+
+  /**
    * Marca o pedido como pago e avisa a loja (atualização no painel, push e fidelidade).
    * O webhook e a verificação ativa podem chegar ao mesmo tempo: a atualização condicional
    * (paymentStatus = PENDING) garante que só um deles anuncia, então nada sai duplicado.
    */
-  private async markPaidAndAnnounce(
+  async markPaidAndAnnounce(
     orderId: string,
     updateData: any,
     source: string,

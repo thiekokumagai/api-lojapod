@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, Optional } from '@nestjs/common';
 import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order } from '../entities/order.entity';
 import { ValidateCouponUseCase } from '../../../coupons/domain/use-cases/validate-coupon.use-case';
@@ -13,6 +13,17 @@ import type { StoreSettings } from '../../../settings/domain/entities/store-sett
 import { pixTerminalPaymentType } from '../utils/pix-terminal';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
+import { PublicFreightService } from '../services/public-freight.service';
+import {
+  TOTAL_TOLERANCE,
+  assertPublicOrderTotals,
+  loyaltyDiscountCap,
+  orderBumpAllowedPrices,
+  pixDiscountPercent,
+  productAllowedPrices,
+  round2,
+  unitPriceMatches,
+} from '../utils/public-order-rules';
 
 @Injectable()
 export class CreateOrderUseCase {
@@ -29,13 +40,21 @@ export class CreateOrderUseCase {
     private readonly settingsRepository: ISettingsRepository,
     private readonly prisma: PrismaService,
     private readonly loyaltyService: LoyaltyService,
+    // Só o pedido da loja pública (`publicOrder`) usa; opcional para os fluxos do painel e para os testes que não precisam de frete
+    @Optional() private readonly publicFreight?: PublicFreightService,
   ) {}
 
+  /**
+   * `publicOrder: true` = pedido feito pela loja virtual (sem login). Nesse modo o servidor confere os preços
+   * com o catálogo e limita descontos e total (ver `public-order-rules.ts`). O painel admin não usa esse modo.
+   */
   async execute(
     data: Partial<Order> & { couponTitle?: string, showProductPrices?: boolean },
+    options: { publicOrder?: boolean } = {},
   ): Promise<Order> {
     try {
       let couponId: string | undefined = undefined;
+      let freeShippingByCoupon = false;
       let couponDiscountValue = Number(data.couponDiscount) || 0;
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
@@ -57,6 +76,14 @@ export class CreateOrderUseCase {
       // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
+          if (options.publicOrder) {
+            if (!item.isCombo && !item.comboId && !item.productId) {
+              throw new BadRequestException('Item do pedido inválido.');
+            }
+            if (!Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1) {
+              throw new BadRequestException('Quantidade inválida em um dos itens.');
+            }
+          }
           if (item.isCombo || item.comboId) {
             const comboId = item.comboId || item.productId;
             if (!comboId) {
@@ -256,6 +283,22 @@ export class CreateOrderUseCase {
               );
             }
 
+            // Pedido da loja: o preço do item tem que ser um preço que o catálogo pratica (regular, promocional ou da oferta "Peça também")
+            if (options.publicOrder) {
+              let allowedPrices = productAllowedPrices(prod);
+              if (item.isOrderBump && item.orderBumpId) {
+                const bump = await this.prisma.orderBump.findUnique({ where: { id: item.orderBumpId } });
+                if (bump && bump.suggestedProductId === prod.id) {
+                  allowedPrices = orderBumpAllowedPrices(prod, bump);
+                }
+              }
+              if (!unitPriceMatches(item.price, allowedPrices)) {
+                throw new BadRequestException(
+                  `O preço de "${prod.title}" mudou. Atualize o carrinho e tente de novo.`,
+                );
+              }
+            }
+
             let resolvedPi: any = null;
 
             if (item.productItemId) {
@@ -299,6 +342,23 @@ export class CreateOrderUseCase {
         }
       }
 
+      // Pedido da loja: o total dos itens é recalculado aqui (preços já conferidos); o do cliente só é aceito se bater
+      let publicItemsSum = 0;
+      // Frete que o navegador mandou, antes de qualquer ajuste do servidor (o frete grátis por valor mínimo zera `data.freight` logo abaixo)
+      const publicClientFreight = Number(data.freight) || 0;
+      if (options.publicOrder) {
+        publicItemsSum = round2(
+          (data.items || []).reduce(
+            (acc: number, item: any) => acc + round2((Number(item.price) || 0) * (Number(item.quantity) || 1)),
+            0,
+          ),
+        );
+        if (Math.abs((Number(data.itemsTotal) || 0) - publicItemsSum) > TOTAL_TOLERANCE) {
+          throw new BadRequestException('O preço de algum item mudou. Atualize o carrinho e tente de novo.');
+        }
+        data.itemsTotal = publicItemsSum;
+      }
+
       // Se a loja tem regra de isenção de taxa (frete grátis) a partir de um valor
       try {
         const settings = await this.settingsRepository.get();
@@ -334,10 +394,26 @@ export class CreateOrderUseCase {
 
         couponId = coupon.id;
         if (coupon.type === 'FREE_SHIPPING') {
+          freeShippingByCoupon = true;
           couponFreightDiscountValue = Number(data.freight) > 0 ? Number(data.freight) : 0;
         } else {
           couponDiscountValue = discountAmount;
         }
+      }
+
+      // Pedido da loja: o frete é o que o SERVIDOR calcula (mesma regra do navegador); o enviado só passa se bater
+      if (options.publicOrder) {
+        if (!this.publicFreight || !storeSettings) {
+          throw new BadRequestException('Não foi possível conferir o frete agora. Tente novamente.');
+        }
+        const verified = await this.publicFreight.resolve({
+          settings: storeSettings,
+          order: data as any,
+          itemsTotal: publicItemsSum,
+          freeShippingByCoupon,
+          clientFreight: publicClientFreight,
+        });
+        data.freight = verified.freight;
       }
 
       const order = new Order({
@@ -377,7 +453,36 @@ export class CreateOrderUseCase {
             100,
         ) / 100;
         
-      order.totalOrder = data.totalOrder !== undefined ? data.totalOrder : calculatedTotal;
+      if (options.publicOrder) {
+        // O total gravado (e cobrado nos gateways) é o do servidor, nunca o enviado pelo navegador
+        const loyaltyCap = await this.publicLoyaltyCap(
+          storeId,
+          order.customerPhone,
+          (data as any).redeemedReward?.rewardType,
+          publicItemsSum,
+          Number(order.receiptDiscount) || 0,
+        );
+        const verified = assertPublicOrderTotals({
+          itemsSum: publicItemsSum,
+          clientItemsTotal: publicItemsSum,
+          clientTotal: data.totalOrder,
+          freight: Number(order.freight) || 0,
+          installmentSurcharge: Number(order.installmentSurcharge) || 0,
+          receiptSurcharge: Number(order.receiptSurcharge) || 0,
+          paymentDiscount: Number(order.paymentDiscount) || 0,
+          receiptDiscount: Number(order.receiptDiscount) || 0,
+          couponDiscount: couponDiscountValue,
+          couponFreightDiscount: couponFreightDiscountValue,
+          paymentIsPix: orderPaymentMethod.includes('pix'),
+          pixDiscountPercent: pixDiscountPercent(storeSettings?.paymentRules),
+          loyaltyCap,
+        });
+        order.itemsTotal = verified.itemsTotal;
+        order.totalOrder = verified.totalOrder;
+        order.totalReceived = verified.totalOrder;
+      } else {
+        order.totalOrder = data.totalOrder !== undefined ? data.totalOrder : calculatedTotal;
+      }
       const savedOrder =
         await this.ordersRepository.saveWithStockDecrement(order);
 
@@ -777,7 +882,27 @@ export class CreateOrderUseCase {
     }
   }
 
-  public async isCustomerBlocked(
+  /** Teto do desconto de fidelidade para o pedido da loja (0 se não houver benefício real que o justifique). */
+  private async publicLoyaltyCap(
+    storeId: string | undefined,
+    phone: string,
+    rewardType: string | undefined,
+    itemsSum: number,
+    receiptDiscount: number,
+  ): Promise<number> {
+    if (receiptDiscount <= 0.01) return 0;
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    if (!storeId || !rewardType || cleanPhone.length < 8) return 0;
+    const [program, card] = await Promise.all([
+      this.prisma.loyaltyProgram.findUnique({ where: { storeId } }),
+      this.prisma.loyaltyCard.findFirst({
+        where: { storeId, customerPhone: { contains: cleanPhone.slice(-8) } },
+      }),
+    ]);
+    return loyaltyDiscountCap({ rewardType, itemsTotal: itemsSum, program, card });
+  }
+
+  async isCustomerBlocked(
     customerId?: string | null,
     customerPhone?: string,
   ): Promise<boolean> {

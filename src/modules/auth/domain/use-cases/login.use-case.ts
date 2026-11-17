@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { IAuthRepository } from '../repositories/iauth.repository';
+import { hashRefreshToken } from '../utils/refresh-token-hash';
 
 @Injectable()
 export class LoginUseCase {
@@ -23,7 +25,12 @@ export class LoginUseCase {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role, user.storeId);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      user.storeId,
+    );
 
     await this.persistRefreshToken(user.id, tokens.refreshToken);
 
@@ -40,7 +47,12 @@ export class LoginUseCase {
     };
   }
 
-  private async generateTokens(userId: string, email: string, role: string, storeId?: string | null) {
+  private async generateTokens(
+    userId: string,
+    email: string,
+    role: string,
+    storeId?: string | null,
+  ) {
     const payload = { sub: userId, email, role, storeId };
 
     const accessToken = await this.jwt.signAsync(payload, {
@@ -48,16 +60,19 @@ export class LoginUseCase {
       expiresIn: '15m',
     });
 
-    const refreshToken = await this.jwt.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
-      expiresIn: '7d',
-    });
+    const refreshToken = await this.jwt.signAsync(
+      { ...payload, jti: crypto.randomUUID() },
+      {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '7d',
+      },
+    );
 
     return { accessToken, refreshToken };
   }
 
   private async persistRefreshToken(userId: string, refreshToken: string) {
-    const hash = await bcrypt.hash(refreshToken, 10);
+    const hash = hashRefreshToken(refreshToken);
     await this.authRepository.updateRefreshToken(userId, hash);
   }
 }

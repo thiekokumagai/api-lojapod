@@ -35,6 +35,8 @@ export interface PaymentCheckInput {
   transactionNsu?: string;
   slug?: string;
   credentials: any;
+  /** Valor que o pedido deve ter (em reais). Gateways que conferem o valor recusam se não bater. */
+  expectedAmount?: number;
 }
 
 export interface PaymentCheckOutput {

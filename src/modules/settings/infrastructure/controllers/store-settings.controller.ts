@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 import { getTimezoneFromCepOrState } from '../../../../common/utils/date.utils';
+import { toPublicMercadoPago } from '../../../payments/domain/utils/mercadopago-config';
 
 @ApiTags('Store Settings')
 @Controller('store/settings')
@@ -33,10 +34,8 @@ export class StoreSettingsController {
         };
       }
       if (rawGateways.mercadopago) {
-        publicGateways.mercadopago = {
-          enabled: !!rawGateways.mercadopago.enabled,
-          acceptCreditCard: !!rawGateways.mercadopago.acceptCreditCard,
-        };
+        // Só o que a vitrine precisa: a public key vai ao navegador; access token e webhook secret nunca
+        publicGateways.mercadopago = toPublicMercadoPago(rawGateways);
       }
       if (rawGateways.asaas) {
         publicGateways.asaas = {

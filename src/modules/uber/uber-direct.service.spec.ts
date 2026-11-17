@@ -40,11 +40,25 @@ describe('UberDirectService.processStoreAutomaticDispatch (pedido pago x na entr
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('Pix online continua sendo despachado (só ida)', async () => {
-    const { service, dispatch } = build({
+  it('Pix online ainda NÃO pago (QR Code pendente) não é despachado: a Uber não cobra nada na entrega', async () => {
+    const { service, prisma, dispatch } = build({
       paymentMethod: 'pix',
       paymentType: 'online',
       paymentStatus: 'PENDING',
+    });
+
+    await expect(
+      service.processStoreAutomaticDispatch('store-1', 'o1'),
+    ).resolves.toBeNull();
+    expect(prisma.order.findMany).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('Pix online depois da confirmação do pagamento (PAID) é despachado (só ida)', async () => {
+    const { service, dispatch } = build({
+      paymentMethod: 'pix',
+      paymentType: 'online',
+      paymentStatus: 'PAID',
     });
 
     await service.processStoreAutomaticDispatch('store-1', 'o1');

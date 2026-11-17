@@ -22,6 +22,8 @@ import { PushNotificationService } from '../../shared/services/push-notification
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { UberModule } from '../uber/uber.module';
 import { UnpaidOnlineOrdersCronService } from './infrastructure/cron/unpaid-online-orders.cron.service';
+import { PublicFreightService } from './domain/services/public-freight.service';
+import { GoogleRoutesClient } from './infrastructure/google-routes.client';
 
 @Module({
   imports: [SettingsModule, CouponsModule, UsersModule, PrintModule, LoyaltyModule, UberModule],
@@ -39,6 +41,8 @@ import { UnpaidOnlineOrdersCronService } from './infrastructure/cron/unpaid-onli
     ReprintOrderUseCase,
     UpdateOrderUseCase,
     UnpaidOnlineOrdersCronService,
+    PublicFreightService,
+    GoogleRoutesClient,
     {
       provide: IOrdersRepository,
       useClass: PrismaOrdersRepository,

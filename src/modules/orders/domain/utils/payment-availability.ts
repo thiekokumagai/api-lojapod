@@ -1,5 +1,6 @@
 import type { StoreSettings } from '../../../settings/domain/entities/store-settings.entity';
 import { isPixOnTerminal } from './pix-terminal';
+import { isMercadoPagoReady } from '../../../payments/domain/utils/mercadopago-config';
 
 type CanonicalMethod =
   | 'pix'
@@ -40,8 +41,12 @@ const METHOD_LABELS: Record<CanonicalMethod, string> = {
 
 function hasOnlineCreditGateway(settings: StoreSettings): boolean {
   const gateways = (settings.paymentGateways ?? {}) as Record<string, any>;
-  return ['infinitepay', 'mercadopago', 'asaas'].some(
-    (key) => !!gateways[key]?.enabled && !!gateways[key]?.acceptCreditCard,
+  return (
+    ['infinitepay', 'asaas'].some(
+      (key) => !!gateways[key]?.enabled && !!gateways[key]?.acceptCreditCard,
+    ) ||
+    // Mercado Pago só conta com credenciais completas (access token + public key)
+    isMercadoPagoReady(gateways, 'card')
   );
 }
 
@@ -79,7 +84,10 @@ export function getPaymentNotAllowedReason(
       if (isOnline && isPixOnTerminal(settings)) {
         return 'Esta loja recebe o Pix na maquininha, na entrega ou retirada. Atualize a página e escolha o Pix novamente.';
       }
-      allowed = !!settings.pixEnabled;
+      // Pix online também vale com Mercado Pago pronto (QR Code gerado no servidor)
+      allowed =
+        !!settings.pixEnabled ||
+        (isOnline && isMercadoPagoReady(settings.paymentGateways, 'pix'));
       break;
     case 'credit':
       allowed = isOnline

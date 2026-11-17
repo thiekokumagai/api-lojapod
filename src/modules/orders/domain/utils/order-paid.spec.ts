@@ -11,32 +11,33 @@ describe('isOrderPaid', () => {
     ).toBe(false);
   });
 
-  it('Pix online continua como pago, mesmo PENDING (comportamento atual)', () => {
-    expect(
-      isOrderPaid({
-        paymentStatus: 'PENDING',
-        paymentMethod: 'pix',
-        paymentType: 'online',
-      }),
-    ).toBe(true);
-    expect(
-      isOrderPaid({
-        paymentStatus: 'PENDING',
-        paymentMethod: 'PIX',
-        paymentType: ' Online ',
-      }),
-    ).toBe(true);
+  it('Pix online pendente NÃO é pago (nem Mercado Pago nem Pix manual): só PAID vale', () => {
+    for (const paymentType of ['online', ' Online ', 'ONLINE']) {
+      for (const paymentMethod of ['pix', 'PIX']) {
+        expect(
+          isOrderPaid({ paymentStatus: 'PENDING', paymentMethod, paymentType }),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('Pix online só passa a contar como pago quando a confirmação chega (PAID)', () => {
+    const pending = {
+      paymentStatus: 'PENDING',
+      paymentMethod: 'pix',
+      paymentType: 'online',
+    };
+    expect(isOrderPaid(pending)).toBe(false);
+    expect(isOrderPaid({ ...pending, paymentStatus: 'PAID' })).toBe(true);
   });
 
   it('pedido PAID continua como pago em qualquer forma', () => {
     for (const paymentMethod of ['pix', 'credit', 'cash']) {
-      expect(
-        isOrderPaid({
-          paymentStatus: 'PAID',
-          paymentMethod,
-          paymentType: 'entrega',
-        }),
-      ).toBe(true);
+      for (const paymentType of ['entrega', 'online']) {
+        expect(
+          isOrderPaid({ paymentStatus: 'PAID', paymentMethod, paymentType }),
+        ).toBe(true);
+      }
     }
   });
 
@@ -68,8 +69,13 @@ describe('isOrderPaid', () => {
     ).toBe(false);
   });
 
-  it('campos ausentes não contam como pago', () => {
+  it('campos ausentes ou status desconhecido não contam como pago', () => {
     expect(isOrderPaid({})).toBe(false);
     expect(isOrderPaid({ paymentMethod: 'pix' })).toBe(false);
+    expect(isOrderPaid({ paymentMethod: 'pix', paymentType: 'online' })).toBe(
+      false,
+    );
+    expect(isOrderPaid({ paymentStatus: null })).toBe(false);
+    expect(isOrderPaid({ paymentStatus: 'paid' })).toBe(false);
   });
 });

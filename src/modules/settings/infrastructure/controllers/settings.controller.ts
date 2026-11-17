@@ -9,6 +9,7 @@ import {
   UploadedFile,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -22,14 +23,55 @@ import {
 import sharp from 'sharp';
 
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/current-user.decorator';
+import type { JwtPayload } from '../../../auth/infrastructure/types/jwt-payload.type';
 import { MinioService } from '../../../../minio/minio.service';
 import { UploadedFile as UploadedFileType } from '../../../../common/types/uploaded-file.type';
 
+import {
+  maskPaymentGatewaysForAdmin,
+  mergePaymentGatewaysOnUpdate,
+} from '../../../payments/domain/utils/mercadopago-config';
 import { UpdateSettingsDto } from '../dtos/update-settings.dto';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
 import { UpdateSettingsUseCase } from '../../domain/use-cases/update-settings.use-case';
 
 import { RequireWritePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
+
+function objectsEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    if (!objectsEqual(aObj[k], bObj[k])) return false;
+  }
+  return true;
+}
+
+function hasGatewayChanges(incoming: unknown, previous: unknown): boolean {
+  if (incoming === undefined) return false;
+  if (!incoming || typeof incoming !== 'object') return true;
+
+  const prev = (
+    previous && typeof previous === 'object' ? previous : {}
+  ) as Record<string, unknown>;
+  const merged = (
+    mergePaymentGatewaysOnUpdate(incoming, previous) || {}
+  ) as Record<string, unknown>;
+
+  const allKeys = new Set([...Object.keys(merged), ...Object.keys(prev)]);
+  for (const key of allKeys) {
+    if (key === 'pixOnTerminal') continue;
+    if (!objectsEqual(merged[key], prev[key])) {
+      return true;
+    }
+  }
+  return false;
+}
 
 @ApiTags('Settings')
 @ApiBearerAuth('access-token')
@@ -46,15 +88,48 @@ export class SettingsController {
   @Get()
   @ApiOperation({ summary: 'Obter configurações da loja' })
   @ApiResponse({ status: 200 })
-  async get() {
-    return this.getSettingsUseCase.execute();
+  async get(@CurrentUser() user?: JwtPayload) {
+    const isStaff = user?.role === 'USER';
+    const isAdmin = !isStaff;
+    return this.withMaskedGateways(
+      await this.getSettingsUseCase.execute(),
+      isAdmin,
+    );
+  }
+
+  /** O painel nunca recebe access token nem webhook secret do Mercado Pago. Não-admin não recebe ...Last4. */
+  private withMaskedGateways<T>(settings: T, isAdmin = true): T {
+    if (!settings || typeof settings !== 'object') return settings;
+    const current = settings as { paymentGateways?: unknown };
+    if (current.paymentGateways === undefined) return settings;
+    return {
+      ...settings,
+      paymentGateways: maskPaymentGatewaysForAdmin(
+        current.paymentGateways,
+        isAdmin,
+      ),
+    };
   }
 
   @Put()
   @ApiOperation({ summary: 'Atualizar configurações da loja' })
   @ApiResponse({ status: 200 })
-  async update(@Body() dto: UpdateSettingsDto) {
+  async update(
+    @Body() dto: UpdateSettingsDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
     const oldSettings = await this.getSettingsUseCase.execute();
+    const isStaff = user?.role === 'USER';
+    const isAdmin = !isStaff;
+
+    // Qualquer mudança em paymentGateways exige ADMIN ou SUPER_ADMIN
+    if (!isAdmin && dto.paymentGateways !== undefined) {
+      if (hasGatewayChanges(dto.paymentGateways, oldSettings?.paymentGateways)) {
+        throw new ForbiddenException(
+          'Apenas administradores podem alterar configurações de gateways de pagamento',
+        );
+      }
+    }
 
     if (oldSettings) {
       // Check logo
@@ -110,7 +185,18 @@ export class SettingsController {
       }
     }
 
-    return this.updateSettingsUseCase.execute(dto);
+    // Segredo em branco mantém o já salvo; parcelas e campos do Mercado Pago são normalizados
+    if (dto.paymentGateways !== undefined) {
+      dto.paymentGateways = mergePaymentGatewaysOnUpdate(
+        dto.paymentGateways,
+        oldSettings?.paymentGateways,
+      );
+    }
+
+    return this.withMaskedGateways(
+      await this.updateSettingsUseCase.execute(dto),
+      isAdmin,
+    );
   }
 
   @Post('upload')

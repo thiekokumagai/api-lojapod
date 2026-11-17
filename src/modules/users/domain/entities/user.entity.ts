@@ -3,6 +3,8 @@ export interface User {
   name: string;
   email: string;
   password: string;
+  /** Hash do refresh token da sessão; `null` derruba a renovação de todas as sessões. */
+  refreshToken?: string | null;
   role?: 'ADMIN' | 'USER' | 'SUPER_ADMIN';
   permissions?: string[];
   storeId?: string | null;

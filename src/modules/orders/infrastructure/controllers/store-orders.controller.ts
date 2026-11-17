@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -16,6 +17,8 @@ import { CreateOrderUseCase } from '../../domain/use-cases/create-order.use-case
 import { GetOrderDetailUseCase } from '../../domain/use-cases/get-order-detail.use-case';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { getPaymentNotAllowedReason } from '../../domain/utils/payment-availability';
+import { sanitizePublicOrderInput } from '../../domain/utils/public-order-rules';
+import { RateLimit, RateLimitGuard } from '../../../../common/guards/rate-limit.guard';
 
 @ApiTags('Store Orders')
 @Controller('store/orders')
@@ -27,6 +30,9 @@ export class StoreOrdersController {
   ) {}
 
   @Post()
+  // Sem login e sem captcha: o limite por IP segura criação de pedidos em massa (e teste de cartões por trás deles)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ name: 'store-order', limit: 10, windowMs: 60_000 })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Criar um novo pedido pela loja virtual (Cliente)' })
   @ApiResponse({
@@ -50,7 +56,10 @@ export class StoreOrdersController {
       throw new BadRequestException(reason);
     }
 
-    return this.createOrderUseCase.execute(body as any);
+    // Pedido da loja pública: o cliente não decide status, pagamento nem desconto; o servidor confere preços e total
+    return this.createOrderUseCase.execute(sanitizePublicOrderInput(body) as any, {
+      publicOrder: true,
+    });
   }
 
   @Get('check-blocked')

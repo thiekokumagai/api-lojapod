@@ -28,6 +28,7 @@ import { UpdatePasswordDto } from '../dtos/update-password.dto';
 import { CurrentUser } from '../../../auth/infrastructure/decorators/current-user.decorator';
 import type { JwtPayload } from '../../../auth/infrastructure/types/jwt-payload.type';
 import { UpdatePasswordUseCase } from '../../domain/use-cases/update-password.use-case';
+import { RateLimit, RateLimitGuard } from '../../../../common/guards/rate-limit.guard';
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -46,7 +47,10 @@ export class UsersController {
   ) {}
 
   @Patch('password')
-  @ApiOperation({ summary: 'Atualizar senha do usuário' })
+  // 5 tentativas a cada 15 min por IP e por usuário: não dá para descobrir a senha atual por tentativa e erro
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ name: 'change-password', limit: 5, windowMs: 15 * 60_000, perUser: true })
+  @ApiOperation({ summary: 'Atualizar a senha do próprio usuário (derruba as outras sessões)' })
   @ApiResponse({
     status: 200,
     description: 'Senha atualizada com sucesso',
@@ -55,8 +59,9 @@ export class UsersController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdatePasswordDto,
   ) {
-    await this.updatePasswordUseCase.execute(user.sub, dto);
-    return { success: true };
+    // O alvo é sempre o usuário do token: não existe userId no corpo
+    const result = await this.updatePasswordUseCase.execute(user.sub, dto, user.storeId);
+    return { success: true, ...result };
   }
 
   @Get('permissions')
