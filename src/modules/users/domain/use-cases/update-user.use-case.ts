@@ -25,7 +25,13 @@ export class UpdateUserUseCase {
       throw new ForbiddenException('Somente funcionários podem ser editados por aqui');
     }
 
-    const update: { name?: string; email?: string; password?: string; permissions?: string[] } = {};
+    const update: {
+      name?: string;
+      email?: string;
+      password?: string;
+      permissions?: string[];
+      refreshToken?: null;
+    } = {};
 
     if (data.name !== undefined) {
       const name = data.name.trim();
@@ -46,6 +52,9 @@ export class UpdateUserUseCase {
 
     if (data.password) {
       update.password = await bcrypt.hash(data.password, 10);
+      // Senha redefinida pelo dono: o funcionário não pode continuar entrando com o refresh token
+      // antigo (7 dias renováveis). Derruba todas as sessões dele, como na troca da própria senha.
+      update.refreshToken = null;
     }
 
     if (data.permissions !== undefined) {

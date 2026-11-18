@@ -61,6 +61,14 @@ async function world(storeId: string | null = 'store-1') {
       row.refreshToken = hash;
       return Promise.resolve();
     }),
+    rotateRefreshToken: jest.fn(
+      (_id: string, mutate: (s: string | null) => string | null) => {
+        const next = mutate(row.refreshToken);
+        if (next === null) return Promise.resolve('rejected' as const);
+        row.refreshToken = next || null;
+        return Promise.resolve('rotated' as const);
+      },
+    ),
   };
   const jwt = new JwtService();
   return {

@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { IAuthRepository } from '../repositories/iauth.repository';
-import { hashRefreshToken } from '../utils/refresh-token-hash';
+import { addRefreshSession } from '../utils/refresh-sessions';
 
 @Injectable()
 export class LoginUseCase {
@@ -72,7 +76,16 @@ export class LoginUseCase {
   }
 
   private async persistRefreshToken(userId: string, refreshToken: string) {
-    const hash = hashRefreshToken(refreshToken);
-    await this.authRepository.updateRefreshToken(userId, hash);
+    // Acrescenta a sessão em vez de sobrescrever: os outros aparelhos continuam logados.
+    const result = await this.authRepository.rotateRefreshToken(
+      userId,
+      (stored) => addRefreshSession(stored, refreshToken),
+    );
+    // Sem gravar, o refresh token entregue nunca valeria e o primeiro refresh deslogaria o usuário.
+    if (result !== 'rotated') {
+      throw new ServiceUnavailableException(
+        'Não foi possível iniciar a sessão agora. Tente novamente.',
+      );
+    }
   }
 }

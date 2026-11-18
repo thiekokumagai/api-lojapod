@@ -19,6 +19,13 @@ export abstract class IUsersRepository {
   }): Promise<StoreUser>;
   abstract updateStoreUser(
     id: string,
-    data: { name?: string; email?: string; password?: string; permissions?: string[] },
+    data: {
+      name?: string;
+      email?: string;
+      password?: string;
+      permissions?: string[];
+      /** null revoga todas as sessões (refresh tokens) do usuário. */
+      refreshToken?: null;
+    },
   ): Promise<StoreUser>;
 }

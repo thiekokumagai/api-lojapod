@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  HttpCode,
   Post,
   UnauthorizedException,
   UseGuards,
@@ -14,6 +15,7 @@ import { CurrentUser } from '../decorators/current-user.decorator';
 import type { JwtRefreshPayload } from '../types/jwt-payload.type';
 import { LoginUseCase } from '../../domain/use-cases/login.use-case';
 import { RefreshTokenUseCase } from '../../domain/use-cases/refresh-token.use-case';
+import { LogoutUseCase } from '../../domain/use-cases/logout.use-case';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -21,6 +23,7 @@ export class AuthController {
   constructor(
     private readonly loginUseCase: LoginUseCase,
     private readonly refreshTokenUseCase: RefreshTokenUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
   ) {}
 
   @Post('login')
@@ -57,5 +60,25 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token inválido ou ausente');
     }
     return this.refreshTokenUseCase.execute(user.sub, user.refreshToken);
+  }
+
+  @Post('logout')
+  @Public()
+  @UseGuards(JwtRefreshGuard)
+  @HttpCode(204)
+  @ApiOperation({
+    summary:
+      'Encerra a sessão deste aparelho (revoga só o refresh token enviado)',
+  })
+  @ApiResponse({ status: 204, description: 'Sessão encerrada' })
+  @ApiResponse({
+    status: 401,
+    description: 'Refresh token inválido, expirado ou ausente',
+  })
+  async logout(@CurrentUser() user: JwtRefreshPayload): Promise<void> {
+    if (!user?.sub || !user.refreshToken) {
+      throw new UnauthorizedException('Refresh token inválido ou ausente');
+    }
+    await this.logoutUseCase.execute(user.sub, user.refreshToken);
   }
 }

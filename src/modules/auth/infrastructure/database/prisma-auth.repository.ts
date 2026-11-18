@@ -3,6 +3,7 @@ import { PrismaService } from '../../../../../prisma/prisma.service';
 import {
   AuthUserRecord,
   IAuthRepository,
+  RotateRefreshResult,
 } from '../../domain/repositories/iauth.repository';
 
 @Injectable()
@@ -49,5 +50,28 @@ export class PrismaAuthRepository implements IAuthRepository {
       where: { id: userId },
       data: { refreshToken: refreshTokenHash },
     });
+  }
+
+  async rotateRefreshToken(
+    userId: string,
+    mutate: (stored: string | null) => string | null,
+  ): Promise<RotateRefreshResult> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { refreshToken: true },
+      });
+      if (!user) return 'rejected';
+
+      const next = mutate(user.refreshToken);
+      if (next === null) return 'rejected';
+
+      const { count } = await this.prisma.user.updateMany({
+        where: { id: userId, refreshToken: user.refreshToken },
+        data: { refreshToken: next || null },
+      });
+      if (count === 1) return 'rotated';
+    }
+    return 'conflict';
   }
 }
