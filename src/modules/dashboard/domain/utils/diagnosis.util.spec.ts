@@ -134,6 +134,33 @@ describe('buildDiagnosisItems', () => {
     expect(find(buildDiagnosisItems(crit), 'taxa-cartao')?.severity).toBe('critical');
   });
 
+  it('taxa de cartão: o texto mostra a forma de pagamento em português, nunca o código gravado', () => {
+    const input = base();
+    input.cardFee = {
+      total: 400,
+      byMethod: [
+        { method: 'credit', amount: 150 },
+        { method: 'Credit', amount: 100 },
+        { method: 'Cartão de Crédito', amount: 50 },
+        { method: 'debit', amount: 100 },
+      ],
+    };
+    const detail = find(buildDiagnosisItems(input), 'taxa-cartao')?.detail ?? '';
+
+    // credit + Credit + Cartão de Crédito somam R$ 300 e passam o débito (R$ 100)
+    expect(detail).toContain('a maior parte vem de Cartão de crédito');
+    expect(detail).not.toMatch(/credit\b|debit\b/);
+  });
+
+  it('taxa de cartão: método desconhecido vira texto legível', () => {
+    const input = base();
+    input.cardFee = { total: 350, byMethod: [{ method: 'gift_card', amount: 350 }] };
+    const detail = find(buildDiagnosisItems(input), 'taxa-cartao')?.detail ?? '';
+
+    expect(detail).toContain('a maior parte vem de Gift card');
+    expect(detail).not.toContain('gift_card');
+  });
+
   it('margem baixa: campeão com margem negativa é crítico e o valor é o lucro que faltou até 10%', () => {
     const input = base();
     input.topProducts = [

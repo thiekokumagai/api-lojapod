@@ -3,6 +3,8 @@
 // Tudo aqui é função pura (sem banco) para ser testável.
 // Os valores são estimativas gerenciais, não contabilidade.
 
+import { formatPaymentMethodLabel } from '../../../orders/domain/utils/payment-method-label';
+
 export type DiagnosisSeverity = 'critical' | 'warning' | 'info' | 'ok';
 
 export interface DiagnosisItem {
@@ -287,9 +289,16 @@ export function buildDiagnosisItems(input: DiagnosisInput): DiagnosisItem[] {
 
   // 4. Taxa de cartão
   const feePct = pct(input.cardFee.total, input.receitaItens);
-  const topMethod = [...input.cardFee.byMethod].sort(
-    (a, b) => b.amount - a.amount,
-  )[0];
+  // Agrupa pelo NOME em português: `credit`, `Credit` e `Cartão de Crédito` somam numa forma só
+  // (o texto nunca mostra o código gravado no pedido).
+  const feeByLabel = new Map<string, number>();
+  for (const m of input.cardFee.byMethod) {
+    const label = formatPaymentMethodLabel(m.method, 'Outros');
+    feeByLabel.set(label, (feeByLabel.get(label) ?? 0) + m.amount);
+  }
+  const topMethod = [...feeByLabel.entries()]
+    .map(([method, amount]) => ({ method, amount }))
+    .sort((a, b) => b.amount - a.amount)[0];
   items.push({
     id: 'taxa-cartao',
     severity:
