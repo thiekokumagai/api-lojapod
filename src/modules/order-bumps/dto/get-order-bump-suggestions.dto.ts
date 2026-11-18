@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GetOrderBumpSuggestionsDto {
@@ -13,4 +13,15 @@ export class GetOrderBumpSuggestionsDto {
   @IsString({ each: true })
   @IsOptional()
   categoryIds?: string[];
+
+  @ApiProperty({
+    description:
+      'Onde o cliente está vendo as ofertas: CART (carrinho, padrão) ou PRODUCT (tela do produto). Só vêm as ofertas marcadas para esse lugar ou para BOTH.',
+    enum: ['CART', 'PRODUCT'],
+    default: 'CART',
+    required: false,
+  })
+  @IsIn(['CART', 'PRODUCT'])
+  @IsOptional()
+  location?: 'CART' | 'PRODUCT';
 }

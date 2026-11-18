@@ -4,6 +4,11 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { CreateOrderBumpDto } from '../dto/create-order-bump.dto';
 import { UpdateOrderBumpDto } from '../dto/update-order-bump.dto';
 import { GetOrderBumpSuggestionsDto } from '../dto/get-order-bump-suggestions.dto';
+import {
+  displayLocationsVisibleIn,
+  maxSuggestionsFor,
+  shortDescription,
+} from './order-bump-display';
 
 @Injectable()
 export class OrderBumpsService {
@@ -110,6 +115,8 @@ export class OrderBumpsService {
         suggestedProductId: dto.suggestedProductId,
         customPrice: dto.customPrice !== undefined ? dto.customPrice : null,
         discountPercent: dto.discountPercent !== undefined ? dto.discountPercent : null,
+        // Sem informar, a oferta aparece só no carrinho, como sempre foi.
+        displayLocation: dto.displayLocation ?? 'CART',
       },
       include: {
         suggestedProduct: {
@@ -164,6 +171,7 @@ export class OrderBumpsService {
     if (dto.suggestedProductId !== undefined) data.suggestedProductId = dto.suggestedProductId;
     if (dto.customPrice !== undefined) data.customPrice = dto.customPrice;
     if (dto.discountPercent !== undefined) data.discountPercent = dto.discountPercent;
+    if (dto.displayLocation !== undefined) data.displayLocation = dto.displayLocation;
 
     return (this.prisma as any).orderBump.update({
       where: { id },
@@ -245,9 +253,13 @@ export class OrderBumpsService {
       inCartCategoryIds = [...new Set(cartProducts.map((p) => p.categoryId).filter(Boolean))];
     }
 
-    // Buscar regras ativas da loja
+    // Buscar regras ativas da loja que aparecem no lugar onde o cliente está (carrinho ou tela do produto)
     const activeRules = await (this.prisma as any).orderBump.findMany({
-      where: { storeId, isActive: true },
+      where: {
+        storeId,
+        isActive: true,
+        displayLocation: { in: displayLocationsVisibleIn(dto.location) },
+      },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       include: {
         suggestedProduct: {
@@ -347,6 +359,8 @@ export class OrderBumpsService {
           hasDiscount: bumpPrice < finalOriginalPrice,
           discountPercent: rule.discountPercent ? Number(rule.discountPercent) : null,
           imageUrl: product.images?.[0]?.url || null,
+          // Descrição curta (ex.: "Lata 310ml") para a linha da oferta
+          description: shortDescription(product.description),
           totalStock: totalAvailableStock,
           hasVariations: (product.variations?.length || 0) > 0 || product.items.length > 1 || product.items.some((it: any) => it.options?.length > 0),
           variations: product.variations || [],
@@ -354,7 +368,8 @@ export class OrderBumpsService {
         },
       });
 
-      if (suggestions.length >= 6) break; // Limite de 6 itens para manter a sacola limpa
+      // Carrinho: 6 para manter a sacola limpa. Tela do produto: até 10, como um grupo de opções.
+      if (suggestions.length >= maxSuggestionsFor(dto.location)) break;
     }
 
     if (suggestions.length > 0) {

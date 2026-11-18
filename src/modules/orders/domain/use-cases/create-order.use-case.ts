@@ -19,6 +19,8 @@ import {
   assertPublicOrderTotals,
   loyaltyDiscountCap,
   orderBumpAllowedPrices,
+  orderBumpTriggerMet,
+  orderBumpUsable,
   pixDiscountPercent,
   productAllowedPrices,
   round2,
@@ -288,7 +290,20 @@ export class CreateOrderUseCase {
               let allowedPrices = productAllowedPrices(prod);
               if (item.isOrderBump && item.orderBumpId) {
                 const bump = await this.prisma.orderBump.findUnique({ where: { id: item.orderBumpId } });
-                if (bump && bump.suggestedProductId === prod.id) {
+                // O preço da oferta só vale se a regra está ativa, é desta loja, é deste produto e o
+                // gatilho (produto/categoria) foi cumprido pelos itens do pedido. Senão vale o preço
+                // normal do catálogo e o pedido é recusado abaixo, como qualquer preço adulterado.
+                if (
+                  bump &&
+                  orderBumpUsable(bump, prod.id, storeId) &&
+                  orderBumpTriggerMet(
+                    bump,
+                    await this.productsForBumpTrigger(
+                      (data.items as any[]) ?? [],
+                      bump.triggerType === 'CATEGORY',
+                    ),
+                  )
+                ) {
                   allowedPrices = orderBumpAllowedPrices(prod, bump);
                 }
               }
@@ -880,6 +895,33 @@ export class CreateOrderUseCase {
         );
       }
     }
+  }
+
+  /**
+   * Produtos do pedido (e, se a oferta pede, a categoria de cada um) para conferir o gatilho do
+   * "Peça também". Só busca categoria no banco quando o gatilho da oferta é por categoria.
+   */
+  private async productsForBumpTrigger(
+    items: Array<{ productId?: string | null }>,
+    withCategories: boolean,
+  ): Promise<Array<{ productId: string; categoryId?: string | null }>> {
+    const ids = [
+      ...new Set(
+        items.map((i) => i?.productId).filter((id): id is string => !!id),
+      ),
+    ];
+    if (!withCategories || ids.length === 0) {
+      return ids.map((productId) => ({ productId }));
+    }
+    const rows = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, categoryId: true },
+    });
+    const categoryById = new Map(rows.map((r) => [r.id, r.categoryId]));
+    return ids.map((productId) => ({
+      productId,
+      categoryId: categoryById.get(productId) ?? null,
+    }));
   }
 
   /** Teto do desconto de fidelidade para o pedido da loja (0 se não houver benefício real que o justifique). */

@@ -3,6 +3,8 @@ import {
   assertPublicOrderTotals,
   loyaltyDiscountCap,
   orderBumpAllowedPrices,
+  orderBumpTriggerMet,
+  orderBumpUsable,
   pixDiscountPercent,
   productAllowedPrices,
   sanitizePublicOrderInput,
@@ -100,6 +102,76 @@ describe('preços de catálogo', () => {
         orderBumpAllowedPrices(product, { customPrice: 30 }),
       ),
     ).toBe(false);
+  });
+});
+
+describe('oferta "Peça também": quando o preço dela pode valer', () => {
+  const bump = {
+    storeId: 'store-1',
+    isActive: true,
+    suggestedProductId: 'coca',
+    triggerType: 'ALL',
+  };
+
+  describe('orderBumpUsable (ativa, da loja e do produto)', () => {
+    it('ativa, da loja do pedido e do produto da linha: vale', () => {
+      expect(orderBumpUsable(bump, 'coca', 'store-1')).toBe(true);
+    });
+
+    it('desativada: não vale', () => {
+      expect(orderBumpUsable({ ...bump, isActive: false }, 'coca', 'store-1')).toBe(false);
+      expect(orderBumpUsable({ ...bump, isActive: undefined }, 'coca', 'store-1')).toBe(false);
+    });
+
+    it('de outra loja: não vale', () => {
+      expect(orderBumpUsable({ ...bump, storeId: 'store-2' }, 'coca', 'store-1')).toBe(false);
+    });
+
+    it('de outro produto: não vale', () => {
+      expect(orderBumpUsable(bump, 'fanta', 'store-1')).toBe(false);
+    });
+
+    it('regra inexistente: não vale', () => {
+      expect(orderBumpUsable(null, 'coca', 'store-1')).toBe(false);
+      expect(orderBumpUsable(undefined, 'coca', 'store-1')).toBe(false);
+    });
+  });
+
+  describe('orderBumpTriggerMet (gatilho cumprido pelos itens do pedido)', () => {
+    const donuts = { productId: 'donuts', categoryId: 'doces' };
+    const coca = { productId: 'coca', categoryId: 'bebidas' };
+
+    it('ALL: vale em qualquer pedido', () => {
+      expect(orderBumpTriggerMet(bump, [coca])).toBe(true);
+      expect(orderBumpTriggerMet({ ...bump, triggerType: undefined }, [coca])).toBe(true);
+    });
+
+    it('PRODUCT: exige o produto gatilho no pedido', () => {
+      const rule = { ...bump, triggerType: 'PRODUCT', triggerProductId: 'donuts' };
+      expect(orderBumpTriggerMet(rule, [donuts, coca])).toBe(true);
+      expect(orderBumpTriggerMet(rule, [coca])).toBe(false);
+    });
+
+    it('PRODUCT sem produto gatilho cadastrado: não vale', () => {
+      expect(orderBumpTriggerMet({ ...bump, triggerType: 'PRODUCT', triggerProductId: null }, [donuts, coca])).toBe(false);
+    });
+
+    it('CATEGORY: exige um produto da categoria gatilho no pedido', () => {
+      const rule = { ...bump, triggerType: 'CATEGORY', triggerCategoryId: 'doces' };
+      expect(orderBumpTriggerMet(rule, [donuts, coca])).toBe(true);
+      expect(orderBumpTriggerMet(rule, [coca])).toBe(false);
+    });
+
+    it('o próprio produto da oferta não conta como gatilho (a loja nunca sugere o que já está no carrinho)', () => {
+      const rule = { ...bump, triggerType: 'PRODUCT', triggerProductId: 'coca' };
+      expect(orderBumpTriggerMet(rule, [coca])).toBe(false);
+      const byCategory = { ...bump, triggerType: 'CATEGORY', triggerCategoryId: 'bebidas' };
+      expect(orderBumpTriggerMet(byCategory, [coca])).toBe(false);
+    });
+
+    it('tipo de gatilho desconhecido: não vale', () => {
+      expect(orderBumpTriggerMet({ ...bump, triggerType: 'OUTRO' }, [donuts])).toBe(false);
+    });
   });
 });
 

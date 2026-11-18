@@ -79,6 +79,63 @@ export function orderBumpAllowedPrices(
   return prices;
 }
 
+/** Regra "Peça também" como vem do banco (só os campos que a conferência do pedido usa). */
+export interface OrderBumpRuleFields {
+  storeId?: string | null;
+  isActive?: boolean | null;
+  suggestedProductId?: string | null;
+  triggerType?: string | null;
+  triggerProductId?: string | null;
+  triggerCategoryId?: string | null;
+}
+
+/**
+ * A oferta pode dar desconto neste pedido? Precisa estar ATIVA, ser DA LOJA do pedido e ser do produto
+ * da linha. Antes o servidor só conferia o produto: quem soubesse o id de uma oferta (inclusive
+ * desativada ou de outra loja) pagava o preço dela.
+ */
+export function orderBumpUsable(
+  bump: OrderBumpRuleFields | null | undefined,
+  productId: string,
+  storeId?: string | null,
+): boolean {
+  if (!bump || bump.isActive !== true) return false;
+  if (bump.suggestedProductId !== productId) return false;
+  if (storeId && bump.storeId !== storeId) return false;
+  return true;
+}
+
+/**
+ * O gatilho da oferta foi cumprido pelos itens do pedido? Mesma regra que a loja usa para mostrá-la:
+ * `ALL` vale sempre; `PRODUCT` exige o produto gatilho no pedido; `CATEGORY` exige um produto da
+ * categoria gatilho. O próprio produto da oferta não conta como gatilho (a loja nunca sugere um
+ * produto que já está no carrinho).
+ */
+export function orderBumpTriggerMet(
+  bump: OrderBumpRuleFields,
+  orderProducts: Array<{ productId: string; categoryId?: string | null }>,
+): boolean {
+  const others = orderProducts.filter(
+    (p) => p.productId !== bump.suggestedProductId,
+  );
+  switch (bump.triggerType ?? 'ALL') {
+    case 'ALL':
+      return true;
+    case 'PRODUCT':
+      return (
+        !!bump.triggerProductId &&
+        others.some((p) => p.productId === bump.triggerProductId)
+      );
+    case 'CATEGORY':
+      return (
+        !!bump.triggerCategoryId &&
+        others.some((p) => p.categoryId === bump.triggerCategoryId)
+      );
+    default:
+      return false;
+  }
+}
+
 interface PaymentRule {
   paymentMethod?: string;
   type?: string;

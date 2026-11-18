@@ -1,5 +1,9 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+/** Onde a oferta aparece para o cliente. */
+export const ORDER_BUMP_DISPLAY_LOCATIONS = ['CART', 'PRODUCT', 'BOTH'] as const;
+export type OrderBumpDisplayLocation = (typeof ORDER_BUMP_DISPLAY_LOCATIONS)[number];
 
 export class CreateOrderBumpDto {
   @ApiProperty({ description: 'Título exibido na seção (ex: Peça também)', default: 'Peça também' })
@@ -46,4 +50,14 @@ export class CreateOrderBumpDto {
   @IsNumber()
   @IsOptional()
   discountPercent?: number;
+
+  @ApiProperty({
+    description: 'Onde a oferta aparece: CART (carrinho), PRODUCT (tela do produto) ou BOTH (os dois)',
+    enum: ORDER_BUMP_DISPLAY_LOCATIONS,
+    default: 'CART',
+    required: false,
+  })
+  @IsIn(ORDER_BUMP_DISPLAY_LOCATIONS as unknown as string[])
+  @IsOptional()
+  displayLocation?: OrderBumpDisplayLocation;
 }

@@ -61,6 +61,14 @@ function build(setup: Setup = {}) {
       findUnique: jest.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve(products[where.id] ?? null),
       ),
+      // categoria de cada produto, para o gatilho por categoria da oferta "Peça também"
+      findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
+        Promise.resolve(
+          where.id.in
+            .filter((id) => products[id])
+            .map((id) => ({ id, categoryId: products[id].categoryId ?? null })),
+        ),
+      ),
       update: jest.fn(),
     },
     orderBump: { findUnique: jest.fn().mockResolvedValue(setup.bump ?? null) },
@@ -227,6 +235,9 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
     it('oferta "Peça também" aceita o preço da oferta e recusa outro', async () => {
       const bump = {
         id: 'b1',
+        storeId: 'store-1',
+        isActive: true,
+        triggerType: 'ALL',
         suggestedProductId: 'p1',
         customPrice: 30,
         discountPercent: null,
@@ -254,6 +265,102 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
         }),
       );
       expect(bad.error).toBeInstanceOf(BadRequestException);
+    });
+
+    describe('oferta "Peça também": só vale se a regra vale e o gatilho foi cumprido', () => {
+      // Bebida (p1) em oferta de R$ 30 sobre o Donuts (p2, categoria "doces")
+      const products = {
+        p1: product({ id: 'p1', title: 'Coca', price: 50, categoryId: 'bebidas' }),
+        p2: product({ id: 'p2', title: 'Donuts', price: 50, categoryId: 'doces' }),
+      };
+      const rule = (extra: Fields = {}) => ({
+        id: 'b1',
+        storeId: 'store-1',
+        isActive: true,
+        triggerType: 'PRODUCT',
+        triggerProductId: 'p2',
+        triggerCategoryId: null,
+        suggestedProductId: 'p1',
+        customPrice: 30,
+        discountPercent: null,
+        ...extra,
+      });
+      const donuts = () => item({ productId: 'p2', productName: 'Donuts', quantity: 1, price: 50 });
+      const coca = (price: number) =>
+        item({ productId: 'p1', productName: 'Coca', quantity: 1, price, isOrderBump: true, orderBumpId: 'b1' });
+      const pickup = { freight: 0, deliveryModality: 'STORE_PICKUP' };
+      const withTotals = (items: Fields[], total: number) =>
+        order({ ...pickup, items, itemsTotal: total, totalOrder: total, totalReceived: total });
+
+      it('gatilho de produto cumprido (Donuts no pedido): aceita o preço da oferta', async () => {
+        const r = await createPublic({ products, bump: rule() }, withTotals([donuts(), coca(30)], 80));
+        expect(r.error).toBeNull();
+      });
+
+      it('gatilho de produto NÃO cumprido (sem o Donuts): recusa o preço da oferta', async () => {
+        const r = await createPublic({ products, bump: rule() }, withTotals([coca(30)], 30));
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('gatilho de categoria cumprido por um produto da categoria: aceita', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ triggerType: 'CATEGORY', triggerProductId: null, triggerCategoryId: 'doces' }) },
+          withTotals([donuts(), coca(30)], 80),
+        );
+        expect(r.error).toBeNull();
+        expect(r.prisma.product.findMany).toHaveBeenCalled();
+      });
+
+      it('gatilho de categoria NÃO cumprido: recusa', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ triggerType: 'CATEGORY', triggerProductId: null, triggerCategoryId: 'salgados' }) },
+          withTotals([donuts(), coca(30)], 80),
+        );
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('oferta para qualquer pedido (ALL): aceita sem gatilho', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ triggerType: 'ALL', triggerProductId: null }) },
+          withTotals([coca(30)], 30),
+        );
+        expect(r.error).toBeNull();
+      });
+
+      it('oferta DESATIVADA: recusa o preço da oferta', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ isActive: false }) },
+          withTotals([donuts(), coca(30)], 80),
+        );
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('oferta de OUTRA LOJA: recusa o preço da oferta', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ storeId: 'store-2' }) },
+          withTotals([donuts(), coca(30)], 80),
+        );
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('oferta de outro produto: recusa o preço da oferta', async () => {
+        const r = await createPublic(
+          { products, bump: rule({ suggestedProductId: 'p2' }) },
+          withTotals([donuts(), coca(30)], 80),
+        );
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('id de oferta que não existe: recusa o preço da oferta', async () => {
+        const r = await createPublic({ products, bump: null }, withTotals([donuts(), coca(30)], 80));
+        expect(r.error).toBeInstanceOf(BadRequestException);
+      });
+
+      it('mesmo sem gatilho, a bebida pelo preço normal é aceita (paga o preço cheio)', async () => {
+        const r = await createPublic({ products, bump: rule() }, withTotals([coca(50)], 50));
+        expect(r.error).toBeNull();
+        expect(r.saved().totalOrder).toBe(50);
+      });
     });
 
     it('combo: o servidor fixa o preço do banco e o total adulterado não passa', async () => {
