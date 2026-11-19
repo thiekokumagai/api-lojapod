@@ -900,15 +900,48 @@ export class CreateOrderUseCase {
   /**
    * Produtos do pedido (e, se a oferta pede, a categoria de cada um) para conferir o gatilho do
    * "Peça também". Só busca categoria no banco quando o gatilho da oferta é por categoria.
+   * Inclui produtos avulsos e componentes de combos presentes no pedido.
    */
   private async productsForBumpTrigger(
-    items: Array<{ productId?: string | null }>,
+    items: Array<{ productId?: string | null; comboId?: string | null; isCombo?: boolean; comboSnapshot?: any }>,
     withCategories: boolean,
   ): Promise<Array<{ productId: string; categoryId?: string | null }>> {
+    const directIds = items
+      .map((i) => i?.productId)
+      .filter((id): id is string => !!id);
+
+    const comboComponentIds: string[] = [];
+    for (const item of items) {
+      if (item?.comboSnapshot?.items && Array.isArray(item.comboSnapshot.items)) {
+        for (const ci of item.comboSnapshot.items) {
+          if (ci?.productId) comboComponentIds.push(ci.productId);
+        }
+      }
+    }
+
+    const comboIds = items
+      .filter((i) => (i?.isCombo || i?.comboId) && !i?.comboSnapshot?.items)
+      .map((i) => i?.comboId)
+      .filter((id): id is string => !!id);
+
+    if (comboIds.length > 0) {
+      try {
+        const comboRecords = await this.prisma.combo.findMany({
+          where: { id: { in: comboIds } },
+          include: { items: { select: { productId: true } } },
+        });
+        for (const c of comboRecords) {
+          for (const ci of c.items || []) {
+            if (ci?.productId) comboComponentIds.push(ci.productId);
+          }
+        }
+      } catch {
+        // Fallback silencioso
+      }
+    }
+
     const ids = [
-      ...new Set(
-        items.map((i) => i?.productId).filter((id): id is string => !!id),
-      ),
+      ...new Set([...directIds, ...comboComponentIds]),
     ];
     if (!withCategories || ids.length === 0) {
       return ids.map((productId) => ({ productId }));

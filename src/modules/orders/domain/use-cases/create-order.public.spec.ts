@@ -411,6 +411,73 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
       expect(bad.saveWithStockDecrement).not.toHaveBeenCalled();
     });
 
+    it('combo + oferta "Peça também": produto dentro do combo satisfaz o gatilho da oferta', async () => {
+      const pGatilho = product({
+        id: 'pGatilho',
+        title: 'Pod Gatilho',
+        price: 60,
+        items: [{ id: 'piGatilho', stock: 20, options: [] }],
+      });
+      const pOferta = product({
+        id: 'pOferta',
+        title: 'Essência Extra',
+        price: 40,
+        items: [{ id: 'piOferta', stock: 20, options: [] }],
+      });
+      const bump = {
+        id: 'bCombo',
+        storeId: 'store-1',
+        isActive: true,
+        triggerType: 'PRODUCT',
+        triggerProductId: 'pGatilho',
+        suggestedProductId: 'pOferta',
+        customPrice: 20,
+        discountPercent: null,
+      };
+      const combo = {
+        id: 'cCombo',
+        name: 'Combo Especial',
+        price: 80,
+        isActive: true,
+        items: [{ productId: 'pGatilho', quantity: 1, product: pGatilho, productItemId: 'piGatilho' }],
+      };
+      const items = [
+        {
+          isCombo: true,
+          comboId: 'cCombo',
+          productName: 'Combo Especial',
+          quantity: 1,
+          price: 80,
+          comboSnapshot: { items: [{ productId: 'pGatilho' }] },
+        },
+        {
+          productId: 'pOferta',
+          productName: 'Essência Extra',
+          quantity: 1,
+          price: 20,
+          isOrderBump: true,
+          orderBumpId: 'bCombo',
+        },
+      ];
+      const ok = await createPublic(
+        {
+          products: { p1: product(), pGatilho, pOferta },
+          combo,
+          bump,
+        },
+        order({
+          items,
+          itemsTotal: 100,
+          freight: 10,
+          totalOrder: 110,
+          totalReceived: 110,
+        }),
+      );
+      expect(ok.error).toBeNull();
+      expect(ok.saved().itemsTotal).toBe(100);
+      expect(ok.saved().totalOrder).toBe(110);
+    });
+
     it('desconto Pix só até o percentual configurado pela loja', async () => {
       const ok = await createPublic(
         {},

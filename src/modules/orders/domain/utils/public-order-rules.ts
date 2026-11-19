@@ -68,8 +68,13 @@ export function orderBumpAllowedPrices(
   bump: { customPrice?: unknown; discountPercent?: unknown },
 ): number[] {
   const prices = productAllowedPrices(product);
-  const custom = n(bump.customPrice);
-  if (custom > 0) prices.push(custom);
+  if (
+    bump.customPrice !== null &&
+    bump.customPrice !== undefined &&
+    Number(bump.customPrice) >= 0
+  ) {
+    prices.push(round2(Number(bump.customPrice)));
+  }
   const percent = n(bump.discountPercent);
   if (percent > 0) {
     for (const base of productAllowedPrices(product)) {
@@ -124,7 +129,10 @@ export function orderBumpTriggerMet(
     case 'PRODUCT':
       return (
         !!bump.triggerProductId &&
-        others.some((p) => p.productId === bump.triggerProductId)
+        (others.some((p) => p.productId === bump.triggerProductId) ||
+          (bump.triggerProductId === bump.suggestedProductId &&
+            orderProducts.filter((p) => p.productId === bump.triggerProductId)
+              .length >= 2))
       );
     case 'CATEGORY':
       return (
