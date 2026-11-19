@@ -7,6 +7,7 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  Header,
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
@@ -74,6 +75,7 @@ export class StoreOrdersController {
   }
 
   @Get(':id')
+  @Header('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet')
   @ApiOperation({ summary: 'Consultar status e dados do pedido pelo cliente' })
   async getById(@Param('id') id: string) {
     return this.getOrderDetailUseCase.execute(id);
