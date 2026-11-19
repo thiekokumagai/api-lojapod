@@ -8,6 +8,7 @@
  */
 export const SCREEN_PERMISSIONS = [
   { key: 'dashboard', label: 'Dashboard', group: 'Geral' },
+  { key: 'reports', label: 'Relatórios', group: 'Geral' },
   { key: 'links', label: 'Página de Links', group: 'Geral' },
 
   { key: 'products', label: 'Produtos', group: 'Catálogo' },
