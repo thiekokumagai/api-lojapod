@@ -72,7 +72,20 @@ function build(setup: Setup = {}) {
       update: jest.fn(),
     },
     orderBump: { findUnique: jest.fn().mockResolvedValue(setup.bump ?? null) },
-    combo: { findUnique: jest.fn().mockResolvedValue(setup.combo ?? null) },
+    combo: {
+      findUnique: jest.fn().mockResolvedValue(setup.combo ?? null),
+      findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) => {
+        if (!setup.combo) return Promise.resolve([]);
+        const comboList = Array.isArray(setup.combo)
+          ? setup.combo
+          : [setup.combo];
+        return Promise.resolve(
+          comboList.filter((c: Fields) =>
+            where?.id?.in?.includes(String(c?.id)),
+          ),
+        );
+      }),
+    },
     loyaltyProgram: {
       findUnique: jest.fn().mockResolvedValue(setup.program ?? null),
     },
@@ -270,8 +283,18 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
     describe('oferta "Peça também": só vale se a regra vale e o gatilho foi cumprido', () => {
       // Bebida (p1) em oferta de R$ 30 sobre o Donuts (p2, categoria "doces")
       const products = {
-        p1: product({ id: 'p1', title: 'Coca', price: 50, categoryId: 'bebidas' }),
-        p2: product({ id: 'p2', title: 'Donuts', price: 50, categoryId: 'doces' }),
+        p1: product({
+          id: 'p1',
+          title: 'Coca',
+          price: 50,
+          categoryId: 'bebidas',
+        }),
+        p2: product({
+          id: 'p2',
+          title: 'Donuts',
+          price: 50,
+          categoryId: 'doces',
+        }),
       };
       const rule = (extra: Fields = {}) => ({
         id: 'b1',
@@ -285,26 +308,58 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
         discountPercent: null,
         ...extra,
       });
-      const donuts = () => item({ productId: 'p2', productName: 'Donuts', quantity: 1, price: 50 });
+      const donuts = () =>
+        item({
+          productId: 'p2',
+          productName: 'Donuts',
+          quantity: 1,
+          price: 50,
+        });
       const coca = (price: number) =>
-        item({ productId: 'p1', productName: 'Coca', quantity: 1, price, isOrderBump: true, orderBumpId: 'b1' });
+        item({
+          productId: 'p1',
+          productName: 'Coca',
+          quantity: 1,
+          price,
+          isOrderBump: true,
+          orderBumpId: 'b1',
+        });
       const pickup = { freight: 0, deliveryModality: 'STORE_PICKUP' };
       const withTotals = (items: Fields[], total: number) =>
-        order({ ...pickup, items, itemsTotal: total, totalOrder: total, totalReceived: total });
+        order({
+          ...pickup,
+          items,
+          itemsTotal: total,
+          totalOrder: total,
+          totalReceived: total,
+        });
 
       it('gatilho de produto cumprido (Donuts no pedido): aceita o preço da oferta', async () => {
-        const r = await createPublic({ products, bump: rule() }, withTotals([donuts(), coca(30)], 80));
+        const r = await createPublic(
+          { products, bump: rule() },
+          withTotals([donuts(), coca(30)], 80),
+        );
         expect(r.error).toBeNull();
       });
 
       it('gatilho de produto NÃO cumprido (sem o Donuts): recusa o preço da oferta', async () => {
-        const r = await createPublic({ products, bump: rule() }, withTotals([coca(30)], 30));
+        const r = await createPublic(
+          { products, bump: rule() },
+          withTotals([coca(30)], 30),
+        );
         expect(r.error).toBeInstanceOf(BadRequestException);
       });
 
       it('gatilho de categoria cumprido por um produto da categoria: aceita', async () => {
         const r = await createPublic(
-          { products, bump: rule({ triggerType: 'CATEGORY', triggerProductId: null, triggerCategoryId: 'doces' }) },
+          {
+            products,
+            bump: rule({
+              triggerType: 'CATEGORY',
+              triggerProductId: null,
+              triggerCategoryId: 'doces',
+            }),
+          },
           withTotals([donuts(), coca(30)], 80),
         );
         expect(r.error).toBeNull();
@@ -313,7 +368,14 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
 
       it('gatilho de categoria NÃO cumprido: recusa', async () => {
         const r = await createPublic(
-          { products, bump: rule({ triggerType: 'CATEGORY', triggerProductId: null, triggerCategoryId: 'salgados' }) },
+          {
+            products,
+            bump: rule({
+              triggerType: 'CATEGORY',
+              triggerProductId: null,
+              triggerCategoryId: 'salgados',
+            }),
+          },
           withTotals([donuts(), coca(30)], 80),
         );
         expect(r.error).toBeInstanceOf(BadRequestException);
@@ -321,7 +383,10 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
 
       it('oferta para qualquer pedido (ALL): aceita sem gatilho', async () => {
         const r = await createPublic(
-          { products, bump: rule({ triggerType: 'ALL', triggerProductId: null }) },
+          {
+            products,
+            bump: rule({ triggerType: 'ALL', triggerProductId: null }),
+          },
           withTotals([coca(30)], 30),
         );
         expect(r.error).toBeNull();
@@ -352,12 +417,18 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
       });
 
       it('id de oferta que não existe: recusa o preço da oferta', async () => {
-        const r = await createPublic({ products, bump: null }, withTotals([donuts(), coca(30)], 80));
+        const r = await createPublic(
+          { products, bump: null },
+          withTotals([donuts(), coca(30)], 80),
+        );
         expect(r.error).toBeInstanceOf(BadRequestException);
       });
 
       it('mesmo sem gatilho, a bebida pelo preço normal é aceita (paga o preço cheio)', async () => {
-        const r = await createPublic({ products, bump: rule() }, withTotals([coca(50)], 50));
+        const r = await createPublic(
+          { products, bump: rule() },
+          withTotals([coca(50)], 50),
+        );
         expect(r.error).toBeNull();
         expect(r.saved().totalOrder).toBe(50);
       });
@@ -439,7 +510,14 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
         name: 'Combo Especial',
         price: 80,
         isActive: true,
-        items: [{ productId: 'pGatilho', quantity: 1, product: pGatilho, productItemId: 'piGatilho' }],
+        items: [
+          {
+            productId: 'pGatilho',
+            quantity: 1,
+            product: pGatilho,
+            productItemId: 'piGatilho',
+          },
+        ],
       };
       const items = [
         {
@@ -448,7 +526,6 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
           productName: 'Combo Especial',
           quantity: 1,
           price: 80,
-          comboSnapshot: { items: [{ productId: 'pGatilho' }] },
         },
         {
           productId: 'pOferta',
@@ -476,6 +553,67 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
       expect(ok.error).toBeNull();
       expect(ok.saved().itemsTotal).toBe(100);
       expect(ok.saved().totalOrder).toBe(110);
+    });
+
+    it('segurança: comboSnapshot forjado no payload do cliente não ativa gatilho de oferta', async () => {
+      const pGatilho = product({
+        id: 'pGatilho',
+        title: 'Pod Gatilho',
+        price: 60,
+        items: [{ id: 'piGatilho', stock: 20, options: [] }],
+      });
+      const pOferta = product({
+        id: 'pOferta',
+        title: 'Essência Extra',
+        price: 40,
+        items: [{ id: 'piOferta', stock: 20, options: [] }],
+      });
+      const bump = {
+        id: 'bCombo',
+        storeId: 'store-1',
+        isActive: true,
+        triggerType: 'PRODUCT',
+        triggerProductId: 'pGatilho',
+        suggestedProductId: 'pOferta',
+        customPrice: 20,
+        discountPercent: null,
+      };
+      // Atacante envia um produto avulso barato tentando injetar comboSnapshot com o productId gatilho
+      const items = [
+        {
+          productId: 'p1',
+          productName: 'Bala',
+          quantity: 1,
+          price: 50,
+          comboSnapshot: { items: [{ productId: 'pGatilho' }] },
+        },
+        {
+          productId: 'pOferta',
+          productName: 'Essência Extra',
+          quantity: 1,
+          price: 20, // preço do order bump que não deveria ser aceito
+          isOrderBump: true,
+          orderBumpId: 'bCombo',
+        },
+      ];
+      const res = await createPublic(
+        {
+          products: { p1: product({ id: 'p1', price: 50 }), pGatilho, pOferta },
+          combo: null,
+          bump,
+        },
+        order({
+          items,
+          itemsTotal: 70,
+          freight: 10,
+          totalOrder: 80,
+          totalReceived: 80,
+        }),
+      );
+      // Gatilho não é satisfeito porque comboSnapshot forjado é ignorado, logo o preço da oferta é recusado
+      expect(res.error).toBeInstanceOf(BadRequestException);
+      expect(res.error?.message).toContain('mudou');
+      expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
     });
 
     it('desconto Pix só até o percentual configurado pela loja', async () => {

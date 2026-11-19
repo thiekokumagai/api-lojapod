@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, Inject, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order } from '../entities/order.entity';
 import { ValidateCouponUseCase } from '../../../coupons/domain/use-cases/validate-coupon.use-case';
@@ -51,7 +56,10 @@ export class CreateOrderUseCase {
    * com o catálogo e limita descontos e total (ver `public-order-rules.ts`). O painel admin não usa esse modo.
    */
   async execute(
-    data: Partial<Order> & { couponTitle?: string, showProductPrices?: boolean },
+    data: Partial<Order> & {
+      couponTitle?: string;
+      showProductPrices?: boolean;
+    },
     options: { publicOrder?: boolean } = {},
   ): Promise<Order> {
     try {
@@ -60,7 +68,8 @@ export class CreateOrderUseCase {
       let couponDiscountValue = Number(data.couponDiscount) || 0;
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
-      const storeId = data.storeId || this.tenantContextService.getStoreId() || undefined;
+      const storeId =
+        data.storeId || this.tenantContextService.getStoreId() || undefined;
 
       // Formas de pagamento que mantêm o preço promocional (configurável na loja; padrão: só Pix)
       let promoPaymentMethods: string[] = ['pix'];
@@ -73,7 +82,9 @@ export class CreateOrderUseCase {
       } catch (err) {
         // Mantém o padrão (apenas Pix)
       }
-      const orderPaymentMethod = String((data as any).paymentMethod || '').toLowerCase();
+      const orderPaymentMethod = String(
+        (data as any).paymentMethod || '',
+      ).toLowerCase();
 
       // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
       if (data.items && Array.isArray(data.items)) {
@@ -82,8 +93,13 @@ export class CreateOrderUseCase {
             if (!item.isCombo && !item.comboId && !item.productId) {
               throw new BadRequestException('Item do pedido inválido.');
             }
-            if (!Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1) {
-              throw new BadRequestException('Quantidade inválida em um dos itens.');
+            if (
+              !Number.isInteger(Number(item.quantity)) ||
+              Number(item.quantity) < 1
+            ) {
+              throw new BadRequestException(
+                'Quantidade inválida em um dos itens.',
+              );
             }
           }
           if (item.isCombo || item.comboId) {
@@ -99,7 +115,9 @@ export class CreateOrderUseCase {
                   include: {
                     product: {
                       include: {
-                        images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                        images: {
+                          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                        },
                         items: true,
                       },
                     },
@@ -110,29 +128,44 @@ export class CreateOrderUseCase {
             });
 
             if (!comboRecord) {
-              throw new BadRequestException(`Combo "${item.productName}" não encontrado.`);
+              throw new BadRequestException(
+                `Combo "${item.productName}" não encontrado.`,
+              );
             }
 
             if (!comboRecord.isActive) {
-              throw new BadRequestException(`O combo "${comboRecord.name}" está inativo.`);
+              throw new BadRequestException(
+                `O combo "${comboRecord.name}" está inativo.`,
+              );
             }
 
             const now = new Date();
             if (comboRecord.startDate && now < comboRecord.startDate) {
-              throw new BadRequestException(`O combo "${comboRecord.name}" ainda não está disponível.`);
+              throw new BadRequestException(
+                `O combo "${comboRecord.name}" ainda não está disponível.`,
+              );
             }
             if (comboRecord.endDate && now > comboRecord.endDate) {
-              throw new BadRequestException(`O combo "${comboRecord.name}" não está mais disponível.`);
+              throw new BadRequestException(
+                `O combo "${comboRecord.name}" não está mais disponível.`,
+              );
             }
 
-            if (comboRecord.maxPerOrder && item.quantity > comboRecord.maxPerOrder) {
+            if (
+              comboRecord.maxPerOrder &&
+              item.quantity > comboRecord.maxPerOrder
+            ) {
               throw new BadRequestException(
                 `Limite máximo de ${comboRecord.maxPerOrder} unidade(s) por pedido para o combo "${comboRecord.name}".`,
               );
             }
 
-            if (comboRecord.maxTotalSales !== null && comboRecord.maxTotalSales !== undefined) {
-              const remaining = comboRecord.maxTotalSales - comboRecord.totalSold;
+            if (
+              comboRecord.maxTotalSales !== null &&
+              comboRecord.maxTotalSales !== undefined
+            ) {
+              const remaining =
+                comboRecord.maxTotalSales - comboRecord.totalSold;
               if (item.quantity > remaining) {
                 throw new BadRequestException(
                   `O combo "${comboRecord.name}" possui apenas ${Math.max(0, remaining)} unidade(s) disponíveis para venda.`,
@@ -150,7 +183,9 @@ export class CreateOrderUseCase {
             // Mapeia e valida cada componente do combo
             // Se o componente já tem variação fixa definida no combo: usa a fixa.
             // Se o componente não tem variação fixa: deve vir em item.comboSelections ou falhar se o produto exigir variação
-            const clientSelections = Array.isArray(item.comboSelections) ? item.comboSelections : [];
+            const clientSelections = Array.isArray(item.comboSelections)
+              ? item.comboSelections
+              : [];
             const snapshotItems: any[] = [];
 
             for (let i = 0; i < comboRecord.items.length; i++) {
@@ -168,15 +203,25 @@ export class CreateOrderUseCase {
 
               if (resolvedProductItemId) {
                 // Variação fixa cadastrada no combo
-                const pi = p.items?.find((itm: any) => itm.id === resolvedProductItemId);
+                const pi = p.items?.find(
+                  (itm: any) => itm.id === resolvedProductItemId,
+                );
                 if (!pi || (pi.stock ?? 0) < ci.quantity * item.quantity) {
                   throw new BadRequestException(
                     `Estoque insuficiente para a opção "${ci.variation || 'padrão'}" do produto "${p.title}" no combo "${comboRecord.name}".`,
                   );
                 }
-              } else if (p.items && p.items.length > 0 && p.items.some((itm: any) => itm.options && itm.options.length > 0)) {
+              } else if (
+                p.items &&
+                p.items.length > 0 &&
+                p.items.some(
+                  (itm: any) => itm.options && itm.options.length > 0,
+                )
+              ) {
                 // Produto possui variações, cliente deve ter escolhido
-                const chosen = clientSelections.find((cs: any) => cs.productId === ci.productId);
+                const chosen = clientSelections.find(
+                  (cs: any) => cs.productId === ci.productId,
+                );
                 if (!chosen || (!chosen.productItemId && !chosen.variation)) {
                   throw new BadRequestException(
                     `Por favor, selecione a variação para o item "${p.title}" do combo "${comboRecord.name}".`,
@@ -186,14 +231,22 @@ export class CreateOrderUseCase {
                 // Validar se a variação escolhida pertence ao produto
                 let matchedItem: any = null;
                 if (chosen.productItemId) {
-                  matchedItem = p.items.find((itm: any) => itm.id === chosen.productItemId);
+                  matchedItem = p.items.find(
+                    (itm: any) => itm.id === chosen.productItemId,
+                  );
                 }
                 if (!matchedItem && chosen.variation) {
                   const targetVar = chosen.variation.trim().toLowerCase();
                   matchedItem = p.items.find((itm: any) => {
-                    const optVals = (itm.options || []).map((o: any) => o.option?.value?.trim()?.toLowerCase()).filter(Boolean);
+                    const optVals = (itm.options || [])
+                      .map((o: any) => o.option?.value?.trim()?.toLowerCase())
+                      .filter(Boolean);
                     const joined = optVals.join(' - ');
-                    return joined === targetVar || optVals.includes(targetVar) || targetVar.includes(joined);
+                    return (
+                      joined === targetVar ||
+                      optVals.includes(targetVar) ||
+                      targetVar.includes(joined)
+                    );
                   });
                 }
 
@@ -210,10 +263,18 @@ export class CreateOrderUseCase {
                 }
 
                 resolvedProductItemId = matchedItem.id;
-                resolvedVariation = chosen.variation || (matchedItem.options || []).map((o: any) => o.option?.value).join(' - ') || null;
+                resolvedVariation =
+                  chosen.variation ||
+                  (matchedItem.options || [])
+                    .map((o: any) => o.option?.value)
+                    .join(' - ') ||
+                  null;
               } else {
                 // Produto simples sem variações
-                const totalStock = (p.items || []).reduce((sum: number, itm: any) => sum + (itm.stock ?? 0), 0);
+                const totalStock = (p.items || []).reduce(
+                  (sum: number, itm: any) => sum + (itm.stock ?? 0),
+                  0,
+                );
                 if (totalStock < ci.quantity * item.quantity) {
                   throw new BadRequestException(
                     `Estoque insuficiente para o produto "${p.title}" do combo "${comboRecord.name}".`,
@@ -224,7 +285,9 @@ export class CreateOrderUseCase {
                 }
               }
 
-              const promo = p?.promotionalPrice ? Number(p.promotionalPrice) : 0;
+              const promo = p?.promotionalPrice
+                ? Number(p.promotionalPrice)
+                : 0;
               const normal = p?.price ? Number(p.price) : 0;
 
               snapshotItems.push({
@@ -263,22 +326,30 @@ export class CreateOrderUseCase {
             });
 
             if (!prod) {
-              throw new BadRequestException(`Produto "${item.productName}" não encontrado.`);
+              throw new BadRequestException(
+                `Produto "${item.productName}" não encontrado.`,
+              );
             }
 
             if (!prod.items || prod.items.length === 0) {
-              throw new BadRequestException(`Produto "${item.productName}" não possui estoque cadastrado.`);
+              throw new BadRequestException(
+                `Produto "${item.productName}" não possui estoque cadastrado.`,
+              );
             }
 
             // Preço promocional só vale nas formas de pagamento permitidas pela loja
-            const promoPrice = prod.promotionalPrice ? Number(prod.promotionalPrice) : 0;
+            const promoPrice = prod.promotionalPrice
+              ? Number(prod.promotionalPrice)
+              : 0;
             const regularPrice = prod.price ? Number(prod.price) : 0;
             if (
               orderPaymentMethod &&
               promoPrice > 0 &&
               regularPrice > promoPrice &&
               Math.abs(Number(item.price) - promoPrice) < 0.005 &&
-              !promoPaymentMethods.map((m) => String(m).toLowerCase()).includes(orderPaymentMethod)
+              !promoPaymentMethods
+                .map((m) => String(m).toLowerCase())
+                .includes(orderPaymentMethod)
             ) {
               throw new BadRequestException(
                 `O preço promocional de "${prod.title}" não é válido para a forma de pagamento escolhida.`,
@@ -289,7 +360,9 @@ export class CreateOrderUseCase {
             if (options.publicOrder) {
               let allowedPrices = productAllowedPrices(prod);
               if (item.isOrderBump && item.orderBumpId) {
-                const bump = await this.prisma.orderBump.findUnique({ where: { id: item.orderBumpId } });
+                const bump = await this.prisma.orderBump.findUnique({
+                  where: { id: item.orderBumpId },
+                });
                 // O preço da oferta só vale se a regra está ativa, é desta loja, é deste produto e o
                 // gatilho (produto/categoria) foi cumprido pelos itens do pedido. Senão vale o preço
                 // normal do catálogo e o pedido é recusado abaixo, como qualquer preço adulterado.
@@ -317,15 +390,23 @@ export class CreateOrderUseCase {
             let resolvedPi: any = null;
 
             if (item.productItemId) {
-              resolvedPi = prod.items.find((pi: any) => pi.id === item.productItemId);
+              resolvedPi = prod.items.find(
+                (pi: any) => pi.id === item.productItemId,
+              );
             }
 
             if (!resolvedPi && item.variation && item.variation.trim() !== '') {
               const targetVar = item.variation.trim().toLowerCase();
               resolvedPi = prod.items.find((pi: any) => {
-                const optVals = (pi.options || []).map((o: any) => o.option?.value?.trim()?.toLowerCase()).filter(Boolean);
+                const optVals = (pi.options || [])
+                  .map((o: any) => o.option?.value?.trim()?.toLowerCase())
+                  .filter(Boolean);
                 const joined = optVals.join(' - ');
-                return joined === targetVar || optVals.includes(targetVar) || targetVar.includes(joined);
+                return (
+                  joined === targetVar ||
+                  optVals.includes(targetVar) ||
+                  targetVar.includes(joined)
+                );
               });
 
               if (!resolvedPi) {
@@ -333,7 +414,11 @@ export class CreateOrderUseCase {
                   `A opção "${item.variation}" do produto "${prod.title}" não está mais disponível no catálogo.`,
                 );
               }
-            } else if (!resolvedPi && prod.items.length === 1 && (!prod.items[0].options || prod.items[0].options.length === 0)) {
+            } else if (
+              !resolvedPi &&
+              prod.items.length === 1 &&
+              (!prod.items[0].options || prod.items[0].options.length === 0)
+            ) {
               resolvedPi = prod.items[0];
             } else if (!resolvedPi && prod.items.length === 1) {
               resolvedPi = prod.items[0];
@@ -364,12 +449,19 @@ export class CreateOrderUseCase {
       if (options.publicOrder) {
         publicItemsSum = round2(
           (data.items || []).reduce(
-            (acc: number, item: any) => acc + round2((Number(item.price) || 0) * (Number(item.quantity) || 1)),
+            (acc: number, item: any) =>
+              acc +
+              round2((Number(item.price) || 0) * (Number(item.quantity) || 1)),
             0,
           ),
         );
-        if (Math.abs((Number(data.itemsTotal) || 0) - publicItemsSum) > TOTAL_TOLERANCE) {
-          throw new BadRequestException('O preço de algum item mudou. Atualize o carrinho e tente de novo.');
+        if (
+          Math.abs((Number(data.itemsTotal) || 0) - publicItemsSum) >
+          TOTAL_TOLERANCE
+        ) {
+          throw new BadRequestException(
+            'O preço de algum item mudou. Atualize o carrinho e tente de novo.',
+          );
         }
         data.itemsTotal = publicItemsSum;
       }
@@ -379,7 +471,11 @@ export class CreateOrderUseCase {
         const settings = await this.settingsRepository.get();
         if (settings?.freeShippingEnabled && settings?.freeShippingMinValue) {
           const minVal = Number(settings.freeShippingMinValue);
-          if (!isNaN(minVal) && minVal > 0 && (Number(data.itemsTotal) || 0) >= minVal) {
+          if (
+            !isNaN(minVal) &&
+            minVal > 0 &&
+            (Number(data.itemsTotal) || 0) >= minVal
+          ) {
             data.freight = 0;
           }
         }
@@ -388,15 +484,25 @@ export class CreateOrderUseCase {
       }
 
       if (data.couponTitle) {
-        let nonPromoTotal = (data as any).nonPromoItemsTotal !== undefined 
-          ? Number((data as any).nonPromoItemsTotal) 
-          : undefined;
+        let nonPromoTotal =
+          (data as any).nonPromoItemsTotal !== undefined
+            ? Number((data as any).nonPromoItemsTotal)
+            : undefined;
 
-        if (nonPromoTotal === undefined && data.items && Array.isArray(data.items)) {
+        if (
+          nonPromoTotal === undefined &&
+          data.items &&
+          Array.isArray(data.items)
+        ) {
           nonPromoTotal = data.items.reduce((acc: number, item: any) => {
-            const isPromo = item.isPromo || item.isPromotional || (item.oldPrice !== undefined && item.oldPrice > 0);
+            const isPromo =
+              item.isPromo ||
+              item.isPromotional ||
+              (item.oldPrice !== undefined && item.oldPrice > 0);
             if (isPromo) return acc;
-            return acc + (Number(item.price) || 0) * (Number(item.quantity) || 1);
+            return (
+              acc + (Number(item.price) || 0) * (Number(item.quantity) || 1)
+            );
           }, 0);
         }
 
@@ -410,7 +516,8 @@ export class CreateOrderUseCase {
         couponId = coupon.id;
         if (coupon.type === 'FREE_SHIPPING') {
           freeShippingByCoupon = true;
-          couponFreightDiscountValue = Number(data.freight) > 0 ? Number(data.freight) : 0;
+          couponFreightDiscountValue =
+            Number(data.freight) > 0 ? Number(data.freight) : 0;
         } else {
           couponDiscountValue = discountAmount;
         }
@@ -419,7 +526,9 @@ export class CreateOrderUseCase {
       // Pedido da loja: o frete é o que o SERVIDOR calcula (mesma regra do navegador); o enviado só passa se bater
       if (options.publicOrder) {
         if (!this.publicFreight || !storeSettings) {
-          throw new BadRequestException('Não foi possível conferir o frete agora. Tente novamente.');
+          throw new BadRequestException(
+            'Não foi possível conferir o frete agora. Tente novamente.',
+          );
         }
         const verified = await this.publicFreight.resolve({
           settings: storeSettings,
@@ -467,7 +576,7 @@ export class CreateOrderUseCase {
             cFDiscount) *
             100,
         ) / 100;
-        
+
       if (options.publicOrder) {
         // O total gravado (e cobrado nos gateways) é o do servidor, nunca o enviado pelo navegador
         const loyaltyCap = await this.publicLoyaltyCap(
@@ -496,7 +605,8 @@ export class CreateOrderUseCase {
         order.totalOrder = verified.totalOrder;
         order.totalReceived = verified.totalOrder;
       } else {
-        order.totalOrder = data.totalOrder !== undefined ? data.totalOrder : calculatedTotal;
+        order.totalOrder =
+          data.totalOrder !== undefined ? data.totalOrder : calculatedTotal;
       }
       const savedOrder =
         await this.ordersRepository.saveWithStockDecrement(order);
@@ -530,7 +640,10 @@ export class CreateOrderUseCase {
             });
 
             const rType = loyaltyReward.rewardType;
-            const rTitle = loyaltyReward.rewardTitle || program?.rewardText || 'Brinde Fidelidade';
+            const rTitle =
+              loyaltyReward.rewardTitle ||
+              program?.rewardText ||
+              'Brinde Fidelidade';
             const isPointsDiscount = rType === 'POINTS_DISCOUNT';
             const isCashback = rType === 'CASHBACK';
 
@@ -544,7 +657,10 @@ export class CreateOrderUseCase {
                 customerName: card.customerName || savedOrder.customerName,
                 rewardType: rType,
                 rewardTitle: rTitle,
-                status: (isPointsDiscount || isCashback) ? 'DELIVERED' : 'PENDING_DELIVERY',
+                status:
+                  isPointsDiscount || isCashback
+                    ? 'DELIVERED'
+                    : 'PENDING_DELIVERY',
               },
             });
 
@@ -619,7 +735,8 @@ export class CreateOrderUseCase {
             try {
               this.eventsGateway.server.emit('loyalty.reward_redeemed', {
                 storeId: savedOrder.storeId || storeId,
-                customerName: card.customerName || savedOrder.customerName || 'Cliente',
+                customerName:
+                  card.customerName || savedOrder.customerName || 'Cliente',
                 customerPhone: cleanPhone,
                 rewardTitle: rTitle,
                 rewardType: rType,
@@ -631,20 +748,26 @@ export class CreateOrderUseCase {
                 cardId: card.id,
                 customerPhone: cleanPhone,
               });
-              this.eventsGateway.server.emit('loyalty.refresh', { storeId: savedOrder.storeId || storeId });
+              this.eventsGateway.server.emit('loyalty.refresh', {
+                storeId: savedOrder.storeId || storeId,
+              });
             } catch (wsErr) {
-              console.error('[Loyalty] Erro ao emitir notificação de resgate:', wsErr);
+              console.error(
+                '[Loyalty] Erro ao emitir notificação de resgate:',
+                wsErr,
+              );
             }
           }
         } else if (cleanPhone) {
           // Fallback para resgates que possam ter sido registrados anteriormente sem orderId
-          const recentRedemption = await this.prisma.loyaltyRewardRedemption.findFirst({
-            where: {
-              customerPhone: { contains: cleanPhone.slice(-8) },
-              orderId: null,
-            },
-            orderBy: { createdAt: 'desc' },
-          });
+          const recentRedemption =
+            await this.prisma.loyaltyRewardRedemption.findFirst({
+              where: {
+                customerPhone: { contains: cleanPhone.slice(-8) },
+                orderId: null,
+              },
+              orderBy: { createdAt: 'desc' },
+            });
 
           if (recentRedemption) {
             await this.prisma.loyaltyRewardRedemption.update({
@@ -654,7 +777,10 @@ export class CreateOrderUseCase {
           }
         }
       } catch (err) {
-        console.error('[Loyalty] Erro ao processar resgate de fidelidade no pedido:', err);
+        console.error(
+          '[Loyalty] Erro ao processar resgate de fidelidade no pedido:',
+          err,
+        );
       }
 
       // Disparar Notificação Push
@@ -662,7 +788,7 @@ export class CreateOrderUseCase {
         const admins = await this.usersRepository.findAll();
         const tokens: string[] = [];
         const webSubscriptions: any[] = [];
-        admins.forEach(u => {
+        admins.forEach((u) => {
           if (u.expoPushToken) {
             tokens.push(...u.expoPushToken.split(',').filter(Boolean));
           }
@@ -674,17 +800,26 @@ export class CreateOrderUseCase {
             }
           }
         });
-        console.log(`[Push Notification] Found ${tokens.length} expo tokens and ${webSubscriptions.length} web subs to send notifications.`);
+        console.log(
+          `[Push Notification] Found ${tokens.length} expo tokens and ${webSubscriptions.length} web subs to send notifications.`,
+        );
         if (tokens.length > 0 || webSubscriptions.length > 0) {
-          const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-          const formattedValue = formatter.format(Number(savedOrder.totalOrder || 0));
-          this.pushNotificationService.sendNotifications(
-            tokens,
-            `(${formattedValue}) Oba! Chegou pedido 🤩`,
-            `Pedido nº #${savedOrder.orderNumber} - ${savedOrder.customerName}`,
-            { orderId: savedOrder.id },
-            webSubscriptions
-          ).catch(e => console.error(e));
+          const formatter = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          });
+          const formattedValue = formatter.format(
+            Number(savedOrder.totalOrder || 0),
+          );
+          this.pushNotificationService
+            .sendNotifications(
+              tokens,
+              `(${formattedValue}) Oba! Chegou pedido 🤩`,
+              `Pedido nº #${savedOrder.orderNumber} - ${savedOrder.customerName}`,
+              { orderId: savedOrder.id },
+              webSubscriptions,
+            )
+            .catch((e) => console.error(e));
         }
       } catch (err) {
         console.error('Erro ao buscar tokens para notificação', err);
@@ -693,7 +828,9 @@ export class CreateOrderUseCase {
       // Avaliação de Transição de Estado de Estoque (Máquina de Estados Anti-Spam)
       try {
         const rawProductIds = (savedOrder.items || []).map((i) => i.productId);
-        const uniqueProductIds = Array.from(new Set(rawProductIds.filter(Boolean))) as string[];
+        const uniqueProductIds = Array.from(
+          new Set(rawProductIds.filter(Boolean)),
+        ) as string[];
 
         for (const prodId of uniqueProductIds) {
           const product = await this.prisma.product.findUnique({
@@ -703,16 +840,22 @@ export class CreateOrderUseCase {
 
           if (!product) continue;
 
-          const totalStock = product.items.reduce((acc, item) => acc + item.stock, 0);
+          const totalStock = product.items.reduce(
+            (acc, item) => acc + item.stock,
+            0,
+          );
           // Estoque mínimo: 7 dias de cobertura (mínimo 3 unidades)
-          const minStock = product.minStock ?? Math.max(3, Math.ceil((product.dailyRunRate ?? 0) * 7));
+          const minStock =
+            product.minStock ??
+            Math.max(3, Math.ceil((product.dailyRunRate ?? 0) * 7));
           const previousState = product.stockAlertState || 'OK';
 
           let newState = 'OK';
           if (totalStock === 0) {
             newState = 'OUT_OF_STOCK';
           } else if (
-            product.coverageDays !== null && product.coverageDays <= 3
+            product.coverageDays !== null &&
+            product.coverageDays <= 3
           ) {
             newState = 'CRITICAL';
           } else if (totalStock <= minStock) {
@@ -737,9 +880,11 @@ export class CreateOrderUseCase {
             const alertTokens: string[] = [];
             const alertWebSubs: unknown[] = [];
             admins.forEach((u) => {
-              if (u.expoPushToken) alertTokens.push(...u.expoPushToken.split(',').filter(Boolean));
+              if (u.expoPushToken)
+                alertTokens.push(...u.expoPushToken.split(',').filter(Boolean));
               if (u.webPushSubscription) {
-                if (Array.isArray(u.webPushSubscription)) alertWebSubs.push(...u.webPushSubscription);
+                if (Array.isArray(u.webPushSubscription))
+                  alertWebSubs.push(...u.webPushSubscription);
                 else alertWebSubs.push(u.webPushSubscription);
               }
             });
@@ -753,7 +898,9 @@ export class CreateOrderUseCase {
                   { screen: 'ProductDetails', productId: product.id },
                   alertWebSubs,
                 )
-                .catch((e) => console.error('[StockAlert Push] Erro ao enviar:', e));
+                .catch((e) =>
+                  console.error('[StockAlert Push] Erro ao enviar:', e),
+                );
             }
 
             await this.prisma.product.update({
@@ -773,13 +920,19 @@ export class CreateOrderUseCase {
           }
         }
       } catch (stockAlertErr) {
-        console.error('[StockAlert StateMachine] Erro ao verificar estado de estoque:', stockAlertErr);
+        console.error(
+          '[StockAlert StateMachine] Erro ao verificar estado de estoque:',
+          stockAlertErr,
+        );
       }
 
       // Disparar WebSocket para impressão
       try {
         if (savedOrder.status !== 'CANCELLED') {
-          const orderForPrint = { ...savedOrder, showProductPrices: data.showProductPrices };
+          const orderForPrint = {
+            ...savedOrder,
+            showProductPrices: data.showProductPrices,
+          };
           const targetPrintStoreId = savedOrder.storeId || storeId || '1';
           this.printGateway.emitNovoPedido(targetPrintStoreId, orderForPrint);
         }
@@ -797,7 +950,10 @@ export class CreateOrderUseCase {
       }
 
       // Atribuição de fidelidade (selos, pontos ou cashback) se o pedido já foi criado como pago ou concluído (ex: pedido manual no admin)
-      if (savedOrder.status === 'COMPLETED' || savedOrder.paymentStatus === 'PAID') {
+      if (
+        savedOrder.status === 'COMPLETED' ||
+        savedOrder.paymentStatus === 'PAID'
+      ) {
         this.loyaltyService
           .processOrderCompleted({
             id: savedOrder.id,
@@ -807,7 +963,10 @@ export class CreateOrderUseCase {
             totalOrder: savedOrder.totalOrder,
           })
           .catch((err) => {
-            console.error('[Loyalty] Erro ao processar fidelidade no pedido criado:', err);
+            console.error(
+              '[Loyalty] Erro ao processar fidelidade no pedido criado:',
+              err,
+            );
           });
       }
 
@@ -900,30 +1059,31 @@ export class CreateOrderUseCase {
   /**
    * Produtos do pedido (e, se a oferta pede, a categoria de cada um) para conferir o gatilho do
    * "Peça também". Só busca categoria no banco quando o gatilho da oferta é por categoria.
-   * Inclui produtos avulsos e componentes de combos presentes no pedido.
+   * Inclui produtos avulsos e componentes de combos legítimos presentes no pedido.
+   * Componentes de combo são obtidos exclusivamente no banco de dados via Prisma (nunca do payload do cliente).
    */
   private async productsForBumpTrigger(
-    items: Array<{ productId?: string | null; comboId?: string | null; isCombo?: boolean; comboSnapshot?: any }>,
+    items: Array<{
+      productId?: string | null;
+      comboId?: string | null;
+      isCombo?: boolean;
+    }>,
     withCategories: boolean,
   ): Promise<Array<{ productId: string; categoryId?: string | null }>> {
     const directIds = items
-      .map((i) => i?.productId)
-      .filter((id): id is string => !!id);
+      .filter((i) => !i?.isCombo && !i?.comboId && i?.productId)
+      .map((i) => i.productId as string);
+
+    const comboIds = [
+      ...new Set(
+        items
+          .filter((i) => i?.isCombo || i?.comboId)
+          .map((i) => i?.comboId || (i?.isCombo ? i?.productId : null))
+          .filter((id): id is string => !!id),
+      ),
+    ];
 
     const comboComponentIds: string[] = [];
-    for (const item of items) {
-      if (item?.comboSnapshot?.items && Array.isArray(item.comboSnapshot.items)) {
-        for (const ci of item.comboSnapshot.items) {
-          if (ci?.productId) comboComponentIds.push(ci.productId);
-        }
-      }
-    }
-
-    const comboIds = items
-      .filter((i) => (i?.isCombo || i?.comboId) && !i?.comboSnapshot?.items)
-      .map((i) => i?.comboId)
-      .filter((id): id is string => !!id);
-
     if (comboIds.length > 0) {
       try {
         const comboRecords = await this.prisma.combo.findMany({
@@ -940,9 +1100,7 @@ export class CreateOrderUseCase {
       }
     }
 
-    const ids = [
-      ...new Set([...directIds, ...comboComponentIds]),
-    ];
+    const ids = [...new Set([...directIds, ...comboComponentIds])];
     if (!withCategories || ids.length === 0) {
       return ids.map((productId) => ({ productId }));
     }
@@ -974,7 +1132,12 @@ export class CreateOrderUseCase {
         where: { storeId, customerPhone: { contains: cleanPhone.slice(-8) } },
       }),
     ]);
-    return loyaltyDiscountCap({ rewardType, itemsTotal: itemsSum, program, card });
+    return loyaltyDiscountCap({
+      rewardType,
+      itemsTotal: itemsSum,
+      program,
+      card,
+    });
   }
 
   async isCustomerBlocked(
