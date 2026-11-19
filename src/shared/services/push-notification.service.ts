@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as webpush from 'web-push';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { ISettingsRepository } from '../../modules/settings/domain/repositories/isettings.repository';
 
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -15,7 +17,10 @@ export class PushNotificationService {
   private expoClient: any = null;
   private ExpoClass: any = null;
 
-  constructor(private readonly settingsRepo: ISettingsRepository) {}
+  constructor(
+    private readonly settingsRepo: ISettingsRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   private async getExpoClient() {
     if (!this.expoClient) {
@@ -67,14 +72,56 @@ export class PushNotificationService {
     const payloadData = { ...(data || {}), icon: iconUrl };
     const payload = JSON.stringify({ title, body, data: payloadData });
 
+    // Endpoints que o serviço de push informou como expirados (404/410)
+    const expiredEndpoints = new Set<string>();
+
     for (const sub of subscriptions) {
       if (!sub || !sub.endpoint) continue;
       try {
         await webpush.sendNotification(sub, payload);
-      } catch (error) {
-        console.error('Error sending web push:', error);
+      } catch (error: any) {
+        if (error?.statusCode === 404 || error?.statusCode === 410) {
+          // Inscrição morta (usuário desinstalou o app ou revogou a permissão): não é erro de verdade
+          expiredEndpoints.add(sub.endpoint);
+        } else {
+          // Log curto: o objeto de erro completo traz dezenas de linhas de headers
+          console.error(
+            `Error sending web push: status=${error?.statusCode ?? 'n/a'} ${error?.message ?? error}`,
+          );
+        }
       }
     }
+
+    if (expiredEndpoints.size > 0) {
+      await this.removeExpiredSubscriptions(expiredEndpoints).catch((err) =>
+        console.error('Error removing expired web push subscriptions:', err?.message ?? err),
+      );
+    }
+  }
+
+  // Remove do cadastro dos usuários as inscrições que já não existem mais
+  private async removeExpiredSubscriptions(endpoints: Set<string>) {
+    const users = await this.prisma.user.findMany({
+      where: { webPushSubscription: { not: Prisma.DbNull } },
+      select: { id: true, webPushSubscription: true },
+    });
+
+    let removed = 0;
+    for (const user of users) {
+      const current = Array.isArray(user.webPushSubscription)
+        ? (user.webPushSubscription as any[])
+        : [user.webPushSubscription as any];
+      const kept = current.filter((s) => !(s && endpoints.has(s.endpoint)));
+      if (kept.length === current.length) continue;
+
+      removed += current.length - kept.length;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { webPushSubscription: kept.length > 0 ? kept : Prisma.DbNull },
+      });
+    }
+
+    console.log(`Web push: ${removed} inscrição(ões) expirada(s) removida(s).`);
   }
 
   private async sendExpoPush(
