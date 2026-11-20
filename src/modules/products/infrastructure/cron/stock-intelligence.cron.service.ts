@@ -80,7 +80,7 @@ export class StockIntelligenceCronService {
         parts.push(`${formattedStagnant} parados sem giro`);
       }
 
-      const title = '💡 Radar de Oportunidades LojaPod';
+      const title = '💡 Radar de Oportunidades Podi Pedir';
       const body = `${parts.join(' e ')}. Veja as sugestões de compra e reposição.`;
 
       await this.pushNotificationService.sendNotifications(

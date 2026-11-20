@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsBoolean, IsArray } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateSettingsDto {
-  @ApiProperty({ example: 'Loja Pod', required: false })
+  @ApiProperty({ example: 'Podi Pedir', required: false })
   @IsString()
   @IsOptional()
   storeName?: string;
@@ -235,7 +235,7 @@ export class UpdateSettingsDto {
   @IsOptional()
   pixKey?: string | null;
 
-  @ApiProperty({ example: 'Loja Pod E-commerce LTDA', required: false })
+  @ApiProperty({ example: 'Podi Pedir E-commerce LTDA', required: false })
   @IsString()
   @IsOptional()
   pixHolder?: string | null;

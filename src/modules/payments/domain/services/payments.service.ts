@@ -66,7 +66,7 @@ export class PaymentsService {
         webhookUrl: '',
         credentials,
         items: [
-          { description: 'Teste de conexão Loja Pod', quantity: 1, price: 1 },
+          { description: 'Teste de conexão Podi Pedir', quantity: 1, price: 1 },
         ],
       });
       return {

@@ -10,7 +10,7 @@ export class CreateStoreDto {
   })
   subdomain?: string;
 
-  @ApiProperty({ example: 'Minha Loja Pod', description: 'Título / Nome da Loja' })
+  @ApiProperty({ example: 'Minha Loja Podi Pedir', description: 'Título / Nome da Loja' })
   @IsString()
   @IsNotEmpty()
   title: string;

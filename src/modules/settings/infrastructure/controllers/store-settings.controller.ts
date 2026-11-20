@@ -115,7 +115,7 @@ export class StoreSettingsController {
     try {
       settings = await this.getSettingsUseCase.execute();
     } catch (e) {
-      settings = { storeName: 'LojaPod', faviconUrl: null };
+      settings = { storeName: 'Podi Pedir', faviconUrl: null };
     }
 
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
@@ -155,8 +155,8 @@ export class StoreSettingsController {
     }
 
     return {
-      name: settings.storeName || 'Loja Pod',
-      short_name: settings.storeName || 'Loja Pod',
+      name: settings.storeName || 'Podi Pedir',
+      short_name: settings.storeName || 'Podi Pedir',
       description: 'Painel Administrativo da loja',
       theme_color: '#ffffff',
       background_color: '#ffffff',
