@@ -8,6 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { DomainExceptionsFilter } from './common/filters/domain-exceptions.filter';
+import { extractPlatformSubdomain } from './modules/tenant/platform-domains.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -26,33 +27,46 @@ async function bootstrap() {
     const path = require('path');
 
     const host = (req.headers['x-forwarded-host'] || req.headers.host || req.hostname || '').toString().toLowerCase();
-    const cleanHost = host.split(':')[0].replace(/^www\./, '');
-    const subdomain = cleanHost.split('.')[0];
+    const cleanHost = host.split(',')[0].trim().split(':')[0].replace(/^www\./, '');
+    const platform = extractPlatformSubdomain(cleanHost);
 
     let store: any = null;
     try {
-      store = await prisma.store.findFirst({
-        where: {
-          OR: [
-            { subdomain: subdomain },
-            { customDomain: cleanHost },
-            { customDomain: `www.${cleanHost}` },
-          ],
-        },
-        include: { storeSettings: true },
-      });
-      if (!store) {
-        const storeDomain = await prisma.storeDomain.findFirst({
+      if (platform.isPlatformDomain) {
+        if (platform.subdomain) {
+          store = await prisma.store.findFirst({
+            where: { subdomain: platform.subdomain },
+            include: { storeSettings: true },
+          });
+        }
+      } else if (!cleanHost.includes('.')) {
+        store = await prisma.store.findFirst({
+          where: { subdomain: cleanHost },
+          include: { storeSettings: true },
+        });
+      } else {
+        store = await prisma.store.findFirst({
           where: {
             OR: [
-              { hostname: cleanHost },
-              { hostname: `www.${cleanHost}` },
+              { customDomain: cleanHost },
+              { customDomain: `www.${cleanHost}` },
             ],
           },
-          include: { store: { include: { storeSettings: true } } },
+          include: { storeSettings: true },
         });
-        if (storeDomain?.store) {
-          store = storeDomain.store;
+        if (!store) {
+          const storeDomain = await prisma.storeDomain.findFirst({
+            where: {
+              OR: [
+                { hostname: cleanHost },
+                { hostname: `www.${cleanHost}` },
+              ],
+            },
+            include: { store: { include: { storeSettings: true } } },
+          });
+          if (storeDomain?.store) {
+            store = storeDomain.store;
+          }
         }
       }
       if (!store) {

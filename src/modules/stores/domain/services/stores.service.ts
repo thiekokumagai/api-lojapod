@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException, UnauthorizedException
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { CreateStoreDto } from '../../infrastructure/dtos/create-store.dto';
 import { MinioService } from '../../../../minio/minio.service';
+import { extractPlatformSubdomain } from '../../../tenant/platform-domains.util';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { promises as dns } from 'dns';
@@ -478,24 +479,55 @@ export class StoresService {
 
   async getStoreBySubdomain(identifier: string) {
     const raw = identifier.toLowerCase().trim();
-    const clean = raw.replace(/^www\./, '');
-    const parts = clean.split('.');
-    const firstPart = parts[0];
+    const clean = raw.split(':')[0].replace(/^www\./, '');
+    const platform = extractPlatformSubdomain(clean);
 
-    const store = await this.prisma.store.findFirst({
-      where: {
-        OR: [
-          { customDomain: clean },
-          { customDomain: `www.${clean}` },
-          { customDomain: raw },
-          { subdomain: clean },
-          { subdomain: firstPart },
-        ],
-      },
-      include: {
-        storeSettings: true,
-      },
-    });
+    let store: any = null;
+
+    if (platform.isPlatformDomain) {
+      if (platform.subdomain) {
+        store = await this.prisma.store.findFirst({
+          where: { subdomain: platform.subdomain },
+          include: { storeSettings: true },
+        });
+      }
+    } else if (!clean.includes('.')) {
+      store = await this.prisma.store.findFirst({
+        where: { subdomain: clean },
+        include: { storeSettings: true },
+      });
+    } else {
+      store = await this.prisma.store.findFirst({
+        where: {
+          OR: [
+            { customDomain: clean },
+            { customDomain: `www.${clean}` },
+            { customDomain: raw },
+          ],
+        },
+        include: { storeSettings: true },
+      });
+
+      if (!store) {
+        const storeDomain = await this.prisma.storeDomain.findFirst({
+          where: {
+            OR: [
+              { hostname: clean },
+              { hostname: `www.${clean}` },
+              { hostname: raw },
+            ],
+          },
+          include: {
+            store: {
+              include: { storeSettings: true },
+            },
+          },
+        });
+        if (storeDomain?.store) {
+          store = storeDomain.store;
+        }
+      }
+    }
 
     if (!store) {
       throw new NotFoundException(`Loja com subdomínio ou domínio "${identifier}" não encontrada`);

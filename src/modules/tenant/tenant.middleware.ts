@@ -2,6 +2,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TenantContextService } from './tenant-context.service';
+import { extractPlatformSubdomain } from './platform-domains.util';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -55,51 +56,59 @@ export class TenantMiddleware implements NestMiddleware {
     let resolvedSubdomain: string | undefined;
 
     try {
-      const cleanIdentifier = rawIdentifier.replace(/^www\./, '');
-      const parts = cleanIdentifier.split('.');
-      const firstPart = parts[0];
+      const cleanIdentifier = rawIdentifier.split(':')[0].replace(/^www\./, '');
+      const platform = extractPlatformSubdomain(cleanIdentifier);
 
-      // Se for um subdomínio lojapod.com (ex: sopod.lojapod.com), o subdomínio real no banco é 'sopod'
-      const isLojapodSubdomain = cleanIdentifier.endsWith('.lojapod.com');
-      const targetSubdomain = isLojapodSubdomain ? firstPart : cleanIdentifier;
+      let store: any = null;
 
-      let store = await this.prisma.store.findFirst({
-        where: {
-          OR: [
-            { customDomain: cleanIdentifier },
-            { customDomain: `www.${cleanIdentifier}` },
-            { customDomain: rawIdentifier },
-            { subdomain: targetSubdomain },
-            { subdomain: cleanIdentifier },
-            { subdomain: firstPart },
-          ],
-        },
-      });
-
-      // Se não encontrou na Store, busca na tabela store_domains
-      if (!store) {
-        const storeDomain = await this.prisma.storeDomain.findFirst({
+      if (platform.isPlatformDomain) {
+        // Domínio da plataforma (lojapod.com / podipedir.com.br): busca apenas pelo subdomínio da loja
+        if (platform.subdomain) {
+          store = await this.prisma.store.findFirst({
+            where: { subdomain: platform.subdomain },
+          });
+        }
+      } else if (!cleanIdentifier.includes('.')) {
+        // Slug direto sem ponto (ex.: header X-Store-Subdomain: sopod ou localhost)
+        store = await this.prisma.store.findFirst({
+          where: { subdomain: cleanIdentifier },
+        });
+      } else {
+        // Domínio externo de lojista (ex.: hnperfumes.com.br): busca apenas em customDomain e StoreDomain
+        store = await this.prisma.store.findFirst({
           where: {
             OR: [
-              { hostname: cleanIdentifier },
-              { hostname: `www.${cleanIdentifier}` },
-              { hostname: rawIdentifier },
+              { customDomain: cleanIdentifier },
+              { customDomain: `www.${cleanIdentifier}` },
+              { customDomain: rawIdentifier },
             ],
-          },
-          include: {
-            store: true,
           },
         });
 
-        if (storeDomain?.store) {
-          store = storeDomain.store;
+        if (!store) {
+          const storeDomain = await this.prisma.storeDomain.findFirst({
+            where: {
+              OR: [
+                { hostname: cleanIdentifier },
+                { hostname: `www.${cleanIdentifier}` },
+                { hostname: rawIdentifier },
+              ],
+            },
+            include: {
+              store: true,
+            },
+          });
 
-          // Auto-sincronização: se a store ainda não tinha o customDomain salvo, atualiza para acelerar buscas futuras
-          if (!store.customDomain) {
-            this.prisma.store.update({
-              where: { id: store.id },
-              data: { customDomain: storeDomain.hostname },
-            }).catch(() => {});
+          if (storeDomain?.store) {
+            store = storeDomain.store;
+
+            // Auto-sincronização apenas para domínios próprios externos
+            if (!store.customDomain) {
+              this.prisma.store.update({
+                where: { id: store.id },
+                data: { customDomain: storeDomain.hostname },
+              }).catch(() => {});
+            }
           }
         }
       }
