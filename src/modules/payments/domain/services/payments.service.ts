@@ -55,7 +55,7 @@ export class PaymentsService {
       const cleanOrigin = (
         originUrl ||
         process.env.ADMIN_FRONTEND_URL ||
-        'https://lojapod.com'
+        'https://podipedir.com.br'
       ).replace(/\/$/, '');
       const result = await gateway.createCreditCardCheckout({
         orderId: 'teste-conexao',

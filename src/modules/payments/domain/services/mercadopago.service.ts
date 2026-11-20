@@ -586,6 +586,6 @@ export class MercadoPagoService {
 
   /** O pedido não guarda e-mail do cliente e o Mercado Pago exige um. */
   private fallbackEmail(orderNumber: number): string {
-    return `pedido${orderNumber}@pagamento.lojapod.com`;
+    return `pedido${orderNumber}@pagamento.podipedir.com.br`;
   }
 }

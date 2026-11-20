@@ -154,9 +154,14 @@ export class StoreSettingsController {
       }
     }
 
+    const cleanStoreName =
+      settings.storeName && !/^loja\s*pod$/i.test(String(settings.storeName).trim())
+        ? settings.storeName
+        : 'Podi Pedir';
+
     return {
-      name: settings.storeName || 'Podi Pedir',
-      short_name: settings.storeName || 'Podi Pedir',
+      name: cleanStoreName,
+      short_name: cleanStoreName,
       description: 'Painel Administrativo da loja',
       theme_color: '#ffffff',
       background_color: '#ffffff',

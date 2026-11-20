@@ -46,8 +46,8 @@ async function main() {
   const demoStore = await prisma.store.create({
     data: {
       subdomain: 'demo',
-      title: 'Loja Pod Demo',
-      adminEmail: 'demo@lojapod.com',
+      title: 'Podi Pedir Demo',
+      adminEmail: 'demo@podipedir.com.br',
       printToken: 'PRT-DEMO1234',
     },
   });
