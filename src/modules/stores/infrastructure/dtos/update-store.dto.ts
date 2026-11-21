@@ -1,6 +1,5 @@
 import {
   IsString,
-  IsEmail,
   IsOptional,
   IsIn,
   IsBoolean,
@@ -25,7 +24,7 @@ export class UpdateStoreDto {
   customDomain?: string | null;
 
   @ApiPropertyOptional()
-  @IsEmail()
+  @IsString()
   @IsOptional()
   adminEmail?: string;
 
