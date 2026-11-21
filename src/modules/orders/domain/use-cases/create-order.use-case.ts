@@ -488,6 +488,20 @@ export class CreateOrderUseCase {
           );
         }
         data.itemsTotal = publicItemsSum;
+
+        if (storeSettings?.minOrderEnabled && storeSettings?.minOrderValue) {
+          const minOrderVal = Number(storeSettings.minOrderValue);
+          if (
+            !isNaN(minOrderVal) &&
+            minOrderVal > 0 &&
+            publicItemsSum + TOTAL_TOLERANCE < minOrderVal
+          ) {
+            const formattedMin = minOrderVal.toFixed(2).replace('.', ',');
+            throw new BadRequestException(
+              `O valor mínimo do pedido é R$ ${formattedMin}.`,
+            );
+          }
+        }
       }
 
       // Se a loja tem regra de isenção de taxa (frete grátis) a partir de um valor
@@ -1091,12 +1105,17 @@ export class CreateOrderUseCase {
       productId?: string | null;
       comboId?: string | null;
       isCombo?: boolean;
+      isOrderBump?: boolean;
+      orderBumpId?: string | null;
     }>,
     withCategories: boolean,
-  ): Promise<Array<{ productId: string; categoryId?: string | null }>> {
-    const directIds = items
-      .filter((i) => !i?.isCombo && !i?.comboId && i?.productId)
-      .map((i) => i.productId as string);
+  ): Promise<
+    Array<{ productId: string; categoryId?: string | null; isOrderBump?: boolean }>
+  > {
+    const directItems = items.filter(
+      (i) => !i?.isCombo && !i?.comboId && i?.productId,
+    );
+    const directIds = directItems.map((i) => i.productId as string);
 
     const comboIds = [
       ...new Set(
@@ -1124,18 +1143,29 @@ export class CreateOrderUseCase {
       }
     }
 
+    const allEntries: Array<{ productId: string; isOrderBump?: boolean }> = [
+      ...directItems.map((i) => ({
+        productId: i.productId as string,
+        isOrderBump: Boolean(i.isOrderBump || i.orderBumpId),
+      })),
+      ...comboComponentIds.map((productId) => ({
+        productId,
+        isOrderBump: false,
+      })),
+    ];
+
     const ids = [...new Set([...directIds, ...comboComponentIds])];
     if (!withCategories || ids.length === 0) {
-      return ids.map((productId) => ({ productId }));
+      return allEntries;
     }
     const rows = await this.prisma.product.findMany({
       where: { id: { in: ids } },
       select: { id: true, categoryId: true },
     });
     const categoryById = new Map(rows.map((r) => [r.id, r.categoryId]));
-    return ids.map((productId) => ({
-      productId,
-      categoryId: categoryById.get(productId) ?? null,
+    return allEntries.map((entry) => ({
+      ...entry,
+      categoryId: categoryById.get(entry.productId) ?? null,
     }));
   }
 

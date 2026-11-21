@@ -219,6 +219,47 @@ describe('pedido público: frete recalculado pelo servidor', () => {
     expect(distanceKm).not.toHaveBeenCalled();
   });
 
+  it('pedido mínimo ativo: recusa pedido público abaixo do mínimo (entrega e retirada) e aceita quando atinge o mínimo', async () => {
+    const settingsMin = {
+      minOrderEnabled: true,
+      minOrderValue: 120,
+    };
+
+    const abaixoEntrega = await create(
+      { km: 3, settings: settingsMin },
+      body({ itemsTotal: 100, freight: 8, totalOrder: 108 }),
+    );
+    expect(abaixoEntrega.error).toBeInstanceOf(BadRequestException);
+    expect(abaixoEntrega.error?.message).toBe(
+      'O valor mínimo do pedido é R$ 120,00.',
+    );
+    expect(abaixoEntrega.saveWithStockDecrement).not.toHaveBeenCalled();
+
+    const abaixoRetirada = await create(
+      { km: 3, settings: settingsMin },
+      body({
+        deliveryModality: 'STORE_PICKUP',
+        itemsTotal: 100,
+        freight: 0,
+        totalOrder: 100,
+      }),
+    );
+    expect(abaixoRetirada.error).toBeInstanceOf(BadRequestException);
+    expect(abaixoRetirada.error?.message).toBe(
+      'O valor mínimo do pedido é R$ 120,00.',
+    );
+
+    const atingiuMinimo = await create(
+      {
+        km: 3,
+        settings: { minOrderEnabled: true, minOrderValue: 100 },
+      },
+      body({ itemsTotal: 100, freight: 8, totalOrder: 108 }),
+    );
+    expect(atingiuMinimo.error).toBeNull();
+    expect(atingiuMinimo.saved.totalOrder).toBe(108);
+  });
+
   it('retirada com frete embutido é recusada', async () => {
     const { error } = await create(
       { km: 3 },

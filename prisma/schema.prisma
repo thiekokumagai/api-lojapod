@@ -379,6 +379,8 @@ model StoreSettings {
   deliveryType                  String   @default("DISTANCE")
   freeShippingEnabled           Boolean  @default(false)
   freeShippingMinValue          Decimal? @db.Decimal(10, 2)
+  minOrderEnabled               Boolean  @default(false)
+  minOrderValue                 Decimal? @db.Decimal(10, 2)
   storePickupEnabled            Boolean  @default(false)
   vendizapAuthId                String?
   vendizapAuthSecret            String?

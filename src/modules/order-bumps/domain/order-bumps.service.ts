@@ -103,12 +103,23 @@ export class OrderBumpsService {
       }
     }
 
+    // Se priority não foi informado, coloca a nova regra com prioridade acima das existentes para aparecer em 1º
+    let nextPriority = dto.priority;
+    if (nextPriority === undefined || nextPriority === null) {
+      const topExisting = await (this.prisma as any).orderBump.findFirst({
+        where: { storeId },
+        orderBy: { priority: 'desc' },
+        select: { priority: true },
+      });
+      nextPriority = (topExisting?.priority ?? 0) + 1;
+    }
+
     return (this.prisma as any).orderBump.create({
       data: {
         storeId,
         title: dto.title || 'Peça também',
         isActive: dto.isActive !== undefined ? dto.isActive : true,
-        priority: dto.priority || 0,
+        priority: nextPriority,
         triggerType: dto.triggerType,
         triggerProductId: dto.triggerType === 'PRODUCT' ? dto.triggerProductId : null,
         triggerCategoryId: dto.triggerType === 'CATEGORY' ? dto.triggerCategoryId : null,
@@ -237,6 +248,40 @@ export class OrderBumpsService {
   }
 
   /**
+   * Reordenar regras de Order Bump da loja (o 1º ID recebe o maior priority)
+   */
+  async reorder(ids: string[]) {
+    const storeId = this.getStoreId();
+    const uniqueIds = [...new Set((ids ?? []).filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const existing = await (this.prisma as any).orderBump.findMany({
+      where: { storeId, id: { in: uniqueIds } },
+      select: { id: true },
+    });
+
+    if (existing.length !== uniqueIds.length) {
+      throw new BadRequestException(
+        'Uma ou mais regras de Order Bump não pertencem a esta loja.',
+      );
+    }
+
+    const total = uniqueIds.length;
+    await this.prisma.$transaction(
+      uniqueIds.map((id, idx) =>
+        (this.prisma as any).orderBump.update({
+          where: { id },
+          data: { priority: total - idx },
+        }),
+      ),
+    );
+
+    return this.listAllForAdmin();
+  }
+
+  /**
    * Sugestões inteligentes para o cliente na sacola (Storefront)
    */
   async getSuggestionsForStore(dto: GetOrderBumpSuggestionsDto) {
@@ -351,6 +396,9 @@ export class OrderBumpsService {
       suggestions.push({
         bumpId: rule.id,
         sectionTitle: rule.title || 'Peça também',
+        triggerType: rule.triggerType || 'ALL',
+        triggerProductId: rule.triggerProductId || null,
+        triggerCategoryId: rule.triggerCategoryId || null,
         product: {
           id: product.id,
           title: product.title,

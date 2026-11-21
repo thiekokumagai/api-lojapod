@@ -141,9 +141,12 @@ describe('oferta "Peça também": quando o preço dela pode valer', () => {
     const donuts = { productId: 'donuts', categoryId: 'doces' };
     const coca = { productId: 'coca', categoryId: 'bebidas' };
 
-    it('ALL: vale em qualquer pedido', () => {
-      expect(orderBumpTriggerMet(bump, [coca])).toBe(true);
-      expect(orderBumpTriggerMet({ ...bump, triggerType: undefined }, [coca])).toBe(true);
+    it('ALL: vale quando há outro produto no pedido, mas NÃO vale se sobrar apenas o próprio order bump sozinho', () => {
+      expect(orderBumpTriggerMet(bump, [donuts, coca])).toBe(true);
+      expect(orderBumpTriggerMet({ ...bump, triggerType: undefined }, [donuts, coca])).toBe(true);
+      expect(
+        orderBumpTriggerMet(bump, [{ ...coca, isOrderBump: true }]),
+      ).toBe(false);
     });
 
     it('PRODUCT: exige o produto gatilho no pedido', () => {

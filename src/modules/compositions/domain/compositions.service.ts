@@ -202,8 +202,18 @@ export class CompositionsService {
       throw new NotFoundException('Produto não encontrado.');
     }
 
+    // Deduplica grupos pelo groupId (mantém a primeira ocorrência na ordem enviada)
+    const seenGroupIds = new Set<string>();
+    const uniqueGroups = (dto.groups ?? []).filter((item) => {
+      if (!item?.groupId || seenGroupIds.has(item.groupId)) {
+        return false;
+      }
+      seenGroupIds.add(item.groupId);
+      return true;
+    });
+
     // Só grupos desta loja podem ser ligados ao produto
-    const groupIds = [...new Set((dto.groups ?? []).map((g) => g.groupId))];
+    const groupIds = [...seenGroupIds];
     if (groupIds.length > 0) {
       const ownGroups = await this.prisma.compositionGroup.findMany({
         where: { id: { in: groupIds }, storeId },
@@ -222,7 +232,7 @@ export class CompositionsService {
         where: { productId },
       });
 
-      if (dto.groups && dto.groups.length > 0) {
+      if (uniqueGroups.length > 0) {
         // Marca o produto como customizável
         await tx.product.update({
           where: { id: productId },
@@ -230,8 +240,8 @@ export class CompositionsService {
         });
 
         // Cria novos vínculos
-        for (let idx = 0; idx < dto.groups.length; idx++) {
-          const item = dto.groups[idx];
+        for (let idx = 0; idx < uniqueGroups.length; idx++) {
+          const item = uniqueGroups[idx];
           await tx.productComposition.create({
             data: {
               productId,

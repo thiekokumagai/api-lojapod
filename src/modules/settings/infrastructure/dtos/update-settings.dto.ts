@@ -173,6 +173,15 @@ export class UpdateSettingsDto {
   @ApiProperty({ example: false, required: false })
   @IsBoolean()
   @IsOptional()
+  minOrderEnabled?: boolean;
+
+  @ApiProperty({ example: 30.00, required: false })
+  @IsOptional()
+  minOrderValue?: number | null;
+
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
   storePickupEnabled?: boolean;
 
   @ApiProperty({ example: 'DISTANCE', required: false })

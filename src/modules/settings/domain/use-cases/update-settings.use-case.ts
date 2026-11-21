@@ -50,6 +50,8 @@ export interface UpdateSettingsInput {
   promoPaymentMethods?: string[];
   freeShippingEnabled?: boolean;
   freeShippingMinValue?: number | null;
+  minOrderEnabled?: boolean;
+  minOrderValue?: number | null;
   storePickupEnabled?: boolean;
   deliveryType?: string;
   deliveryFixedFee?: number | null;
@@ -286,6 +288,14 @@ export class UpdateSettingsUseCase {
         input.freeShippingMinValue !== undefined
           ? input.freeShippingMinValue
           : (base as any).freeShippingMinValue,
+      minOrderEnabled:
+        input.minOrderEnabled !== undefined
+          ? input.minOrderEnabled
+          : (base as any).minOrderEnabled,
+      minOrderValue:
+        input.minOrderValue !== undefined
+          ? input.minOrderValue
+          : (base as any).minOrderValue,
       storePickupEnabled:
         input.storePickupEnabled !== undefined
           ? input.storePickupEnabled

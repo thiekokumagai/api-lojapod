@@ -133,6 +133,8 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       paymentGateways: settings.paymentGateways ?? undefined,
       freeShippingEnabled: settings.freeShippingEnabled ?? false,
       freeShippingMinValue: settings.freeShippingMinValue ?? null,
+      minOrderEnabled: settings.minOrderEnabled ?? false,
+      minOrderValue: settings.minOrderValue ?? null,
       storePickupEnabled: settings.storePickupEnabled ?? false,
       deliveryType: settings.deliveryType ?? 'DISTANCE',
       deliveryFixedFee: settings.deliveryFixedFee ?? null,

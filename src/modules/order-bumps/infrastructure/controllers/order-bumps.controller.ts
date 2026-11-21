@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard
 import { OrderBumpsService } from '../../domain/order-bumps.service';
 import { CreateOrderBumpDto } from '../../dto/create-order-bump.dto';
 import { UpdateOrderBumpDto } from '../../dto/update-order-bump.dto';
+import { ReorderOrderBumpsDto } from '../../dto/reorder-order-bumps.dto';
 
 import { RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
 
@@ -25,6 +26,12 @@ export class OrderBumpsController {
   @ApiOperation({ summary: 'Criar nova regra de Order Bump' })
   async create(@Body() dto: CreateOrderBumpDto) {
     return this.service.create(dto);
+  }
+
+  @Patch('reorder')
+  @ApiOperation({ summary: 'Reordenar regras de Order Bump da loja' })
+  async reorder(@Body() dto: ReorderOrderBumpsDto) {
+    return this.service.reorder(dto.ids);
   }
 
   @Put(':id')

@@ -112,17 +112,32 @@ export function orderBumpUsable(
 
 /**
  * O gatilho da oferta foi cumprido pelos itens do pedido? Mesma regra que a loja usa para mostrá-la:
- * `ALL` vale sempre; `PRODUCT` exige o produto gatilho no pedido; `CATEGORY` exige um produto da
- * categoria gatilho. O próprio produto da oferta não conta como gatilho (a loja nunca sugere um
- * produto que já está no carrinho).
+ *  - É obrigatório existir pelo menos um produto no pedido que NÃO seja a própria oferta (e que seja
+ *    diferente de `suggestedProductId`, a menos que haja pelo menos 2 unidades/linhas do mesmo produto).
+ *  - `ALL`: vale desde que exista outro produto no pedido;
+ *  - `PRODUCT`: exige o produto gatilho no pedido;
+ *  - `CATEGORY`: exige um produto da categoria gatilho no pedido.
+ * O próprio produto da oferta não conta sozinho como gatilho (se o cliente remover o produto principal e
+ * deixar só o order bump na sacola, ele perde o desconto da oferta).
  */
 export function orderBumpTriggerMet(
   bump: OrderBumpRuleFields,
-  orderProducts: Array<{ productId: string; categoryId?: string | null }>,
+  orderProducts: Array<{ productId: string; categoryId?: string | null; isOrderBump?: boolean }>,
 ): boolean {
   const others = orderProducts.filter(
     (p) => p.productId !== bump.suggestedProductId,
   );
+  const sameProductLines = orderProducts.filter(
+    (p) => p.productId === bump.suggestedProductId,
+  );
+  const hasMainAndBumpOfSameProduct =
+    sameProductLines.length >= 2 && sameProductLines.some((p) => !p.isOrderBump);
+
+  // Se não há outro produto no pedido nem uma segunda linha normal do próprio produto, a oferta está sozinha
+  if (others.length === 0 && !hasMainAndBumpOfSameProduct) {
+    return false;
+  }
+
   switch (bump.triggerType ?? 'ALL') {
     case 'ALL':
       return true;
@@ -131,8 +146,7 @@ export function orderBumpTriggerMet(
         !!bump.triggerProductId &&
         (others.some((p) => p.productId === bump.triggerProductId) ||
           (bump.triggerProductId === bump.suggestedProductId &&
-            orderProducts.filter((p) => p.productId === bump.triggerProductId)
-              .length >= 2))
+            sameProductLines.length >= 2))
       );
     case 'CATEGORY':
       return (

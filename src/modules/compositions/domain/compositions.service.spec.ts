@@ -92,6 +92,26 @@ describe('CompositionsService.syncProductCompositions', () => {
     });
   });
 
+  it('deduplica groupIds repetidos no payload para não violar a unique constraint (productId, groupId)', async () => {
+    const { service, tx } = build({
+      groups: [{ id: 'gA', storeId: 'storeA' }],
+    });
+    await service.syncProductCompositions('p1', {
+      groups: [
+        { groupId: 'gA', customMinQuantity: 1 },
+        { groupId: 'gA', customMinQuantity: 2 },
+      ],
+    });
+    expect(tx.productComposition.create).toHaveBeenCalledTimes(1);
+    expect(tx.productComposition.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        productId: 'p1',
+        groupId: 'gA',
+        customMinQuantity: 1,
+      }),
+    });
+  });
+
   it('o corpo do sync passa pelo ValidationPipe global (whitelist + forbidNonWhitelisted)', async () => {
     const pipe = new ValidationPipe({
       whitelist: true,
