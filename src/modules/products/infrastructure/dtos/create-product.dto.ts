@@ -6,6 +6,7 @@ import {
   IsNumber,
   Min,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -52,14 +53,17 @@ export class CreateProductDto {
   createdAt?: string;
 
   @ApiPropertyOptional({ example: true })
+  @IsBoolean()
   @IsOptional()
   isVisible?: boolean;
 
   @ApiPropertyOptional({ example: false })
+  @IsBoolean()
   @IsOptional()
   isFeatured?: boolean;
 
   @ApiPropertyOptional({ example: false })
+  @IsBoolean()
   @IsOptional()
   isCustomizable?: boolean;
 }
