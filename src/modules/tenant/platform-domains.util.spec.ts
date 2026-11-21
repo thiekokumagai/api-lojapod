@@ -81,6 +81,33 @@ describe('TenantMiddleware com múltiplos domínios-base', () => {
     return { prisma, tenantContext, middleware };
   };
 
+  it('resolve subdomínio local *.localhost (ex.: demo.localhost) apenas por subdomain', async () => {
+    const { prisma, tenantContext, middleware } = createMocks();
+    prisma.store.findFirst.mockResolvedValue({
+      id: 'store-demo',
+      subdomain: 'demo',
+      isActive: true,
+    });
+
+    await middleware.use(
+      {
+        headers: { 'x-store-domain': 'demo.localhost' },
+        query: {},
+      } as any,
+      {} as any,
+      jest.fn(),
+    );
+
+    expect(prisma.store.findFirst).toHaveBeenCalledWith({
+      where: { subdomain: 'demo' },
+    });
+    expect(prisma.storeDomain.findFirst).not.toHaveBeenCalled();
+    expect(tenantContext.run).toHaveBeenCalledWith(
+      { storeId: 'store-demo', subdomain: 'demo', isActive: true },
+      expect.any(Function),
+    );
+  });
+
   it('resolve subdomínio em podipedir.com.br apenas por subdomain, sem consultar StoreDomain', async () => {
     const { prisma, tenantContext, middleware } = createMocks();
     prisma.store.findFirst.mockResolvedValue({

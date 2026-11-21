@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { IOrdersRepository } from '../repositories/iorders.repository';
 import { Order } from '../entities/order.entity';
 import { ValidateCouponUseCase } from '../../../coupons/domain/use-cases/validate-coupon.use-case';
@@ -8,6 +14,11 @@ import { EventsGateway } from '../../../events/events.gateway';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { pixTerminalPaymentType } from '../utils/pix-terminal';
+import { PrismaService } from '../../../../../prisma/prisma.service';
+import {
+  resetNonProductCustomization,
+  resolveCustomizedAllowedPrices,
+} from '../utils/order-customization';
 
 @Injectable()
 export class UpdateOrderUseCase {
@@ -20,15 +31,33 @@ export class UpdateOrderUseCase {
     private readonly eventsGateway: EventsGateway,
     private readonly tenantContextService: TenantContextService,
     private readonly settingsRepository: ISettingsRepository,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   async execute(
     id: string,
-    data: Partial<Order> & { couponTitle?: string, showProductPrices?: boolean },
+    data: Partial<Order> & { couponTitle?: string; showProductPrices?: boolean },
+    currentUser?: { storeId?: string | null; role?: string } | null,
   ): Promise<Order> {
     try {
-      const existingOrder = await this.ordersRepository.findById(id);
-      if (!existingOrder) throw new BadRequestException('Pedido não encontrado.');
+      const storeFilter =
+        currentUser && currentUser.role !== 'SUPER_ADMIN'
+          ? (currentUser.storeId ?? '__NO_STORE__')
+          : undefined;
+
+      const existingOrder = await this.ordersRepository.findById(
+        id,
+        storeFilter,
+      );
+      if (
+        !existingOrder ||
+        (currentUser &&
+          currentUser.role !== 'SUPER_ADMIN' &&
+          (!currentUser.storeId ||
+            existingOrder.storeId !== currentUser.storeId))
+      ) {
+        throw new NotFoundException('Pedido não encontrado.');
+      }
 
       if (existingOrder.status !== 'PENDING') {
         throw new BadRequestException('Apenas pedidos com status pendente podem ser editados.');
@@ -38,7 +67,10 @@ export class UpdateOrderUseCase {
       let couponDiscountValue = Number(data.couponDiscount) || 0;
       let couponFreightDiscountValue = Number(data.couponFreightDiscount) || 0;
 
-      const storeId = data.storeId || existingOrder.storeId || this.tenantContextService.getStoreId() || undefined;
+      const storeId =
+        existingOrder.storeId ||
+        this.tenantContextService.getStoreId() ||
+        undefined;
 
       if (data.couponTitle) {
         const { coupon, discountAmount } =
@@ -63,6 +95,40 @@ export class UpdateOrderUseCase {
         couponFreightDiscount: couponFreightDiscountValue,
         couponId: couponId,
       });
+
+      // Saneamento da montagem dos itens (mesma regra do CreateOrderUseCase)
+      if (Array.isArray(orderToUpdate.items)) {
+        for (const item of orderToUpdate.items) {
+          if (resetNonProductCustomization(item) || !item.isCustomized || !item.productId) {
+            item.isCustomized = false;
+            item.customizationSnapshot = undefined;
+          } else {
+            if (!this.prisma) {
+              throw new BadRequestException(
+                'Serviço de banco indisponível para validar personalização do item.',
+              );
+            }
+            const prod = await this.prisma.product.findFirst({
+              where: {
+                id: item.productId,
+                ...(storeId ? { storeId } : {}),
+              },
+            });
+            if (!prod) {
+              throw new BadRequestException(
+                'Produto do item personalizado não encontrado.',
+              );
+            }
+            const customResult = await resolveCustomizedAllowedPrices(
+              prod,
+              item,
+              this.prisma,
+              storeId,
+            );
+            item.customizationSnapshot = customResult.sanitizedSnapshot;
+          }
+        }
+      }
 
       // Pix na maquininha: Pix não pago nunca fica `online` (seria tratado como já pago)
       const storeSettings = await this.settingsRepository
@@ -118,6 +184,9 @@ export class UpdateOrderUseCase {
 
       return savedOrder;
     } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new BadRequestException(error.message);
     }
   }

@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { StoreSettings } from '../entities/store-settings.entity';
+import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  BusinessType,
+  StoreSettings,
+} from '../entities/store-settings.entity';
 import { ISettingsRepository } from '../repositories/isettings.repository';
 
 export interface UpdateSettingsInput {
@@ -75,6 +78,8 @@ export interface UpdateSettingsInput {
   showVariationsOnCard?: boolean;
   searchFilters?: any;
   paymentGateways?: any;
+  businessType?: BusinessType;
+  forceDisableCustomizations?: boolean;
 }
 
 @Injectable()
@@ -83,6 +88,29 @@ export class UpdateSettingsUseCase {
 
   async execute(input: UpdateSettingsInput): Promise<StoreSettings> {
     const existing = await this.settingsRepository.get();
+
+    const currentBusinessType: BusinessType = existing?.businessType ?? 'POD';
+    const nextBusinessType: BusinessType =
+      input.businessType !== undefined ? input.businessType : currentBusinessType;
+
+    let disableCustomizableProducts = false;
+    if (nextBusinessType === 'POD' && currentBusinessType !== 'POD') {
+      const customizableProductsCount = this.settingsRepository
+        .countCustomizableProducts
+        ? await this.settingsRepository.countCustomizableProducts()
+        : 0;
+
+      if (customizableProductsCount > 0) {
+        if (!input.forceDisableCustomizations) {
+          throw new ConflictException({
+            message: `Existem ${customizableProductsCount} produto(s) personalizável(is). Desmarque-os ou confirme para desmarcar automaticamente antes de trocar para Vape Shop.`,
+            code: 'CUSTOMIZABLE_PRODUCTS_EXIST',
+            customizableProductsCount,
+          });
+        }
+        disableCustomizableProducts = true;
+      }
+    }
 
     const base = existing || {
       storeName: 'Minha Loja',
@@ -365,6 +393,7 @@ export class UpdateSettingsUseCase {
         input.paymentGateways !== undefined
           ? input.paymentGateways
           : (base as any).paymentGateways,
-    });
+      businessType: nextBusinessType,
+    }, { disableCustomizableProducts });
   }
 }

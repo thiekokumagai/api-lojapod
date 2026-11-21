@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, Matches, MinLength, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, Matches, MinLength, IsOptional, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateStoreDto {
@@ -30,4 +30,13 @@ export class CreateStoreDto {
   @IsOptional()
   @MinLength(6)
   password?: string;
+
+  @ApiPropertyOptional({
+    example: 'POD',
+    enum: ['POD', 'FOOD', 'ACAI'],
+    description: 'Segmento da loja (somente Super Admin)',
+  })
+  @IsIn(['POD', 'FOOD', 'ACAI'])
+  @IsOptional()
+  businessType?: 'POD' | 'FOOD' | 'ACAI';
 }

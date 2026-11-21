@@ -6,9 +6,12 @@ export interface PaymentRule {
   maxInstallments?: number;
 }
 
+export type BusinessType = 'POD' | 'FOOD' | 'ACAI';
+
 export interface StoreSettings {
   id: string;
   storeName: string;
+  businessType?: BusinessType;
   templateId?: string;
   primaryColor?: string | null;
   secondaryColor?: string | null;

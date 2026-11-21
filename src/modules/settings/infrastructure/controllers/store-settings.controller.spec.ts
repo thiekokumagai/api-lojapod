@@ -70,4 +70,19 @@ describe('StoreSettingsController.getStoreSettings (Pix na maquininha)', () => {
 
     expect(result.pixKey).toBe('12345678900');
   });
+
+  it('devolve businessType da loja (padrão POD ou valor salvo)', async () => {
+    const useCase = {
+      execute: jest.fn().mockResolvedValue({
+        ...baseSettings,
+        businessType: 'ACAI',
+        paymentGateways: null,
+      }),
+    };
+    const controller = new StoreSettingsController(
+      useCase as unknown as GetSettingsUseCase,
+    );
+    const result = (await controller.getStoreSettings()) as any;
+    expect(result.businessType).toBe('ACAI');
+  });
 });

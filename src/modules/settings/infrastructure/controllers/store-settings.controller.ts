@@ -47,6 +47,7 @@ export class StoreSettingsController {
 
     return {
       ...settings,
+      businessType: settings.businessType ?? 'POD',
       ...(pixOnTerminal
         ? { pixKey: null, pixKeyType: null, pixHolder: null }
         : {}),

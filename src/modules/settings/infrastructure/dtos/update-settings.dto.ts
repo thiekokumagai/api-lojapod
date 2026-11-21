@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateSettingsDto {
@@ -358,4 +358,18 @@ export class UpdateSettingsDto {
   @ApiProperty({ example: {}, required: false })
   @IsOptional()
   paymentGateways?: any;
+
+  @ApiProperty({
+    example: 'POD',
+    enum: ['POD', 'FOOD', 'ACAI'],
+    required: false,
+  })
+  @IsIn(['POD', 'FOOD', 'ACAI'])
+  @IsOptional()
+  businessType?: 'POD' | 'FOOD' | 'ACAI';
+
+  @ApiProperty({ example: false, required: false })
+  @IsBoolean()
+  @IsOptional()
+  forceDisableCustomizations?: boolean;
 }

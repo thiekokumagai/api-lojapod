@@ -1,7 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { StoreSettings } from '../../domain/entities/store-settings.entity';
-import { ISettingsRepository } from '../../domain/repositories/isettings.repository';
+import {
+  ISettingsRepository,
+  SaveSettingsOptions,
+} from '../../domain/repositories/isettings.repository';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 
 @Injectable()
@@ -18,29 +21,53 @@ export class PrismaSettingsRepository implements ISettingsRepository {
     }
     let record = await this.prisma.storeSettings.findFirst({
       where: { storeId },
+      include: {
+        store: {
+          select: { businessType: true },
+        },
+      },
     });
 
     if (!record) {
       const store = await this.prisma.store.findUnique({
         where: { id: storeId },
-        select: { title: true },
+        select: { title: true, businessType: true },
       });
       if (store) {
-        record = await this.prisma.storeSettings.create({
+        record = (await this.prisma.storeSettings.create({
           data: {
             storeId,
             storeName: store.title,
           },
-        });
+          include: {
+            store: {
+              select: { businessType: true },
+            },
+          },
+        })) as any;
       }
     }
 
     if (!record) return null;
-    return record as unknown as StoreSettings;
+    return {
+      ...record,
+      businessType: (record as any).store?.businessType ?? 'POD',
+    } as unknown as StoreSettings;
+  }
+
+  async countCustomizableProducts(): Promise<number> {
+    const storeId = this.tenantContextService.getStoreId();
+    if (!storeId) {
+      return 0;
+    }
+    return this.prisma.product.count({
+      where: { storeId, isCustomizable: true },
+    });
   }
 
   async save(
     settings: Omit<StoreSettings, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: SaveSettingsOptions,
   ): Promise<StoreSettings> {
     const storeId = this.tenantContextService.getStoreId();
     if (!storeId) {
@@ -69,7 +96,8 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       pixelId: settings.pixelId,
       facebookPixelEnabled: settings.facebookPixelEnabled ?? false,
       facebookConversionsToken: settings.facebookConversionsToken ?? null,
-      facebookConversionsApiEnabled: settings.facebookConversionsApiEnabled ?? false,
+      facebookConversionsApiEnabled:
+        settings.facebookConversionsApiEnabled ?? false,
       marketingLinks: settings.marketingLinks ?? [],
       cep: settings.cep,
       street: settings.street,
@@ -96,8 +124,10 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       payOnDeliveryCash: settings.payOnDeliveryCash,
       payOnDeliveryCardDebit: settings.payOnDeliveryCardDebit,
       payOnDeliveryCardCredit: settings.payOnDeliveryCardCredit,
-      payOnDeliveryMealVoucher: (settings as any).payOnDeliveryMealVoucher ?? false,
-      payOnDeliveryFoodVoucher: (settings as any).payOnDeliveryFoodVoucher ?? false,
+      payOnDeliveryMealVoucher:
+        (settings as any).payOnDeliveryMealVoucher ?? false,
+      payOnDeliveryFoodVoucher:
+        (settings as any).payOnDeliveryFoodVoucher ?? false,
       paymentRules: settings.paymentRules ?? [],
       promoPaymentMethods: settings.promoPaymentMethods ?? ['pix'],
       paymentGateways: settings.paymentGateways ?? undefined,
@@ -114,23 +144,53 @@ export class PrismaSettingsRepository implements ISettingsRepository {
       uberDirectClientSecret: settings.uberDirectClientSecret ?? null,
       uberDirectCustomerId: settings.uberDirectCustomerId ?? null,
       uberDirectEnvironment: settings.uberDirectEnvironment ?? 'sandbox',
-      uberDirectPickupInstructions: settings.uberDirectPickupInstructions ?? null,
+      uberDirectPickupInstructions:
+        settings.uberDirectPickupInstructions ?? null,
       uberDirectPickupPhone: settings.uberDirectPickupPhone ?? null,
       uberDirectBatchSize: settings.uberDirectBatchSize ?? 3,
       uberDirectMaxAngleDelta: settings.uberDirectMaxAngleDelta ?? 45,
-      uberDirectDispatchDelayMinutes: settings.uberDirectDispatchDelayMinutes ?? 0,
+      uberDirectDispatchDelayMinutes:
+        settings.uberDirectDispatchDelayMinutes ?? 0,
       autoHideOutOfStock: settings.autoHideOutOfStock ?? true,
-      enableStockAlertNotification: settings.enableStockAlertNotification ?? true,
+      enableStockAlertNotification:
+        settings.enableStockAlertNotification ?? true,
       showVariationsOnCard: settings.showVariationsOnCard ?? true,
       searchFilters: ((settings as any).searchFilters ?? []) as any,
     };
 
-    const result = await this.prisma.storeSettings.upsert({
-      where: { storeId },
-      create: dataPayload,
-      update: dataPayload,
+    const validTypes = ['POD', 'FOOD', 'ACAI'] as const;
+    const requestedBusinessType = validTypes.includes(
+      (settings as any).businessType,
+    )
+      ? ((settings as any).businessType as 'POD' | 'FOOD' | 'ACAI')
+      : undefined;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (options?.disableCustomizableProducts) {
+        await tx.product.updateMany({
+          where: { storeId, isCustomizable: true },
+          data: { isCustomizable: false },
+        });
+      }
+
+      if (requestedBusinessType) {
+        await tx.store.update({
+          where: { id: storeId },
+          data: { businessType: requestedBusinessType },
+        });
+      }
+
+      return tx.storeSettings.upsert({
+        where: { storeId },
+        create: dataPayload,
+        update: dataPayload,
+      });
     });
 
-    return result as unknown as StoreSettings;
+    return {
+      ...result,
+      businessType:
+        requestedBusinessType ?? (settings as any).businessType ?? 'POD',
+    } as unknown as StoreSettings;
   }
 }

@@ -121,6 +121,16 @@ export class SettingsController {
     const oldSettings = await this.getSettingsUseCase.execute();
     const isStaff = user?.role === 'USER';
     const isAdmin = !isStaff;
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+    const currentBusinessType = oldSettings?.businessType ?? 'POD';
+    const isChangingBusinessType =
+      dto.businessType !== undefined && dto.businessType !== currentBusinessType;
+    if ((isChangingBusinessType || dto.forceDisableCustomizations) && !isSuperAdmin) {
+      throw new ForbiddenException(
+        'Apenas super administradores podem alterar o segmento da loja',
+      );
+    }
 
     // Qualquer mudança em paymentGateways exige ADMIN ou SUPER_ADMIN
     if (!isAdmin && dto.paymentGateways !== undefined) {

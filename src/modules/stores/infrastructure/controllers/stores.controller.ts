@@ -14,6 +14,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StoresService } from '../../domain/services/stores.service';
 import { CreateStoreDto } from '../dtos/create-store.dto';
+import { UpdateStoreDto } from '../dtos/update-store.dto';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 import { JwtAuthGuard } from '../../../auth/infrastructure/guards/jwt-auth.guard';
 import { AdminOnly, RequirePermissions } from '../../../auth/infrastructure/decorators/permissions.decorator';
@@ -62,7 +63,7 @@ export class StoresController {
   @ApiOperation({ summary: 'Cadastra uma nova loja para teste grátis (Público)' })
   @ApiResponse({ status: 201, description: 'Loja criada com sucesso em trial grátis' })
   async registerTrialStore(@Body() dto: CreateStoreDto) {
-    return this.storesService.createStore(dto);
+    return this.storesService.createStore({ ...dto, businessType: 'POD' });
   }
 
   @Post()
@@ -71,7 +72,15 @@ export class StoresController {
   @AdminOnly()
   @ApiOperation({ summary: 'Cadastra uma nova loja (Super Admin)' })
   @ApiResponse({ status: 201, description: 'Loja criada com sucesso' })
-  async createStore(@Body() dto: CreateStoreDto) {
+  async createStore(
+    @Body() dto: CreateStoreDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    if (dto.businessType !== undefined && user?.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'Apenas super administradores podem definir o segmento da loja',
+      );
+    }
     return this.storesService.createStore(dto);
   }
 
@@ -79,11 +88,20 @@ export class StoresController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @AdminOnly()
-  @ApiOperation({ summary: 'Atualiza título, subdomínio, domínio próprio, e-mail admin e senha da loja' })
+  @ApiOperation({ summary: 'Atualiza título, subdomínio, domínio próprio, segmento, e-mail admin e senha da loja' })
   async updateStore(
     @Param('id') id: string,
-    @Body() body: { title?: string; subdomain?: string; customDomain?: string | null; adminEmail?: string; password?: string; subscriptionExpiresAt?: string; monthlyFee?: number },
+    @Body() body: UpdateStoreDto,
+    @CurrentUser() user?: JwtPayload,
   ) {
+    if (
+      (body.businessType !== undefined || body.forceDisableCustomizations) &&
+      user?.role !== 'SUPER_ADMIN'
+    ) {
+      throw new ForbiddenException(
+        'Apenas super administradores podem alterar o segmento da loja',
+      );
+    }
     return this.storesService.updateStore(id, body);
   }
 

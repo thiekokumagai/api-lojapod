@@ -19,6 +19,7 @@ export abstract class IProductsRepository {
     createdAt?: Date | string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    isCustomizable?: boolean;
   }): Promise<Product>;
 
   abstract update(
@@ -33,6 +34,7 @@ export abstract class IProductsRepository {
       costPrice?: any;
       isVisible?: boolean;
       isFeatured?: boolean;
+      isCustomizable?: boolean;
     },
   ): Promise<Product>;
 

@@ -43,12 +43,19 @@ export class StoresService {
 
     const printToken = `PRT-${randomUUID().substring(0, 8).toUpperCase()}`;
 
+    const validBusinessTypes = ['POD', 'FOOD', 'ACAI'] as const;
+    const businessType =
+      dto.businessType && validBusinessTypes.includes(dto.businessType)
+        ? dto.businessType
+        : 'POD';
+
     const store = await this.prisma.store.create({
       data: {
         subdomain: finalSubdomain,
         title: dto.title.trim(),
         adminEmail: dto.adminEmail.trim().toLowerCase(),
         printToken,
+        businessType,
       },
     });
 
@@ -382,7 +389,18 @@ export class StoresService {
     return { success: true, message: 'Domínio removido com sucesso.' };
   }
 
-  async updateStore(id: string, dto: { title?: string; subdomain?: string; customDomain?: string | null; adminEmail?: string; password?: string }) {
+  async updateStore(
+    id: string,
+    dto: {
+      title?: string;
+      subdomain?: string;
+      customDomain?: string | null;
+      adminEmail?: string;
+      password?: string;
+      businessType?: 'POD' | 'FOOD' | 'ACAI';
+      forceDisableCustomizations?: boolean;
+    },
+  ) {
     const store = await this.prisma.store.findUnique({
       where: { id },
     });
@@ -420,10 +438,51 @@ export class StoresService {
       updateData.adminEmail = dto.adminEmail.trim().toLowerCase();
     }
 
-    const updatedStore = await this.prisma.store.update({
-      where: { id },
-      data: updateData,
-    });
+    const validBusinessTypes = ['POD', 'FOOD', 'ACAI'] as const;
+    const currentBusinessType = ((store as any).businessType ?? 'POD') as
+      | 'POD'
+      | 'FOOD'
+      | 'ACAI';
+    let disableCustomizableProducts = false;
+
+    if (
+      dto.businessType !== undefined &&
+      validBusinessTypes.includes(dto.businessType) &&
+      dto.businessType !== currentBusinessType
+    ) {
+      if (dto.businessType === 'POD' && currentBusinessType !== 'POD') {
+        const customizableProductsCount = await this.prisma.product.count({
+          where: { storeId: id, isCustomizable: true },
+        });
+        if (customizableProductsCount > 0) {
+          if (!dto.forceDisableCustomizations) {
+            throw new ConflictException({
+              message: `Existem ${customizableProductsCount} produto(s) personalizável(is). Desmarque-os ou confirme para desmarcar automaticamente antes de trocar para Vape Shop.`,
+              code: 'CUSTOMIZABLE_PRODUCTS_EXIST',
+              customizableProductsCount,
+            });
+          }
+          disableCustomizableProducts = true;
+        }
+      }
+      updateData.businessType = dto.businessType;
+    }
+
+    const updatedStore = disableCustomizableProducts
+      ? await this.prisma.$transaction(async (tx) => {
+          await tx.product.updateMany({
+            where: { storeId: id, isCustomizable: true },
+            data: { isCustomizable: false },
+          });
+          return tx.store.update({
+            where: { id },
+            data: updateData,
+          });
+        })
+      : await this.prisma.store.update({
+          where: { id },
+          data: updateData,
+        });
 
     if (updateData.title) {
       await this.prisma.storeSettings.updateMany({

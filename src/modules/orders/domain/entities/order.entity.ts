@@ -34,6 +34,8 @@ export interface OrderItem {
   comboSnapshot?: any;
   isOrderBump?: boolean;
   orderBumpId?: string | null;
+  isCustomized?: boolean;
+  customizationSnapshot?: any;
   comboSelections?: Array<{
     productId: string;
     productItemId?: string;

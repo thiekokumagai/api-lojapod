@@ -68,6 +68,16 @@ export class TenantMiddleware implements NestMiddleware {
             where: { subdomain: platform.subdomain },
           });
         }
+      } else if (cleanIdentifier.endsWith('.localhost')) {
+        // Subdomínio local (ex.: demo.localhost → subdomain: 'demo')
+        const localSubdomain = cleanIdentifier
+          .slice(0, -'.localhost'.length)
+          .split('.')[0];
+        if (localSubdomain) {
+          store = await this.prisma.store.findFirst({
+            where: { subdomain: localSubdomain },
+          });
+        }
       } else if (!cleanIdentifier.includes('.')) {
         // Slug direto sem ponto (ex.: header X-Store-Subdomain: sopod ou localhost)
         store = await this.prisma.store.findFirst({

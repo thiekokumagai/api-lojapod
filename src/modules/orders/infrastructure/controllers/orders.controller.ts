@@ -100,8 +100,12 @@ export class OrdersController {
     status: 200,
     description: 'Pedido atualizado com sucesso',
   })
-  async updateFull(@Param('id') id: string, @Body() body: CreateOrderDto) {
-    return this.updateOrderUseCase.execute(id, body as any);
+  async updateFull(
+    @Param('id') id: string,
+    @Body() body: CreateOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.updateOrderUseCase.execute(id, body as any, user);
   }
 
   @Post(':id/cancel')

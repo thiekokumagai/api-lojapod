@@ -44,9 +44,12 @@ interface Setup {
   products?: Record<string, Fields>;
   bump?: Fields | null;
   combo?: Fields | null;
+  options?: Fields[];
   program?: Fields | null;
   card?: Fields | null;
   coupon?: { discountAmount: number; type?: string } | null;
+  /** Ligações produto-grupo; sem isto, todo grupo das opções do setup fica ligado ao produto. */
+  productCompositions?: Fields[];
 }
 
 function build(setup: Setup = {}) {
@@ -82,6 +85,38 @@ function build(setup: Setup = {}) {
         return Promise.resolve(
           comboList.filter((c: Fields) =>
             where?.id?.in?.includes(String(c?.id)),
+          ),
+        );
+      }),
+    },
+    compositionOption: {
+      findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) => {
+        const opts = (setup.options as Fields[]) ?? [];
+        return Promise.resolve(
+          opts
+            .filter((o) => where?.id?.in?.includes(String(o?.id)))
+            .map((o) => ({ groupId: o.group?.id, ...o })),
+        );
+      }),
+    },
+    productComposition: {
+      findMany: jest.fn(({ where }: { where: { productId: string } }) => {
+        const derived = [
+          ...new Map(
+            ((setup.options as Fields[]) ?? []).map((o) => [
+              o.group?.id,
+              {
+                productId: where?.productId,
+                groupId: o.group?.id,
+                group: o.group,
+              },
+            ]),
+          ).values(),
+        ];
+        const comps = setup.productCompositions ?? derived;
+        return Promise.resolve(
+          comps.filter(
+            (c) => !where?.productId || c.productId === where.productId,
           ),
         );
       }),
@@ -482,6 +517,55 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
       expect(bad.saveWithStockDecrement).not.toHaveBeenCalled();
     });
 
+    it('combo [SEGURANÇA]: customizationSnapshot do cliente é descartado (não vai para a comanda)', async () => {
+      const combo = {
+        id: 'c1',
+        name: 'Combo',
+        price: 70,
+        isActive: true,
+        items: [],
+        imageUrl: null,
+        startDate: null,
+        endDate: null,
+        maxPerOrder: null,
+        maxTotalSales: null,
+        totalSold: 0,
+      };
+      const ok = await createPublic(
+        { combo },
+        order({
+          items: [
+            {
+              isCombo: true,
+              comboId: 'c1',
+              productName: 'Combo',
+              quantity: 1,
+              price: 70,
+              isCustomized: true,
+              customizationSnapshot: {
+                stages: [
+                  {
+                    groupName: 'Adicionais',
+                    options: [
+                      { optionId: 'x', name: 'Picanha 400g', quantity: 3 },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+          itemsTotal: 70,
+          freight: 0,
+          totalOrder: 70,
+          deliveryModality: 'STORE_PICKUP',
+        }),
+      );
+      expect(ok.error).toBeNull();
+      const saved = ok.saved().items[0];
+      expect(saved.isCustomized).toBe(false);
+      expect(saved.customizationSnapshot).toBeUndefined();
+    });
+
     it('combo + oferta "Peça também": produto dentro do combo satisfaz o gatilho da oferta', async () => {
       const pGatilho = product({
         id: 'pGatilho',
@@ -614,6 +698,580 @@ describe('CreateOrderUseCase — pedido público (loja virtual)', () => {
       expect(res.error).toBeInstanceOf(BadRequestException);
       expect(res.error?.message).toContain('mudou');
       expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+    });
+
+    it('produto customizado (marmita/açaí): calcula corretamente preço base + adicionais', async () => {
+      const marmita = product({
+        id: 'pMarmita',
+        title: 'Marmita Tradicional M',
+        isCustomizable: true,
+        price: 25,
+      });
+      const optArroz = {
+        id: 'optArroz',
+        name: 'Arroz Branco',
+        price: 0,
+        group: { id: 'gBase', name: 'Base', freeQuantity: 0 },
+      };
+      const optPicanha = {
+        id: 'optPicanha',
+        name: 'Picanha',
+        price: 8,
+        group: { id: 'gCarne', name: 'Carne', freeQuantity: 0 },
+      };
+      const items = [
+        {
+          productId: 'pMarmita',
+          productName: 'Marmita Tradicional M',
+          quantity: 1,
+          price: 33, // 25 base + 8 picanha
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 25,
+            stages: [
+              {
+                groupId: 'gBase',
+                groupName: 'Base',
+                options: [
+                  {
+                    optionId: 'optArroz',
+                    name: 'Arroz Branco',
+                    quantity: 1,
+                    price: 0,
+                  },
+                ],
+              },
+              {
+                groupId: 'gCarne',
+                groupName: 'Carne',
+                options: [
+                  {
+                    optionId: 'optPicanha',
+                    name: 'Picanha',
+                    quantity: 1,
+                    price: 8,
+                  },
+                ],
+              },
+            ],
+            totalAdditions: 8,
+            finalUnitPrice: 33,
+          },
+        },
+      ];
+
+      const ok = await createPublic(
+        {
+          products: { pMarmita: marmita },
+          options: [optArroz, optPicanha],
+        },
+        order({
+          items,
+          itemsTotal: 33,
+          freight: 10,
+          totalOrder: 43,
+          totalReceived: 43,
+        }),
+      );
+
+      expect(ok.error).toBeNull();
+      expect(ok.saved().itemsTotal).toBe(33);
+      expect(ok.saved().totalOrder).toBe(43);
+      expect(ok.saved().items[0].isCustomized).toBe(true);
+      // O snapshot salvo é reconstruído a partir do banco
+      expect(
+        ok.saved().items[0].customizationSnapshot.stages[1].options[0].name,
+      ).toBe('Picanha');
+    });
+
+    it('produto customizado: adulteração no preço do adicional é recusada pelo servidor', async () => {
+      const marmita = product({
+        id: 'pMarmita',
+        title: 'Marmita Tradicional M',
+        isCustomizable: true,
+        price: 25,
+      });
+      const optPicanha = {
+        id: 'optPicanha',
+        name: 'Picanha',
+        price: 8,
+        group: { id: 'gCarne', name: 'Carne', freeQuantity: 0 },
+      };
+      const items = [
+        {
+          productId: 'pMarmita',
+          productName: 'Marmita Tradicional M',
+          quantity: 1,
+          price: 26, // cliente tenta pagar 26 em vez de 33 (tentando burlar o adicional de R$ 8 da picanha)
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 25,
+            stages: [
+              {
+                groupId: 'gCarne',
+                groupName: 'Carne',
+                options: [
+                  {
+                    optionId: 'optPicanha',
+                    name: 'Picanha',
+                    quantity: 1,
+                    price: 1,
+                  },
+                ],
+              },
+            ],
+            totalAdditions: 1,
+            finalUnitPrice: 26,
+          },
+        },
+      ];
+
+      const res = await createPublic(
+        {
+          products: { pMarmita: marmita },
+          options: [optPicanha],
+        },
+        order({
+          items,
+          itemsTotal: 26,
+          freight: 5,
+          totalOrder: 31,
+          totalReceived: 31,
+        }),
+      );
+
+      expect(res.error).toBeInstanceOf(BadRequestException);
+      expect(res.error?.message).toContain('mudou');
+      expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+    });
+
+    it('produto customizado [SEGURANÇA]: rejeita quantidade negativa em opções adicionais', async () => {
+      const marmita = product({
+        id: 'pMarmita',
+        title: 'Marmita Tradicional M',
+        isCustomizable: true,
+        price: 50,
+      });
+      const optPicanha = {
+        id: 'optPicanha',
+        name: 'Picanha',
+        price: 10,
+        group: { id: 'gCarne', name: 'Carne', freeQuantity: 0 },
+      };
+      const items = [
+        {
+          productId: 'pMarmita',
+          productName: 'Marmita Tradicional M',
+          quantity: 1,
+          price: 30, // atacante tenta abater 20 reais com quantity -2
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 50,
+            stages: [
+              {
+                groupId: 'gCarne',
+                groupName: 'Carne',
+                options: [
+                  {
+                    optionId: 'optPicanha',
+                    name: 'Picanha',
+                    quantity: -2,
+                    price: 10,
+                  },
+                ],
+              },
+            ],
+            totalAdditions: -20,
+            finalUnitPrice: 30,
+          },
+        },
+      ];
+
+      const res = await createPublic(
+        {
+          products: { pMarmita: marmita },
+          options: [optPicanha],
+        },
+        order({
+          items,
+          itemsTotal: 30,
+          freight: 10,
+          totalOrder: 40,
+          totalReceived: 40,
+        }),
+      );
+
+      expect(res.error).toBeInstanceOf(BadRequestException);
+      expect(res.error?.message).toContain('inteiro positivo');
+      expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+    });
+
+    it('produto customizado [SEGURANÇA]: rejeita opção fantasma sem optionId válido ou inexistente', async () => {
+      const marmita = product({
+        id: 'pMarmita',
+        title: 'Marmita Tradicional M',
+        isCustomizable: true,
+        price: 25,
+      });
+      const items = [
+        {
+          productId: 'pMarmita',
+          productName: 'Marmita Tradicional M',
+          quantity: 1,
+          price: 25,
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 25,
+            stages: [
+              {
+                groupId: 'gCarne',
+                groupName: 'Carne',
+                options: [
+                  {
+                    name: 'Picanha Fantasma Não Cobrada',
+                    quantity: 2,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ];
+
+      const res = await createPublic(
+        {
+          products: { pMarmita: marmita },
+          options: [],
+        },
+        order({
+          items,
+          itemsTotal: 25,
+          freight: 10,
+          totalOrder: 35,
+          totalReceived: 35,
+        }),
+      );
+
+      expect(res.error).toBeInstanceOf(BadRequestException);
+      expect(res.error?.message).toContain('Identificador da opção');
+      expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+    });
+
+    it('produto customizado: respeita cotas grátis (freeQuantity) na montagem', async () => {
+      const marmita = product({
+        id: 'pMarmita',
+        title: 'Marmita Tradicional M',
+        isCustomizable: true,
+        price: 25,
+      });
+      const optMolho1 = {
+        id: 'optMolho1',
+        name: 'Molho Barbecue',
+        price: 3,
+        group: { id: 'gMolhos', name: 'Molhos', freeQuantity: 2 },
+      };
+      const optMolho2 = {
+        id: 'optMolho2',
+        name: 'Molho Alho',
+        price: 3,
+        group: { id: 'gMolhos', name: 'Molhos', freeQuantity: 2 },
+      };
+      const items = [
+        {
+          productId: 'pMarmita',
+          productName: 'Marmita Tradicional M',
+          quantity: 1,
+          price: 25, // 2 molhos grátis escolhidos -> acréscimo R$ 0
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 25,
+            stages: [
+              {
+                groupId: 'gMolhos',
+                groupName: 'Molhos',
+                options: [
+                  {
+                    optionId: 'optMolho1',
+                    name: 'Molho Barbecue',
+                    quantity: 1,
+                  },
+                  { optionId: 'optMolho2', name: 'Molho Alho', quantity: 1 },
+                ],
+              },
+            ],
+          },
+        },
+      ];
+
+      const ok = await createPublic(
+        {
+          products: { pMarmita: marmita },
+          options: [optMolho1, optMolho2],
+        },
+        order({
+          items,
+          itemsTotal: 25,
+          freight: 10,
+          totalOrder: 35,
+          totalReceived: 35,
+        }),
+      );
+
+      expect(ok.error).toBeNull();
+      expect(ok.saved().itemsTotal).toBe(25);
+      expect(ok.saved().items[0].customizationSnapshot.totalAdditions).toBe(0);
+      expect(ok.saved().items[0].customizationSnapshot.finalUnitPrice).toBe(25);
+    });
+
+    describe('montagem [SEGURANÇA]: grupo, cota e limites vêm do banco', () => {
+      const gCarne = {
+        id: 'gCarne',
+        name: 'Carne',
+        freeQuantity: 0,
+        maxQuantity: 3,
+      };
+      const gMolhos = {
+        id: 'gMolhos',
+        name: 'Molhos',
+        freeQuantity: 2,
+        maxQuantity: 10,
+      };
+      const marmita = () =>
+        product({
+          id: 'pMarmita',
+          title: 'Marmita',
+          price: 25,
+          isCustomizable: true,
+        });
+      const picanha = {
+        id: 'optPicanha',
+        name: 'Picanha',
+        price: 15,
+        maxQuantityPerItem: 2,
+        group: gCarne,
+      };
+      const molho = (n: number) => ({
+        id: `optMolho${n}`,
+        name: `Molho ${n}`,
+        price: 3,
+        maxQuantityPerItem: 2,
+        sortOrder: n,
+        group: gMolhos,
+      });
+      const customItem = (
+        price: number,
+        stages: Fields[],
+        extra: Fields = {},
+      ) => ({
+        productId: 'pMarmita',
+        productName: 'Marmita',
+        quantity: 1,
+        price,
+        isCustomized: true,
+        customizationSnapshot: { stages },
+        ...extra,
+      });
+      const run = (setup: Setup, it0: Fields) =>
+        createPublic(
+          { products: { pMarmita: marmita() }, ...setup },
+          order({
+            items: [it0],
+            itemsTotal: it0.price,
+            freight: 10,
+            totalOrder: it0.price + 10,
+            totalReceived: it0.price + 10,
+          }),
+        );
+
+      it('etapa com groupId trocado não usa a cota grátis de outro grupo', async () => {
+        const stages = [
+          {
+            groupId: 'gMolhos',
+            groupName: 'Molhos',
+            options: [{ optionId: 'optPicanha', quantity: 2 }],
+          },
+        ];
+        const bad = await run(
+          { options: [picanha, molho(1)] },
+          customItem(25, stages),
+        );
+        expect(bad.error).toBeInstanceOf(BadRequestException);
+        expect(bad.error?.message).toContain('mudou');
+        expect(bad.saveWithStockDecrement).not.toHaveBeenCalled();
+
+        // Preço cheio (25 + 2x15) passa, e a etapa gravada é a do grupo real
+        const ok = await run(
+          { options: [picanha, molho(1)] },
+          customItem(55, stages),
+        );
+        expect(ok.error).toBeNull();
+        const snap = ok.saved().items[0].customizationSnapshot;
+        expect(snap.stages).toEqual([
+          {
+            groupId: 'gCarne',
+            groupName: 'Carne',
+            options: [
+              {
+                optionId: 'optPicanha',
+                name: 'Picanha',
+                quantity: 2,
+                unitPrice: 15,
+                totalPrice: 30,
+              },
+            ],
+          },
+        ]);
+      });
+
+      it('grupo dividido em várias etapas aplica a cota grátis uma vez só', async () => {
+        const opts = [molho(1), molho(2), molho(3)];
+        const stages = opts.map((o) => ({
+          groupId: 'gMolhos',
+          options: [{ optionId: o.id, quantity: 2 }],
+        }));
+        // 6 molhos, 2 grátis: 4 x R$ 3 = R$ 12
+        const bad = await run({ options: opts }, customItem(25, stages));
+        expect(bad.error).toBeInstanceOf(BadRequestException);
+        expect(bad.error?.message).toContain('mudou');
+
+        const ok = await run({ options: opts }, customItem(37, stages));
+        expect(ok.error).toBeNull();
+        const snap = ok.saved().items[0].customizationSnapshot;
+        expect(snap.totalAdditions).toBe(12);
+        expect(snap.stages).toHaveLength(1);
+        expect(snap.stages[0].options.map((o: Fields) => o.totalPrice)).toEqual(
+          [0, 6, 6],
+        );
+      });
+
+      it('etapa sem groupId não estende a cota de um grupo a opções de outro', async () => {
+        const stages = [
+          {
+            options: [
+              { optionId: 'optMolho1', quantity: 1 },
+              { optionId: 'optPicanha', quantity: 1 },
+            ],
+          },
+        ];
+        const bad = await run(
+          { options: [molho(1), picanha] },
+          customItem(25, stages),
+        );
+        expect(bad.error?.message).toContain('mudou');
+        const ok = await run(
+          { options: [molho(1), picanha] },
+          customItem(40, stages),
+        );
+        expect(ok.error).toBeNull();
+      });
+
+      it('opção de grupo não ligado ao produto é recusada', async () => {
+        const stages = [
+          {
+            groupId: 'gCarne',
+            options: [{ optionId: 'optPicanha', quantity: 1 }],
+          },
+        ];
+        const res = await run(
+          {
+            options: [picanha],
+            productCompositions: [
+              { productId: 'pMarmita', groupId: 'gMolhos', group: gMolhos },
+            ],
+          },
+          customItem(40, stages),
+        );
+        expect(res.error).toBeInstanceOf(BadRequestException);
+        expect(res.error?.message).toContain('não pertencem a este produto');
+        expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+      });
+
+      it('maxQuantity do grupo (e customMaxQuantity da ligação) é conferido no servidor', async () => {
+        const opts = [molho(1), molho(2)];
+        const stages = [
+          {
+            groupId: 'gMolhos',
+            options: [
+              { optionId: 'optMolho1', quantity: 2 },
+              { optionId: 'optMolho2', quantity: 1 },
+            ],
+          },
+        ];
+        const res = await run(
+          {
+            options: opts,
+            productCompositions: [
+              {
+                productId: 'pMarmita',
+                groupId: 'gMolhos',
+                customMaxQuantity: 2,
+                group: gMolhos,
+              },
+            ],
+          },
+          customItem(28, stages),
+        );
+        expect(res.error).toBeInstanceOf(BadRequestException);
+        expect(res.error?.message).toContain('no máximo 2 escolha');
+        expect(res.saveWithStockDecrement).not.toHaveBeenCalled();
+      });
+
+      it('maxQuantityPerItem é conferido mesmo somando a opção repetida em várias etapas', async () => {
+        const stages = [
+          {
+            groupId: 'gCarne',
+            options: [{ optionId: 'optPicanha', quantity: 2 }],
+          },
+          {
+            groupId: 'gCarne',
+            options: [{ optionId: 'optPicanha', quantity: 1 }],
+          },
+        ];
+        const res = await run({ options: [picanha] }, customItem(70, stages));
+        expect(res.error).toBeInstanceOf(BadRequestException);
+        expect(res.error?.message).toContain('no máximo 2 unidade');
+      });
+
+      it('isCustomized=false com snapshot: snapshot do cliente é descartado', async () => {
+        const stages = [
+          {
+            groupId: 'gCarne',
+            groupName: 'Carne',
+            options: [{ optionId: 'x', name: 'Picanha 400g', quantity: 3 }],
+          },
+        ];
+        const ok = await run(
+          { options: [picanha] },
+          customItem(25, stages, { isCustomized: false }),
+        );
+        expect(ok.error).toBeNull();
+        expect(ok.saved().items[0].isCustomized).toBeFalsy();
+        expect(ok.saved().items[0].customizationSnapshot).toBeUndefined();
+      });
+
+      it('isCustomized=true em produto que não aceita montagem é recusado', async () => {
+        const stages = [
+          {
+            groupId: 'gCarne',
+            options: [{ optionId: 'optPicanha', quantity: 1 }],
+          },
+        ];
+        const res = await run(
+          {
+            options: [picanha],
+            products: {
+              pMarmita: product({
+                id: 'pMarmita',
+                title: 'Marmita',
+                price: 25,
+              }),
+            },
+          },
+          customItem(40, stages),
+        );
+        expect(res.error).toBeInstanceOf(BadRequestException);
+        expect(res.error?.message).toContain('não aceita montagem');
+      });
     });
 
     it('desconto Pix só até o percentual configurado pela loja', async () => {

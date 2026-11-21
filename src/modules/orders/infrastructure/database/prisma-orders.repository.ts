@@ -37,7 +37,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       couponFreightDiscount: Number(record.couponFreightDiscount || 0),
       receiptDiscount: Number(record.receiptDiscount || 0),
       receiptSurcharge: Number(record.receiptSurcharge || 0),
-      amountProvided: record.amountProvided ? Number(record.amountProvided) : null,
+      amountProvided: record.amountProvided
+        ? Number(record.amountProvided)
+        : null,
       changeAmount: record.changeAmount ? Number(record.changeAmount) : null,
 
       totalOrder: Number(record.totalOrder),
@@ -86,7 +88,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       isPrinted: record.isPrinted,
       uberDeliveryId: record.uberDeliveryId,
       uberDeliveryStatus: record.uberDeliveryStatus,
-      uberDeliveryFee: record.uberDeliveryFee ? Number(record.uberDeliveryFee) : null,
+      uberDeliveryFee: record.uberDeliveryFee
+        ? Number(record.uberDeliveryFee)
+        : null,
       uberTrackingUrl: record.uberTrackingUrl,
       uberBatchId: record.uberBatchId,
       items:
@@ -102,20 +106,37 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           } else if (item.comboSnapshot?.comboImageUrl) {
             imageUrl = item.comboSnapshot.comboImageUrl;
           }
-          let costPrice = item.product?.costPrice ? Number(item.product.costPrice) : 0;
-          if (costPrice === 0 && (item.isCombo || item.comboId || item.comboSnapshot)) {
-            if (item.comboSnapshot?.items && Array.isArray(item.comboSnapshot.items)) {
-              costPrice = item.comboSnapshot.items.reduce((acc: number, comp: any) => {
-                const compCost = Number(comp.productCostPrice || 0);
-                const compQty = Number(comp.quantity || 1);
-                return acc + (compCost * compQty);
-              }, 0);
+          let costPrice = item.product?.costPrice
+            ? Number(item.product.costPrice)
+            : 0;
+          if (
+            costPrice === 0 &&
+            (item.isCombo || item.comboId || item.comboSnapshot)
+          ) {
+            if (
+              item.comboSnapshot?.items &&
+              Array.isArray(item.comboSnapshot.items)
+            ) {
+              costPrice = item.comboSnapshot.items.reduce(
+                (acc: number, comp: any) => {
+                  const compCost = Number(comp.productCostPrice || 0);
+                  const compQty = Number(comp.quantity || 1);
+                  return acc + compCost * compQty;
+                },
+                0,
+              );
             }
-            if (costPrice === 0 && item.combo?.items && Array.isArray(item.combo.items)) {
+            if (
+              costPrice === 0 &&
+              item.combo?.items &&
+              Array.isArray(item.combo.items)
+            ) {
               costPrice = item.combo.items.reduce((acc: number, ci: any) => {
-                const compCost = ci.product?.costPrice ? Number(ci.product.costPrice) : 0;
+                const compCost = ci.product?.costPrice
+                  ? Number(ci.product.costPrice)
+                  : 0;
                 const compQty = Number(ci.quantity || 1);
-                return acc + (compCost * compQty);
+                return acc + compCost * compQty;
               }, 0);
             }
           }
@@ -130,10 +151,15 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             variation: item.variation || null,
             imageUrl,
             costPrice,
-            categoryName: item.product?.category?.title || item.combo?.category?.title || null,
+            categoryName:
+              item.product?.category?.title ||
+              item.combo?.category?.title ||
+              null,
             comboId: item.comboId || null,
             isCombo: item.isCombo || false,
             comboSnapshot: item.comboSnapshot || null,
+            isCustomized: item.isCustomized || false,
+            customizationSnapshot: item.customizationSnapshot || null,
             isOrderBump: item.isOrderBump || false,
             orderBumpId: item.orderBumpId || null,
           };
@@ -160,34 +186,83 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         { customerName: { contains: filters.search, mode: 'insensitive' } },
         { customerPhone: { contains: filters.search, mode: 'insensitive' } },
       ];
-      
+
       const cleanSearch = filters.search.replace(/\D/g, '');
       if (cleanSearch.length > 0) {
-        where.OR.push({ customerPhone: { contains: cleanSearch, mode: 'insensitive' } });
-        
+        where.OR.push({
+          customerPhone: { contains: cleanSearch, mode: 'insensitive' },
+        });
+
         if (cleanSearch.length === 11) {
           const ddd = cleanSearch.substring(0, 2);
           const p1 = cleanSearch.substring(2, 7);
           const p2 = cleanSearch.substring(7);
-          
-          where.OR.push({ customerPhone: { contains: `(${ddd}) ${p1}-${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `(${ddd})${p1}-${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `(${ddd}) ${p1}${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `${ddd} ${p1}-${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `(${ddd}) ${p1.substring(0,1)} ${p1.substring(1)}-${p2}`, mode: 'insensitive' } });
+
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd}) ${p1}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd})${p1}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd}) ${p1}${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `${ddd} ${p1}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd}) ${p1.substring(0, 1)} ${p1.substring(1)}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
         } else if (cleanSearch.length === 10) {
           const ddd = cleanSearch.substring(0, 2);
           const p1 = cleanSearch.substring(2, 6);
           const p2 = cleanSearch.substring(6);
-          
-          where.OR.push({ customerPhone: { contains: `(${ddd}) ${p1}-${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `(${ddd})${p1}-${p2}`, mode: 'insensitive' } });
-          where.OR.push({ customerPhone: { contains: `(${ddd}) ${p1}${p2}`, mode: 'insensitive' } });
+
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd}) ${p1}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd})${p1}-${p2}`,
+              mode: 'insensitive',
+            },
+          });
+          where.OR.push({
+            customerPhone: {
+              contains: `(${ddd}) ${p1}${p2}`,
+              mode: 'insensitive',
+            },
+          });
         } else {
           let f1 = cleanSearch;
-          if (cleanSearch.length >= 2) f1 = '(' + cleanSearch.substring(0, 2) + (cleanSearch.length > 2 ? ') ' + cleanSearch.substring(2) : '');
-          if (cleanSearch.length >= 7) f1 = f1.substring(0, 10) + '-' + f1.substring(10);
-          where.OR.push({ customerPhone: { contains: f1, mode: 'insensitive' } });
+          if (cleanSearch.length >= 2)
+            f1 =
+              '(' +
+              cleanSearch.substring(0, 2) +
+              (cleanSearch.length > 2 ? ') ' + cleanSearch.substring(2) : '');
+          if (cleanSearch.length >= 7)
+            f1 = f1.substring(0, 10) + '-' + f1.substring(10);
+          where.OR.push({
+            customerPhone: { contains: f1, mode: 'insensitive' },
+          });
         }
       }
 
@@ -219,7 +294,6 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       }
     }
 
-
     // Default pagination params
     const page = filters.page ? Math.max(1, Number(filters.page)) : 1;
     const limit = filters.limit ? Math.max(1, Number(filters.limit)) : 10;
@@ -235,7 +309,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         courierTransaction: {
           include: {
             courier: true,
-          }
+          },
         },
         items: {
           include: {
@@ -246,7 +320,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             },
             product: {
               include: {
-                images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                images: {
+                  orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                },
                 category: true,
               },
             },
@@ -327,7 +403,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             courierTransaction: {
               include: {
                 courier: true,
-              }
+              },
             },
             items: {
               include: {
@@ -338,7 +414,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 },
                 product: {
                   include: {
-                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                    images: {
+                      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                    },
                     category: true,
                   },
                 },
@@ -354,7 +432,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             courierTransaction: {
               include: {
                 courier: true,
-              }
+              },
             },
             items: {
               include: {
@@ -365,7 +443,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 },
                 product: {
                   include: {
-                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                    images: {
+                      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                    },
                     category: true,
                   },
                 },
@@ -387,7 +467,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
   async save(order: Order): Promise<Order> {
     const payload = {
-      storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
+      storeId:
+        order.storeId || this.tenantContextService.getStoreId() || undefined,
       customerId: order.customerId,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
@@ -423,11 +504,18 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       cardFee: order.cardFee,
       couponId: order.couponId || undefined,
       isPrinted: order.isPrinted || false,
-      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
-      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
-      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
-      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
-      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
+      uberDeliveryId:
+        order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
+      uberDeliveryStatus:
+        order.uberDeliveryStatus !== undefined
+          ? order.uberDeliveryStatus
+          : undefined,
+      uberDeliveryFee:
+        order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
+      uberTrackingUrl:
+        order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
+      uberBatchId:
+        order.uberBatchId !== undefined ? order.uberBatchId : undefined,
     };
 
     let record;
@@ -445,7 +533,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               },
               product: {
                 include: {
-                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                  images: {
+                    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                  },
                   category: true,
                 },
               },
@@ -469,6 +559,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 comboId: item.comboId || null,
                 isCombo: item.isCombo || false,
                 comboSnapshot: item.comboSnapshot || undefined,
+                isCustomized: item.isCustomized || false,
+                customizationSnapshot: item.customizationSnapshot || undefined,
               })) ?? [],
           },
         } as any,
@@ -482,7 +574,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               },
               product: {
                 include: {
-                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
+                  images: {
+                    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                  },
                   category: true,
                 },
               },
@@ -530,14 +624,19 @@ export class PrismaOrdersRepository implements IOrdersRepository {
     if (allItems.length === 0) return null;
 
     // Se o produto possui apenas 1 item (produto simples sem variação), retorna ele
-    if (allItems.length === 1 && (!allItems[0].options || allItems[0].options.length === 0)) {
+    if (
+      allItems.length === 1 &&
+      (!allItems[0].options || allItems[0].options.length === 0)
+    ) {
       return allItems[0];
     }
 
     if (variation && variation.trim() !== '') {
       const targetVar = variation.trim().toLowerCase();
       const match = allItems.find((pi: any) => {
-        const optValues = pi.options.map((o: any) => o.option.value.trim().toLowerCase());
+        const optValues = pi.options.map((o: any) =>
+          o.option.value.trim().toLowerCase(),
+        );
         const joinedLabel = optValues.join(' - ');
         return (
           joinedLabel === targetVar ||
@@ -562,56 +661,146 @@ export class PrismaOrdersRepository implements IOrdersRepository {
   }
 
   async saveWithStockDecrement(order: Order): Promise<Order> {
-    const record = await this.prisma.$transaction(async (tx) => {
-      const createdStockMovementIds: string[] = [];
-      if (order.items && order.items.length > 0) {
-        for (const item of order.items) {
-          if (item.isCombo || item.comboId) {
-            // Lógica para item de COMBO
-            const comboId = item.comboId || item.productId;
-            const comboRecord = await tx.combo.findUnique({
-              where: { id: comboId! },
-              include: {
-                items: {
-                  include: {
-                    product: {
-                      include: { items: true },
+    const record = await this.prisma.$transaction(
+      async (tx) => {
+        const createdStockMovementIds: string[] = [];
+        if (order.items && order.items.length > 0) {
+          for (const item of order.items) {
+            if (item.isCombo || item.comboId) {
+              // Lógica para item de COMBO
+              const comboId = item.comboId || item.productId;
+              const comboRecord = await tx.combo.findUnique({
+                where: { id: comboId! },
+                include: {
+                  items: {
+                    include: {
+                      product: {
+                        include: { items: true },
+                      },
+                      productItem: true,
                     },
-                    productItem: true,
                   },
                 },
-              },
-            });
+              });
 
-            if (!comboRecord) {
-              throw new Error(`Combo "${item.productName}" não encontrado para baixa de estoque.`);
-            }
+              if (!comboRecord) {
+                throw new Error(
+                  `Combo "${item.productName}" não encontrado para baixa de estoque.`,
+                );
+              }
 
-            // Para cada componente do combo, valida e decrementa estoque
-            const snapshotItems = (item.comboSnapshot as any)?.items;
-            const componentsToProcess = Array.isArray(snapshotItems) && snapshotItems.length > 0
-              ? snapshotItems
-              : comboRecord.items;
+              // Para cada componente do combo, valida e decrementa estoque
+              const snapshotItems = (item.comboSnapshot as any)?.items;
+              const componentsToProcess =
+                Array.isArray(snapshotItems) && snapshotItems.length > 0
+                  ? snapshotItems
+                  : comboRecord.items;
 
-            for (const component of componentsToProcess) {
-              const requiredQuantity = (component.quantity || 1) * item.quantity;
+              for (const component of componentsToProcess) {
+                const requiredQuantity =
+                  (component.quantity || 1) * item.quantity;
+                const productItem = await this.findProductItem(
+                  tx,
+                  component.productId,
+                  component.productItemId,
+                  component.variation,
+                  requiredQuantity,
+                );
+
+                if (!productItem) {
+                  throw new Error(
+                    `Componente "${component.productName || 'Componente'}" do combo não possui estoque/variação cadastrada.`,
+                  );
+                }
+
+                if (productItem.stock < requiredQuantity) {
+                  throw new Error(
+                    `Estoque insuficiente para o componente "${component.productName || 'Componente'}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  );
+                }
+
+                await tx.productItem.update({
+                  where: { id: productItem.id },
+                  data: {
+                    stock: {
+                      decrement: requiredQuantity,
+                    },
+                  },
+                });
+
+                const sm = await tx.stockMovement.create({
+                  data: {
+                    type: 'SUBTRACT',
+                    quantity: requiredQuantity,
+                    previousStock: productItem.stock,
+                    newStock: productItem.stock - requiredQuantity,
+                    observation: `Venda via combo "${comboRecord.name}" no pedido`,
+                    productId: component.productId,
+                    productItemId: productItem.id,
+                  },
+                });
+                createdStockMovementIds.push(sm.id);
+
+                // Verifica se o estoque do produto do componente zerou para aplicar autoHideOutOfStock
+                const allCompItems = await tx.productItem.findMany({
+                  where: { productId: component.productId },
+                });
+                const totalCompStock = allCompItems.reduce(
+                  (acc, curr) => acc + curr.stock,
+                  0,
+                );
+                if (totalCompStock <= 0) {
+                  let autoHide = true;
+                  if (order.storeId) {
+                    const settings = await tx.storeSettings.findFirst({
+                      where: { storeId: order.storeId },
+                      select: { autoHideOutOfStock: true },
+                    });
+                    if (settings && settings.autoHideOutOfStock === false) {
+                      autoHide = false;
+                    }
+                  }
+                  if (autoHide) {
+                    await tx.product.update({
+                      where: { id: component.productId },
+                      data: { isVisible: false },
+                    });
+                  }
+                }
+              }
+
+              // Incrementa totalSold no combo
+              await tx.combo.update({
+                where: { id: comboRecord.id },
+                data: {
+                  totalSold: { increment: item.quantity },
+                },
+              });
+            } else {
+              // Lógica padrão para produtos convencionais
+              if (!item.productId) {
+                throw new Error(
+                  `Item productName ${item.productName} must be linked to a productId`,
+                );
+              }
+
               const productItem = await this.findProductItem(
                 tx,
-                component.productId,
-                component.productItemId,
-                component.variation,
-                requiredQuantity,
+                item.productId,
+                item.productItemId,
+                item.variation,
+                item.quantity,
               );
 
               if (!productItem) {
                 throw new Error(
-                  `Componente "${component.productName || 'Componente'}" do combo não possui estoque/variação cadastrada.`,
+                  `Estoque do produto ou variação de "${item.productName}" não cadastrado.`,
                 );
               }
 
-              if (productItem.stock < requiredQuantity) {
+              if (productItem.stock < item.quantity) {
                 throw new Error(
-                  `Estoque insuficiente para o componente "${component.productName || 'Componente'}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  `Estoque insuficiente para o item "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
                 );
               }
 
@@ -619,7 +808,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 where: { id: productItem.id },
                 data: {
                   stock: {
-                    decrement: requiredQuantity,
+                    decrement: item.quantity,
                   },
                 },
               });
@@ -627,22 +816,25 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               const sm = await tx.stockMovement.create({
                 data: {
                   type: 'SUBTRACT',
-                  quantity: requiredQuantity,
+                  quantity: item.quantity,
                   previousStock: productItem.stock,
-                  newStock: productItem.stock - requiredQuantity,
-                  observation: `Venda via combo "${comboRecord.name}" no pedido`,
-                  productId: component.productId,
+                  newStock: productItem.stock - item.quantity,
+                  observation: `Venda via pedido`,
+                  productId: item.productId,
                   productItemId: productItem.id,
                 },
               });
               createdStockMovementIds.push(sm.id);
 
-              // Verifica se o estoque do produto do componente zerou para aplicar autoHideOutOfStock
-              const allCompItems = await tx.productItem.findMany({
-                where: { productId: component.productId },
+              // Check if total stock for this product is 0 or less, if so check storeSettings before disabling
+              const allItems = await tx.productItem.findMany({
+                where: { productId: item.productId },
               });
-              const totalCompStock = allCompItems.reduce((acc, curr) => acc + curr.stock, 0);
-              if (totalCompStock <= 0) {
+              const totalStock = allItems.reduce(
+                (acc, curr) => acc + curr.stock,
+                0,
+              );
+              if (totalStock <= 0) {
                 let autoHide = true;
                 if (order.storeId) {
                   const settings = await tx.storeSettings.findFirst({
@@ -655,483 +847,534 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 }
                 if (autoHide) {
                   await tx.product.update({
-                    where: { id: component.productId },
+                    where: { id: item.productId },
                     data: { isVisible: false },
                   });
                 }
               }
-            }
 
-            // Incrementa totalSold no combo
-            await tx.combo.update({
-              where: { id: comboRecord.id },
+              item.productItemId = productItem.id;
+            }
+          }
+        }
+
+        let customerIdToLink = order.customerId;
+
+        if (!customerIdToLink && order.customerPhone) {
+          let customer = await tx.customer.findFirst({
+            where: {
+              phone: order.customerPhone,
+              storeId: order.storeId || null,
+            },
+          });
+
+          if (customer?.isBlocked) {
+            throw new Error(
+              'Não foi possível finalizar o pedido. O telefone informado está bloqueado para compras.',
+            );
+          }
+
+          if (!customer) {
+            try {
+              customer = await tx.customer.create({
+                data: {
+                  name: order.customerName,
+                  phone: order.customerPhone,
+                  storeId: order.storeId,
+                },
+              });
+            } catch (e: any) {
+              customer = await tx.customer.findFirst({
+                where: {
+                  phone: order.customerPhone,
+                  storeId: order.storeId || null,
+                },
+              });
+            }
+          }
+          if (customer) {
+            customerIdToLink = customer.id;
+          }
+        }
+
+        if (customerIdToLink) {
+          if (order.customerPhone) {
+            const existingWithPhone = await tx.customer.findFirst({
+              where: {
+                phone: order.customerPhone,
+                storeId: order.storeId || null,
+              },
+            });
+            if (
+              existingWithPhone &&
+              existingWithPhone.id !== customerIdToLink
+            ) {
+              throw new Error(
+                'Este telefone já está cadastrado para outro cliente.',
+              );
+            }
+          }
+          await tx.customer.update({
+            where: { id: customerIdToLink },
+            data: {
+              ...(order.customerName ? { name: order.customerName } : {}),
+              ...(order.customerPhone ? { phone: order.customerPhone } : {}),
+            },
+          });
+        }
+
+        // Validação para cadastrar endereço novo por CEP e número
+        if (customerIdToLink && order.cep) {
+          const existingAddress = await tx.customerAddress.findFirst({
+            where: {
+              customerId: customerIdToLink,
+              cep: order.cep,
+              number: order.number,
+            },
+          });
+
+          if (!existingAddress) {
+            // Remove isDefault dos outros
+            await tx.customerAddress.updateMany({
+              where: { customerId: customerIdToLink },
+              data: { isDefault: false },
+            });
+
+            // Cria o novo
+            await tx.customerAddress.create({
               data: {
-                totalSold: { increment: item.quantity },
+                customerId: customerIdToLink,
+                street: order.street,
+                number: order.number,
+                neighborhood: order.neighborhood,
+                city: order.city || '',
+                state: order.state || '',
+                cep: order.cep || '',
+                complement: order.complement || '',
+                isDefault: true,
               },
             });
           } else {
-            // Lógica padrão para produtos convencionais
-            if (!item.productId) {
-              throw new Error(
-                `Item productName ${item.productName} must be linked to a productId`,
-              );
-            }
-
-            const productItem = await this.findProductItem(
-              tx,
-              item.productId,
-              item.productItemId,
-              item.variation,
-              item.quantity,
-            );
-
-            if (!productItem) {
-              throw new Error(
-                `Estoque do produto ou variação de "${item.productName}" não cadastrado.`,
-              );
-            }
-
-            if (productItem.stock < item.quantity) {
-              throw new Error(
-                `Estoque insuficiente para o item "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
-              );
-            }
-
-            await tx.productItem.update({
-              where: { id: productItem.id },
+            // Atualiza para ser o padrão e atualiza os dados do endereço (rua, bairro, cidade, estado, complemento)
+            await tx.customerAddress.updateMany({
+              where: { customerId: customerIdToLink },
+              data: { isDefault: false },
+            });
+            await tx.customerAddress.update({
+              where: { id: existingAddress.id },
               data: {
-                stock: {
-                  decrement: item.quantity,
-                },
+                street: order.street,
+                number: order.number,
+                neighborhood: order.neighborhood,
+                city: order.city || '',
+                state: order.state || '',
+                cep: order.cep || '',
+                complement: order.complement || '',
+                isDefault: true,
               },
-            });
-
-            const sm = await tx.stockMovement.create({
-              data: {
-                type: 'SUBTRACT',
-                quantity: item.quantity,
-                previousStock: productItem.stock,
-                newStock: productItem.stock - item.quantity,
-                observation: `Venda via pedido`,
-                productId: item.productId,
-                productItemId: productItem.id,
-              },
-            });
-            createdStockMovementIds.push(sm.id);
-
-            // Check if total stock for this product is 0 or less, if so check storeSettings before disabling
-            const allItems = await tx.productItem.findMany({
-              where: { productId: item.productId },
-            });
-            const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
-            if (totalStock <= 0) {
-              let autoHide = true;
-              if (order.storeId) {
-                const settings = await tx.storeSettings.findFirst({
-                  where: { storeId: order.storeId },
-                  select: { autoHideOutOfStock: true },
-                });
-                if (settings && settings.autoHideOutOfStock === false) {
-                  autoHide = false;
-                }
-              }
-              if (autoHide) {
-                await tx.product.update({
-                  where: { id: item.productId },
-                  data: { isVisible: false },
-                });
-              }
-            }
-
-            item.productItemId = productItem.id;
-          }
-        }
-      }
-
-      let customerIdToLink = order.customerId;
-
-      if (!customerIdToLink && order.customerPhone) {
-        let customer = await tx.customer.findFirst({
-          where: { phone: order.customerPhone, storeId: order.storeId || null },
-        });
-
-        if (customer?.isBlocked) {
-          throw new Error('Não foi possível finalizar o pedido. O telefone informado está bloqueado para compras.');
-        }
-
-        if (!customer) {
-          try {
-            customer = await tx.customer.create({
-              data: {
-                name: order.customerName,
-                phone: order.customerPhone,
-                storeId: order.storeId,
-              },
-            });
-          } catch (e: any) {
-            customer = await tx.customer.findFirst({
-              where: { phone: order.customerPhone, storeId: order.storeId || null },
             });
           }
         }
-        if (customer) {
-          customerIdToLink = customer.id;
-        }
-      }
 
-      if (customerIdToLink) {
-        if (order.customerPhone) {
-          const existingWithPhone = await tx.customer.findFirst({ where: { phone: order.customerPhone, storeId: order.storeId || null } });
-          if (existingWithPhone && existingWithPhone.id !== customerIdToLink) {
-            throw new Error('Este telefone já está cadastrado para outro cliente.');
-          }
-        }
-        await tx.customer.update({
-          where: { id: customerIdToLink },
+        const payload = {
+          storeId:
+            order.storeId ||
+            this.tenantContextService.getStoreId() ||
+            undefined,
+          customerId: customerIdToLink,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          itemsTotal: order.itemsTotal,
+          freight: order.freight,
+          paymentDiscount: order.paymentDiscount,
+          installmentSurcharge: order.installmentSurcharge,
+          couponDiscount: order.couponDiscount,
+          couponFreightDiscount: order.couponFreightDiscount,
+          receiptDiscount: order.receiptDiscount,
+          receiptSurcharge: order.receiptSurcharge,
+          amountProvided: order.amountProvided,
+          changeAmount: order.changeAmount,
+
+          totalOrder: order.totalOrder,
+          totalReceived: order.totalReceived,
+          paymentType: order.paymentType,
+          paymentMethod: order.paymentMethod,
+          deliveryModality: order.deliveryModality || 'DELIVERY',
+          pixKey: order.pixKey,
+          street: order.street,
+          number: order.number,
+          neighborhood: order.neighborhood,
+          city: order.city,
+          state: order.state,
+          cep: order.cep,
+          complement: order.complement,
+          observation: order.observation,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          installments: order.installments,
+          paymentDate: order.paymentDate,
+          cardFee: order.cardFee,
+          couponId: order.couponId || undefined,
+          courierTransactionId: order.courierTransactionId || undefined,
+          isPrinted: order.isPrinted || false,
+          uberDeliveryId:
+            order.uberDeliveryId !== undefined
+              ? order.uberDeliveryId
+              : undefined,
+          uberDeliveryStatus:
+            order.uberDeliveryStatus !== undefined
+              ? order.uberDeliveryStatus
+              : undefined,
+          uberDeliveryFee:
+            order.uberDeliveryFee !== undefined
+              ? order.uberDeliveryFee
+              : undefined,
+          uberTrackingUrl:
+            order.uberTrackingUrl !== undefined
+              ? order.uberTrackingUrl
+              : undefined,
+          uberBatchId:
+            order.uberBatchId !== undefined ? order.uberBatchId : undefined,
+        };
+
+        const createdOrder = await tx.order.create({
           data: {
-            ...(order.customerName ? { name: order.customerName } : {}),
-            ...(order.customerPhone ? { phone: order.customerPhone } : {}),
-          },
-        });
-      }
-
-      // Validação para cadastrar endereço novo por CEP e número
-      if (customerIdToLink && order.cep) {
-        const existingAddress = await tx.customerAddress.findFirst({
-          where: {
-            customerId: customerIdToLink,
-            cep: order.cep,
-            number: order.number,
-          },
-        });
-
-        if (!existingAddress) {
-          // Remove isDefault dos outros
-          await tx.customerAddress.updateMany({
-            where: { customerId: customerIdToLink },
-            data: { isDefault: false },
-          });
-
-          // Cria o novo
-          await tx.customerAddress.create({
-            data: {
-              customerId: customerIdToLink,
-              street: order.street,
-              number: order.number,
-              neighborhood: order.neighborhood,
-              city: order.city || '',
-              state: order.state || '',
-              cep: order.cep || '',
-              complement: order.complement || '',
-              isDefault: true,
+            ...payload,
+            items: {
+              create:
+                order.items?.map((item) => ({
+                  productId: item.productId,
+                  productItemId: item.productItemId,
+                  productName: item.productName,
+                  price: item.price,
+                  quantity: item.quantity,
+                  variation: item.variation,
+                  comboId: item.comboId || null,
+                  isCombo: item.isCombo || false,
+                  comboSnapshot: item.comboSnapshot || undefined,
+                  isCustomized: item.isCustomized || false,
+                  customizationSnapshot:
+                    item.customizationSnapshot || undefined,
+                  isOrderBump: (item as any).isOrderBump || false,
+                  orderBumpId: (item as any).orderBumpId || null,
+                })) ?? [],
             },
-          });
-        } else {
-          // Atualiza para ser o padrão e atualiza os dados do endereço (rua, bairro, cidade, estado, complemento)
-          await tx.customerAddress.updateMany({
-            where: { customerId: customerIdToLink },
-            data: { isDefault: false },
-          });
-          await tx.customerAddress.update({
-            where: { id: existingAddress.id },
+          } as any,
+          include: {
+            items: {
+              include: {
+                combo: {
+                  include: {
+                    category: true,
+                  },
+                },
+                product: {
+                  include: {
+                    images: {
+                      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                    },
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (createdStockMovementIds.length > 0) {
+          await tx.stockMovement.updateMany({
+            where: { id: { in: createdStockMovementIds } },
             data: {
-              street: order.street,
-              number: order.number,
-              neighborhood: order.neighborhood,
-              city: order.city || '',
-              state: order.state || '',
-              cep: order.cep || '',
-              complement: order.complement || '',
-              isDefault: true,
+              observation: `Venda via pedido #${createdOrder.orderNumber}`,
             },
           });
         }
-      }
 
-      const payload = {
-        storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
-        customerId: customerIdToLink,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        itemsTotal: order.itemsTotal,
-        freight: order.freight,
-        paymentDiscount: order.paymentDiscount,
-        installmentSurcharge: order.installmentSurcharge,
-        couponDiscount: order.couponDiscount,
-        couponFreightDiscount: order.couponFreightDiscount,
-        receiptDiscount: order.receiptDiscount,
-        receiptSurcharge: order.receiptSurcharge,
-        amountProvided: order.amountProvided,
-        changeAmount: order.changeAmount,
-
-        totalOrder: order.totalOrder,
-        totalReceived: order.totalReceived,
-        paymentType: order.paymentType,
-        paymentMethod: order.paymentMethod,
-        deliveryModality: order.deliveryModality || 'DELIVERY',
-        pixKey: order.pixKey,
-        street: order.street,
-        number: order.number,
-        neighborhood: order.neighborhood,
-        city: order.city,
-        state: order.state,
-        cep: order.cep,
-        complement: order.complement,
-        observation: order.observation,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        installments: order.installments,
-        paymentDate: order.paymentDate,
-        cardFee: order.cardFee,
-        couponId: order.couponId || undefined,
-        courierTransactionId: order.courierTransactionId || undefined,
-        isPrinted: order.isPrinted || false,
-      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
-      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
-      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
-      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
-      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
-      };
-
-      const createdOrder = await tx.order.create({
-        data: {
-          ...payload,
-          items: {
-            create:
-              order.items?.map((item) => ({
-                productId: item.productId,
-                productItemId: item.productItemId,
-                productName: item.productName,
-                price: item.price,
-                quantity: item.quantity,
-                variation: item.variation,
-                comboId: item.comboId || null,
-                isCombo: item.isCombo || false,
-                comboSnapshot: item.comboSnapshot || undefined,
-                isOrderBump: (item as any).isOrderBump || false,
-                orderBumpId: (item as any).orderBumpId || null,
-              })) ?? [],
-          },
-        } as any,
-        include: {
-          items: {
-            include: {
-              combo: {
-                include: {
-                  category: true,
-                },
-              },
-              product: {
-                include: {
-                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
-                  category: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (createdStockMovementIds.length > 0) {
-        await tx.stockMovement.updateMany({
-          where: { id: { in: createdStockMovementIds } },
-          data: { observation: `Venda via pedido #${createdOrder.orderNumber}` }
-        });
-      }
-
-      // Incrementar métricas de conversão e faturamento das regras de Order Bump
-      if (order.items && order.items.length > 0) {
-        for (const item of order.items) {
-          const bumpId = (item as any).orderBumpId;
-          if (bumpId && ((item as any).isOrderBump || (item as any).isBump)) {
-            const itemRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 1);
-            await (tx as any).orderBump.update({
-              where: { id: bumpId },
-              data: {
-                conversionsCount: { increment: 1 },
-                totalRevenue: { increment: itemRevenue },
-              },
-            }).catch((err: any) => console.error('Erro ao registrar conversão no order bump:', err));
+        // Incrementar métricas de conversão e faturamento das regras de Order Bump
+        if (order.items && order.items.length > 0) {
+          for (const item of order.items) {
+            const bumpId = (item as any).orderBumpId;
+            if (bumpId && ((item as any).isOrderBump || (item as any).isBump)) {
+              const itemRevenue =
+                (Number(item.price) || 0) * (Number(item.quantity) || 1);
+              await (tx as any).orderBump
+                .update({
+                  where: { id: bumpId },
+                  data: {
+                    conversionsCount: { increment: 1 },
+                    totalRevenue: { increment: itemRevenue },
+                  },
+                })
+                .catch((err: any) =>
+                  console.error(
+                    'Erro ao registrar conversão no order bump:',
+                    err,
+                  ),
+                );
+            }
           }
         }
-      }
 
-      return createdOrder;
-    }, {
-      maxWait: 15000,
-      timeout: 30000,
-    });
+        return createdOrder;
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000,
+      },
+    );
 
     return this.mapToDomain(record);
   }
 
   async updateWithStockAdjustment(id: string, order: Order): Promise<Order> {
-    const record = await this.prisma.$transaction(async (tx) => {
-      const existingOrder = await tx.order.findUnique({
-        where: { id },
-        include: { items: true },
-      });
+    const record = await this.prisma.$transaction(
+      async (tx) => {
+        const existingOrder = await tx.order.findUnique({
+          where: { id },
+          include: { items: true },
+        });
 
-      if (!existingOrder) throw new Error(`Order with ID ${id} not found`);
+        if (!existingOrder) throw new Error(`Order with ID ${id} not found`);
 
-      // 1. Restaurar o estoque dos itens antigos
-      for (const oldItem of existingOrder.items) {
-        if (oldItem.isCombo || oldItem.comboId || oldItem.comboSnapshot) {
-          const snapshot = oldItem.comboSnapshot as any;
-          const components = snapshot?.items || [];
+        // 1. Restaurar o estoque dos itens antigos
+        for (const oldItem of existingOrder.items) {
+          if (oldItem.isCombo || oldItem.comboId || oldItem.comboSnapshot) {
+            const snapshot = oldItem.comboSnapshot as any;
+            const components = snapshot?.items || [];
 
-          for (const comp of components) {
-            const returnQuantity = (comp.quantity || 1) * oldItem.quantity;
-            let productItem: any;
-            if (comp.productItemId) {
-              productItem = await tx.productItem.findUnique({ where: { id: comp.productItemId } });
-            } else if (comp.productId) {
-              productItem = await tx.productItem.findFirst({ where: { productId: comp.productId } });
+            for (const comp of components) {
+              const returnQuantity = (comp.quantity || 1) * oldItem.quantity;
+              let productItem: any;
+              if (comp.productItemId) {
+                productItem = await tx.productItem.findUnique({
+                  where: { id: comp.productItemId },
+                });
+              } else if (comp.productId) {
+                productItem = await tx.productItem.findFirst({
+                  where: { productId: comp.productId },
+                });
+              }
+
+              if (productItem) {
+                await tx.productItem.update({
+                  where: { id: productItem.id },
+                  data: { stock: { increment: returnQuantity } },
+                });
+
+                await tx.stockMovement.create({
+                  data: {
+                    type: 'ADD',
+                    quantity: returnQuantity,
+                    previousStock: productItem.stock,
+                    newStock: productItem.stock + returnQuantity,
+                    observation: `Restaurado por edição do pedido #${existingOrder.orderNumber} (Combo: ${oldItem.productName})`,
+                    productId: comp.productId,
+                    productItemId: productItem.id,
+                  },
+                });
+
+                if (comp.productId) {
+                  await tx.product.update({
+                    where: { id: comp.productId },
+                    data: { isVisible: true },
+                  });
+                }
+              }
             }
+
+            if (oldItem.comboId) {
+              try {
+                await tx.combo.update({
+                  where: { id: oldItem.comboId },
+                  data: { totalSold: { decrement: oldItem.quantity } },
+                });
+              } catch (err) {}
+            }
+          } else if (oldItem.productId) {
+            const productItem = await this.findProductItem(
+              tx,
+              oldItem.productId,
+              oldItem.productItemId,
+              oldItem.variation,
+              oldItem.quantity,
+            );
 
             if (productItem) {
               await tx.productItem.update({
                 where: { id: productItem.id },
-                data: { stock: { increment: returnQuantity } },
+                data: { stock: { increment: oldItem.quantity } },
               });
-
               await tx.stockMovement.create({
                 data: {
                   type: 'ADD',
-                  quantity: returnQuantity,
+                  quantity: oldItem.quantity,
                   previousStock: productItem.stock,
-                  newStock: productItem.stock + returnQuantity,
-                  observation: `Restaurado por edição do pedido #${existingOrder.orderNumber} (Combo: ${oldItem.productName})`,
-                  productId: comp.productId,
+                  newStock: productItem.stock + oldItem.quantity,
+                  observation: `Restaurado por edição do pedido #${existingOrder.orderNumber}`,
+                  productId: oldItem.productId,
                   productItemId: productItem.id,
                 },
               });
-
-              if (comp.productId) {
-                await tx.product.update({
-                  where: { id: comp.productId },
-                  data: { isVisible: true },
-                });
-              }
-            }
-          }
-
-          if (oldItem.comboId) {
-            try {
-              await tx.combo.update({
-                where: { id: oldItem.comboId },
-                data: { totalSold: { decrement: oldItem.quantity } },
+              await tx.product.update({
+                where: { id: oldItem.productId },
+                data: { isVisible: true },
               });
-            } catch (err) {}
-          }
-        } else if (oldItem.productId) {
-          const productItem = await this.findProductItem(
-            tx,
-            oldItem.productId,
-            oldItem.productItemId,
-            oldItem.variation,
-            oldItem.quantity,
-          );
-
-          if (productItem) {
-            await tx.productItem.update({
-              where: { id: productItem.id },
-              data: { stock: { increment: oldItem.quantity } },
-            });
-            await tx.stockMovement.create({
-              data: {
-                type: 'ADD',
-                quantity: oldItem.quantity,
-                previousStock: productItem.stock,
-                newStock: productItem.stock + oldItem.quantity,
-                observation: `Restaurado por edição do pedido #${existingOrder.orderNumber}`,
-                productId: oldItem.productId,
-                productItemId: productItem.id,
-              },
-            });
-            await tx.product.update({
-              where: { id: oldItem.productId },
-              data: { isVisible: true },
-            });
+            }
           }
         }
-      }
 
-      // 2. Deletar itens antigos
-      await tx.orderItem.deleteMany({
-        where: { orderId: id },
-      });
+        // 2. Deletar itens antigos
+        await tx.orderItem.deleteMany({
+          where: { orderId: id },
+        });
 
-      // 3. Decrementar estoque dos novos itens
-      if (order.items && order.items.length > 0) {
-        for (const item of order.items) {
-          if (item.isCombo || item.comboId) {
-            const comboId = item.comboId || item.productId;
-            const comboRecord = await tx.combo.findUnique({
-              where: { id: comboId! },
-              include: {
-                items: {
-                  include: {
-                    product: { include: { items: true } },
-                    productItem: true,
+        // 3. Decrementar estoque dos novos itens
+        if (order.items && order.items.length > 0) {
+          for (const item of order.items) {
+            if (item.isCombo || item.comboId) {
+              const comboId = item.comboId || item.productId;
+              const comboRecord = await tx.combo.findUnique({
+                where: { id: comboId! },
+                include: {
+                  items: {
+                    include: {
+                      product: { include: { items: true } },
+                      productItem: true,
+                    },
                   },
                 },
-              },
-            });
+              });
 
-            if (!comboRecord) {
-              throw new Error(`Combo "${item.productName}" não encontrado para baixa de estoque.`);
-            }
+              if (!comboRecord) {
+                throw new Error(
+                  `Combo "${item.productName}" não encontrado para baixa de estoque.`,
+                );
+              }
 
-            const snapshotItems = (item.comboSnapshot as any)?.items;
-            const componentsToProcess = Array.isArray(snapshotItems) && snapshotItems.length > 0
-              ? snapshotItems
-              : comboRecord.items;
+              const snapshotItems = (item.comboSnapshot as any)?.items;
+              const componentsToProcess =
+                Array.isArray(snapshotItems) && snapshotItems.length > 0
+                  ? snapshotItems
+                  : comboRecord.items;
 
-            for (const component of componentsToProcess) {
-              const requiredQuantity = (component.quantity || 1) * item.quantity;
+              for (const component of componentsToProcess) {
+                const requiredQuantity =
+                  (component.quantity || 1) * item.quantity;
+                const productItem = await this.findProductItem(
+                  tx,
+                  component.productId,
+                  component.productItemId,
+                  component.variation,
+                  requiredQuantity,
+                );
+
+                if (!productItem) {
+                  throw new Error(
+                    `Componente "${component.productName || 'Componente'}" do combo não possui estoque/variação cadastrada.`,
+                  );
+                }
+
+                if (productItem.stock < requiredQuantity) {
+                  throw new Error(
+                    `Estoque insuficiente para o componente "${component.productName || 'Componente'}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  );
+                }
+
+                await tx.productItem.update({
+                  where: { id: productItem.id },
+                  data: { stock: { decrement: requiredQuantity } },
+                });
+
+                await tx.stockMovement.create({
+                  data: {
+                    type: 'SUBTRACT',
+                    quantity: requiredQuantity,
+                    previousStock: productItem.stock,
+                    newStock: productItem.stock - requiredQuantity,
+                    observation: `Venda via combo "${comboRecord.name}" na edição do pedido #${existingOrder.orderNumber}`,
+                    productId: component.productId,
+                    productItemId: productItem.id,
+                  },
+                });
+
+                const allCompItems = await tx.productItem.findMany({
+                  where: { productId: component.productId },
+                });
+                const totalCompStock = allCompItems.reduce(
+                  (acc, curr) => acc + curr.stock,
+                  0,
+                );
+                if (totalCompStock <= 0) {
+                  let autoHide = true;
+                  const targetStoreId = existingOrder.storeId || order.storeId;
+                  if (targetStoreId) {
+                    const settings = await tx.storeSettings.findFirst({
+                      where: { storeId: targetStoreId },
+                      select: { autoHideOutOfStock: true },
+                    });
+                    if (settings && settings.autoHideOutOfStock === false) {
+                      autoHide = false;
+                    }
+                  }
+                  if (autoHide) {
+                    await tx.product.update({
+                      where: { id: component.productId },
+                      data: { isVisible: false },
+                    });
+                  }
+                }
+              }
+
+              await tx.combo.update({
+                where: { id: comboRecord.id },
+                data: { totalSold: { increment: item.quantity } },
+              });
+            } else {
+              if (!item.productId)
+                throw new Error(`Item must be linked to a productId`);
+
               const productItem = await this.findProductItem(
                 tx,
-                component.productId,
-                component.productItemId,
-                component.variation,
-                requiredQuantity,
+                item.productId,
+                item.productItemId,
+                item.variation,
+                item.quantity,
               );
 
-              if (!productItem) {
+              if (!productItem)
                 throw new Error(
-                  `Componente "${component.productName || 'Componente'}" do combo não possui estoque/variação cadastrada.`,
+                  `Estoque do produto "${item.productName}" não cadastrado.`,
                 );
-              }
-
-              if (productItem.stock < requiredQuantity) {
+              if (productItem.stock < item.quantity)
                 throw new Error(
-                  `Estoque insuficiente para o componente "${component.productName || 'Componente'}" do combo "${comboRecord.name}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  `Estoque insuficiente para "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
                 );
-              }
 
               await tx.productItem.update({
                 where: { id: productItem.id },
-                data: { stock: { decrement: requiredQuantity } },
+                data: { stock: { decrement: item.quantity } },
               });
 
               await tx.stockMovement.create({
                 data: {
                   type: 'SUBTRACT',
-                  quantity: requiredQuantity,
+                  quantity: item.quantity,
                   previousStock: productItem.stock,
-                  newStock: productItem.stock - requiredQuantity,
-                  observation: `Venda via combo "${comboRecord.name}" na edição do pedido #${existingOrder.orderNumber}`,
-                  productId: component.productId,
+                  newStock: productItem.stock - item.quantity,
+                  observation: `Venda via edição do pedido #${existingOrder.orderNumber}`,
+                  productId: item.productId,
                   productItemId: productItem.id,
                 },
               });
 
-              const allCompItems = await tx.productItem.findMany({
-                where: { productId: component.productId },
+              const allItems = await tx.productItem.findMany({
+                where: { productId: item.productId },
               });
-              const totalCompStock = allCompItems.reduce((acc, curr) => acc + curr.stock, 0);
-              if (totalCompStock <= 0) {
+              const totalStock = allItems.reduce(
+                (acc, curr) => acc + curr.stock,
+                0,
+              );
+              if (totalStock <= 0) {
                 let autoHide = true;
                 const targetStoreId = existingOrder.storeId || order.storeId;
                 if (targetStoreId) {
@@ -1145,401 +1388,482 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 }
                 if (autoHide) {
                   await tx.product.update({
-                    where: { id: component.productId },
+                    where: { id: item.productId },
                     data: { isVisible: false },
                   });
                 }
               }
+
+              item.productItemId = productItem.id;
             }
+          }
+        }
 
-            await tx.combo.update({
-              where: { id: comboRecord.id },
-              data: { totalSold: { increment: item.quantity } },
-            });
-          } else {
-            if (!item.productId) throw new Error(`Item must be linked to a productId`);
+        // 4. Atualizar o pedido e criar os novos itens
+        const customerIdToLink = order.customerId;
 
-            const productItem = await this.findProductItem(
-              tx,
-              item.productId,
-              item.productItemId,
-              item.variation,
-              item.quantity,
-            );
-
-            if (!productItem) throw new Error(`Estoque do produto "${item.productName}" não cadastrado.`);
-            if (productItem.stock < item.quantity) throw new Error(`Estoque insuficiente para "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`);
-
-            await tx.productItem.update({
-              where: { id: productItem.id },
-              data: { stock: { decrement: item.quantity } },
-            });
-
-            await tx.stockMovement.create({
-              data: {
-                type: 'SUBTRACT',
-                quantity: item.quantity,
-                previousStock: productItem.stock,
-                newStock: productItem.stock - item.quantity,
-                observation: `Venda via edição do pedido #${existingOrder.orderNumber}`,
-                productId: item.productId,
-                productItemId: productItem.id,
+        if (customerIdToLink) {
+          if (order.customerPhone) {
+            const existingWithPhone = await tx.customer.findFirst({
+              where: {
+                phone: order.customerPhone,
+                storeId: order.storeId || null,
               },
             });
-
-            const allItems = await tx.productItem.findMany({ where: { productId: item.productId } });
-            const totalStock = allItems.reduce((acc, curr) => acc + curr.stock, 0);
-            if (totalStock <= 0) {
-              let autoHide = true;
-              const targetStoreId = existingOrder.storeId || order.storeId;
-              if (targetStoreId) {
-                const settings = await tx.storeSettings.findFirst({
-                  where: { storeId: targetStoreId },
-                  select: { autoHideOutOfStock: true },
-                });
-                if (settings && settings.autoHideOutOfStock === false) {
-                  autoHide = false;
-                }
-              }
-              if (autoHide) {
-                await tx.product.update({
-                  where: { id: item.productId },
-                  data: { isVisible: false },
-                });
-              }
+            if (
+              existingWithPhone &&
+              existingWithPhone.id !== customerIdToLink
+            ) {
+              throw new Error(
+                'Este telefone já está cadastrado para outro cliente.',
+              );
             }
-
-            item.productItemId = productItem.id;
           }
+          await tx.customer.update({
+            where: { id: customerIdToLink },
+            data: {
+              ...(order.customerName ? { name: order.customerName } : {}),
+              ...(order.customerPhone ? { phone: order.customerPhone } : {}),
+            },
+          });
         }
-      }
+        const payload = {
+          storeId:
+            order.storeId ||
+            this.tenantContextService.getStoreId() ||
+            undefined,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerId: customerIdToLink || undefined,
+          itemsTotal: order.itemsTotal,
+          freight: order.freight,
+          paymentDiscount: order.paymentDiscount,
+          installmentSurcharge: order.installmentSurcharge,
+          couponDiscount: order.couponDiscount,
+          couponFreightDiscount: order.couponFreightDiscount,
+          receiptDiscount: order.receiptDiscount,
+          receiptSurcharge: order.receiptSurcharge,
+          amountProvided: order.amountProvided,
+          changeAmount: order.changeAmount,
 
-      // 4. Atualizar o pedido e criar os novos itens
-      const customerIdToLink = order.customerId;
+          totalOrder: order.totalOrder,
+          totalReceived: order.totalReceived,
+          paymentType: order.paymentType,
+          paymentMethod: order.paymentMethod,
+          deliveryModality: order.deliveryModality || 'DELIVERY',
+          pixKey: order.pixKey,
+          street: order.street,
+          number: order.number,
+          neighborhood: order.neighborhood,
+          city: order.city,
+          state: order.state,
+          cep: order.cep,
+          complement: order.complement,
+          observation: order.observation,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          installments: order.installments,
+          paymentDate: order.paymentDate,
+          cardFee: order.cardFee,
+          couponId: order.couponId || undefined,
+          courierTransactionId: order.courierTransactionId || undefined,
+          isPrinted: order.isPrinted || false,
+          uberDeliveryId:
+            order.uberDeliveryId !== undefined
+              ? order.uberDeliveryId
+              : undefined,
+          uberDeliveryStatus:
+            order.uberDeliveryStatus !== undefined
+              ? order.uberDeliveryStatus
+              : undefined,
+          uberDeliveryFee:
+            order.uberDeliveryFee !== undefined
+              ? order.uberDeliveryFee
+              : undefined,
+          uberTrackingUrl:
+            order.uberTrackingUrl !== undefined
+              ? order.uberTrackingUrl
+              : undefined,
+          uberBatchId:
+            order.uberBatchId !== undefined ? order.uberBatchId : undefined,
+        };
 
-      if (customerIdToLink) {
-        if (order.customerPhone) {
-          const existingWithPhone = await tx.customer.findFirst({ where: { phone: order.customerPhone, storeId: order.storeId || null } });
-          if (existingWithPhone && existingWithPhone.id !== customerIdToLink) {
-            throw new Error('Este telefone já está cadastrado para outro cliente.');
-          }
-        }
-        await tx.customer.update({
-          where: { id: customerIdToLink },
+        const updatedOrder = await tx.order.update({
+          where: { id },
           data: {
-            ...(order.customerName ? { name: order.customerName } : {}),
-            ...(order.customerPhone ? { phone: order.customerPhone } : {}),
+            ...payload,
+            items: {
+              create:
+                order.items?.map((item) => ({
+                  productId: item.productId,
+                  productItemId: item.productItemId,
+                  productName: item.productName,
+                  price: item.price,
+                  quantity: item.quantity,
+                  variation: item.variation,
+                  comboId: item.comboId || null,
+                  isCombo: item.isCombo || false,
+                  comboSnapshot: item.comboSnapshot || undefined,
+                  isCustomized: item.isCustomized || false,
+                  customizationSnapshot:
+                    item.customizationSnapshot || undefined,
+                })) ?? [],
+            },
           },
-        });
-      }
-      const payload = {
-        storeId: order.storeId || this.tenantContextService.getStoreId() || undefined,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerId: customerIdToLink || undefined,
-        itemsTotal: order.itemsTotal,
-        freight: order.freight,
-        paymentDiscount: order.paymentDiscount,
-        installmentSurcharge: order.installmentSurcharge,
-        couponDiscount: order.couponDiscount,
-        couponFreightDiscount: order.couponFreightDiscount,
-        receiptDiscount: order.receiptDiscount,
-        receiptSurcharge: order.receiptSurcharge,
-        amountProvided: order.amountProvided,
-        changeAmount: order.changeAmount,
-
-        totalOrder: order.totalOrder,
-        totalReceived: order.totalReceived,
-        paymentType: order.paymentType,
-        paymentMethod: order.paymentMethod,
-        deliveryModality: order.deliveryModality || 'DELIVERY',
-        pixKey: order.pixKey,
-        street: order.street,
-        number: order.number,
-        neighborhood: order.neighborhood,
-        city: order.city,
-        state: order.state,
-        cep: order.cep,
-        complement: order.complement,
-        observation: order.observation,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        installments: order.installments,
-        paymentDate: order.paymentDate,
-        cardFee: order.cardFee,
-        couponId: order.couponId || undefined,
-        courierTransactionId: order.courierTransactionId || undefined,
-        isPrinted: order.isPrinted || false,
-      uberDeliveryId: order.uberDeliveryId !== undefined ? order.uberDeliveryId : undefined,
-      uberDeliveryStatus: order.uberDeliveryStatus !== undefined ? order.uberDeliveryStatus : undefined,
-      uberDeliveryFee: order.uberDeliveryFee !== undefined ? order.uberDeliveryFee : undefined,
-      uberTrackingUrl: order.uberTrackingUrl !== undefined ? order.uberTrackingUrl : undefined,
-      uberBatchId: order.uberBatchId !== undefined ? order.uberBatchId : undefined,
-      };
-
-      const updatedOrder = await tx.order.update({
-        where: { id },
-        data: {
-          ...payload,
-          items: {
-            create: order.items?.map(item => ({
-              productId: item.productId,
-              productItemId: item.productItemId,
-              productName: item.productName,
-              price: item.price,
-              quantity: item.quantity,
-              variation: item.variation,
-              comboId: item.comboId || null,
-              isCombo: item.isCombo || false,
-              comboSnapshot: item.comboSnapshot || undefined,
-            })) ?? []
-          }
-        },
-        include: {
-          items: {
-            include: {
-              combo: true,
-              product: {
-                include: {
-                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
-                  category: true,
+          include: {
+            items: {
+              include: {
+                combo: true,
+                product: {
+                  include: {
+                    images: {
+                      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+                    },
+                    category: true,
+                  },
                 },
               },
             },
           },
-        },
-      });
-
-      if (customerIdToLink && order.cep) {
-        const existingAddress = await tx.customerAddress.findFirst({
-          where: {
-            customerId: customerIdToLink,
-            cep: order.cep,
-            number: order.number,
-          },
         });
 
-        if (!existingAddress) {
-          await tx.customerAddress.updateMany({
-            where: { customerId: customerIdToLink },
-            data: { isDefault: false },
-          });
-          await tx.customerAddress.create({
-            data: {
+        if (customerIdToLink && order.cep) {
+          const existingAddress = await tx.customerAddress.findFirst({
+            where: {
               customerId: customerIdToLink,
-              street: order.street,
+              cep: order.cep,
               number: order.number,
-              neighborhood: order.neighborhood,
-              city: order.city || '',
-              state: order.state || '',
-              cep: order.cep || '',
-              complement: order.complement || '',
-              isDefault: true,
             },
           });
-        } else {
-          await tx.customerAddress.updateMany({
-            where: { customerId: customerIdToLink },
-            data: { isDefault: false },
-          });
-          await tx.customerAddress.update({
-            where: { id: existingAddress.id },
-            data: {
-              street: order.street,
-              number: order.number,
-              neighborhood: order.neighborhood,
-              city: order.city || '',
-              state: order.state || '',
-              cep: order.cep || '',
-              complement: order.complement || '',
-              isDefault: true,
-            },
-          });
-        }
-      }
 
-      return updatedOrder;
-    }, { maxWait: 15000, timeout: 30000 });
+          if (!existingAddress) {
+            await tx.customerAddress.updateMany({
+              where: { customerId: customerIdToLink },
+              data: { isDefault: false },
+            });
+            await tx.customerAddress.create({
+              data: {
+                customerId: customerIdToLink,
+                street: order.street,
+                number: order.number,
+                neighborhood: order.neighborhood,
+                city: order.city || '',
+                state: order.state || '',
+                cep: order.cep || '',
+                complement: order.complement || '',
+                isDefault: true,
+              },
+            });
+          } else {
+            await tx.customerAddress.updateMany({
+              where: { customerId: customerIdToLink },
+              data: { isDefault: false },
+            });
+            await tx.customerAddress.update({
+              where: { id: existingAddress.id },
+              data: {
+                street: order.street,
+                number: order.number,
+                neighborhood: order.neighborhood,
+                city: order.city || '',
+                state: order.state || '',
+                cep: order.cep || '',
+                complement: order.complement || '',
+                isDefault: true,
+              },
+            });
+          }
+        }
+
+        return updatedOrder;
+      },
+      { maxWait: 15000, timeout: 30000 },
+    );
 
     return this.mapToDomain(record);
   }
 
   async cancelAndRestoreStock(id: string): Promise<Order> {
-    const record = await this.prisma.$transaction(async (tx) => {
-      const orderRecord = await tx.order.findUnique({
-        where: { id },
-        include: {
-          items: true,
-        },
-      });
+    const record = await this.prisma.$transaction(
+      async (tx) => {
+        const orderRecord = await tx.order.findUnique({
+          where: { id },
+          include: {
+            items: true,
+          },
+        });
 
-      if (!orderRecord) {
-        throw new Error(`Order with ID ${id} not found`);
-      }
+        if (!orderRecord) {
+          throw new Error(`Order with ID ${id} not found`);
+        }
 
-      if (orderRecord.status === 'CANCELLED') {
-        throw new Error('Este pedido já está cancelado.');
-      }
+        if (orderRecord.status === 'CANCELLED') {
+          throw new Error('Este pedido já está cancelado.');
+        }
 
-      if (orderRecord.status === 'COMPLETED') {
-        throw new Error(CANNOT_CANCEL_COMPLETED_ORDER_MESSAGE);
-      }
+        if (orderRecord.status === 'COMPLETED') {
+          throw new Error(CANNOT_CANCEL_COMPLETED_ORDER_MESSAGE);
+        }
 
-      for (const item of orderRecord.items) {
-        if (item.isCombo || item.comboId || item.comboSnapshot) {
-          // Devolução de estoque dos componentes do combo
-          const snapshot = item.comboSnapshot as any;
-          const components = snapshot?.items || [];
+        for (const item of orderRecord.items) {
+          if (item.isCombo || item.comboId || item.comboSnapshot) {
+            // Devolução de estoque dos componentes do combo
+            const snapshot = item.comboSnapshot as any;
+            const components = snapshot?.items || [];
 
-          for (const comp of components) {
-            const returnQuantity = (comp.quantity || 1) * item.quantity;
+            for (const comp of components) {
+              const returnQuantity = (comp.quantity || 1) * item.quantity;
+              let productItem: any;
+              if (comp.productItemId) {
+                productItem = await tx.productItem.findUnique({
+                  where: { id: comp.productItemId },
+                });
+              } else if (comp.productId) {
+                productItem = await tx.productItem.findFirst({
+                  where: { productId: comp.productId },
+                });
+              }
+
+              if (productItem) {
+                await tx.productItem.update({
+                  where: { id: productItem.id },
+                  data: {
+                    stock: { increment: returnQuantity },
+                  },
+                });
+
+                await tx.stockMovement.create({
+                  data: {
+                    type: 'ADD',
+                    quantity: returnQuantity,
+                    previousStock: productItem.stock,
+                    newStock: productItem.stock + returnQuantity,
+                    observation: `Cancelamento do pedido #${orderRecord.orderNumber} (Combo: ${item.productName})`,
+                    productId: comp.productId,
+                    productItemId: productItem.id,
+                  },
+                });
+
+                if (comp.productId) {
+                  await tx.product.update({
+                    where: { id: comp.productId },
+                    data: { isVisible: true },
+                  });
+                }
+              }
+            }
+
+            // Decrementa totalSold do combo se ele ainda existir
+            if (item.comboId) {
+              try {
+                await tx.combo.update({
+                  where: { id: item.comboId },
+                  data: { totalSold: { decrement: item.quantity } },
+                });
+              } catch (err) {
+                // Ignora se o combo já tiver sido excluído
+              }
+            }
+          } else if (item.productId) {
             let productItem: any;
-            if (comp.productItemId) {
-              productItem = await tx.productItem.findUnique({ where: { id: comp.productItemId } });
-            } else if (comp.productId) {
-              productItem = await tx.productItem.findFirst({ where: { productId: comp.productId } });
+            if (item.productItemId) {
+              productItem = await tx.productItem.findUnique({
+                where: { id: item.productItemId },
+              });
+            }
+            if (!productItem) {
+              productItem = await this.findProductItem(
+                tx,
+                item.productId,
+                null,
+                item.variation,
+                item.quantity,
+              );
+            }
+            if (!productItem) {
+              productItem = await tx.productItem.findFirst({
+                where: { productId: item.productId },
+              });
             }
 
             if (productItem) {
               await tx.productItem.update({
                 where: { id: productItem.id },
                 data: {
-                  stock: { increment: returnQuantity },
+                  stock: {
+                    increment: item.quantity,
+                  },
                 },
               });
 
               await tx.stockMovement.create({
                 data: {
                   type: 'ADD',
-                  quantity: returnQuantity,
+                  quantity: item.quantity,
                   previousStock: productItem.stock,
-                  newStock: productItem.stock + returnQuantity,
-                  observation: `Cancelamento do pedido #${orderRecord.orderNumber} (Combo: ${item.productName})`,
-                  productId: comp.productId,
+                  newStock: productItem.stock + item.quantity,
+                  observation: `Cancelamento do pedido #${orderRecord.orderNumber}`,
+                  productId: item.productId,
                   productItemId: productItem.id,
                 },
               });
 
-              if (comp.productId) {
-                await tx.product.update({
-                  where: { id: comp.productId },
-                  data: { isVisible: true },
-                });
-              }
-            }
-          }
-
-          // Decrementa totalSold do combo se ele ainda existir
-          if (item.comboId) {
-            try {
-              await tx.combo.update({
-                where: { id: item.comboId },
-                data: { totalSold: { decrement: item.quantity } },
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { isVisible: true },
               });
-            } catch (err) {
-              // Ignora se o combo já tiver sido excluído
             }
-          }
-        } else if (item.productId) {
-          let productItem: any;
-          if (item.productItemId) {
-            productItem = await tx.productItem.findUnique({ where: { id: item.productItemId } });
-          }
-          if (!productItem) {
-            productItem = await this.findProductItem(
-              tx,
-              item.productId,
-              null,
-              item.variation,
-              item.quantity,
-            );
-          }
-          if (!productItem) {
-            productItem = await tx.productItem.findFirst({ where: { productId: item.productId } });
-          }
-
-          if (productItem) {
-            await tx.productItem.update({
-              where: { id: productItem.id },
-              data: {
-                stock: {
-                  increment: item.quantity,
-                },
-              },
-            });
-
-            await tx.stockMovement.create({
-              data: {
-                type: 'ADD',
-                quantity: item.quantity,
-                previousStock: productItem.stock,
-                newStock: productItem.stock + item.quantity,
-                observation: `Cancelamento do pedido #${orderRecord.orderNumber}`,
-                productId: item.productId,
-                productItemId: productItem.id,
-              },
-            });
-
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { isVisible: true },
-            });
           }
         }
-      }
 
-      const updatedOrder = await tx.order.update({
-        where: { id },
-        data: {
-          status: 'CANCELLED',
-        },
-        include: {
-          items: true,
-        },
-      });
+        const updatedOrder = await tx.order.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+          },
+          include: {
+            items: true,
+          },
+        });
 
-      return updatedOrder;
-    }, {
-      maxWait: 15000,
-      timeout: 30000,
-    });
+        return updatedOrder;
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000,
+      },
+    );
 
     return this.mapToDomain(record);
   }
 
-  async recoverAndDecrementStock(id: string, newStatus: OrderStatus): Promise<Order> {
-    const record = await this.prisma.$transaction(async (tx) => {
-      const orderRecord = await tx.order.findUnique({
-        where: { id },
-        include: { items: true },
-      });
+  async recoverAndDecrementStock(
+    id: string,
+    newStatus: OrderStatus,
+  ): Promise<Order> {
+    const record = await this.prisma.$transaction(
+      async (tx) => {
+        const orderRecord = await tx.order.findUnique({
+          where: { id },
+          include: { items: true },
+        });
 
-      if (!orderRecord) {
-        throw new Error(`Order with ID ${id} not found`);
-      }
+        if (!orderRecord) {
+          throw new Error(`Order with ID ${id} not found`);
+        }
 
-      if (orderRecord.status !== 'CANCELLED') {
-        throw new Error('Order is not cancelled, cannot recover');
-      }
+        if (orderRecord.status !== 'CANCELLED') {
+          throw new Error('Order is not cancelled, cannot recover');
+        }
 
-      for (const item of orderRecord.items) {
-        if (item.isCombo || item.comboId || item.comboSnapshot) {
-          const snapshot = item.comboSnapshot as any;
-          const components = snapshot?.items || [];
+        for (const item of orderRecord.items) {
+          if (item.isCombo || item.comboId || item.comboSnapshot) {
+            const snapshot = item.comboSnapshot as any;
+            const components = snapshot?.items || [];
 
-          for (const comp of components) {
-            const requiredQuantity = (comp.quantity || 1) * item.quantity;
+            for (const comp of components) {
+              const requiredQuantity = (comp.quantity || 1) * item.quantity;
+              let productItem: any;
+              if (comp.productItemId) {
+                productItem = await tx.productItem.findUnique({
+                  where: { id: comp.productItemId },
+                });
+              } else if (comp.productId) {
+                productItem = await tx.productItem.findFirst({
+                  where: { productId: comp.productId },
+                });
+              }
+
+              if (productItem) {
+                if (productItem.stock < requiredQuantity) {
+                  throw new Error(
+                    `Estoque insuficiente para recuperação do componente "${comp.productName || 'Componente'}" do combo "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  );
+                }
+
+                await tx.productItem.update({
+                  where: { id: productItem.id },
+                  data: {
+                    stock: {
+                      decrement: requiredQuantity,
+                    },
+                  },
+                });
+
+                await tx.stockMovement.create({
+                  data: {
+                    type: 'SUBTRACT',
+                    quantity: requiredQuantity,
+                    previousStock: productItem.stock,
+                    newStock: productItem.stock - requiredQuantity,
+                    observation: `Recuperação do pedido #${orderRecord.orderNumber} (Combo: ${item.productName})`,
+                    productId: comp.productId,
+                    productItemId: productItem.id,
+                  },
+                });
+
+                const allCompItems = await tx.productItem.findMany({
+                  where: { productId: comp.productId },
+                });
+                const currentTotalStock = allCompItems.reduce(
+                  (acc, curr) => acc + curr.stock,
+                  0,
+                );
+                if (currentTotalStock <= 0) {
+                  let autoHide = true;
+                  if (orderRecord.storeId) {
+                    const settings = await tx.storeSettings.findFirst({
+                      where: { storeId: orderRecord.storeId },
+                      select: { autoHideOutOfStock: true },
+                    });
+                    if (settings && settings.autoHideOutOfStock === false) {
+                      autoHide = false;
+                    }
+                  }
+                  if (autoHide && comp.productId) {
+                    await tx.product.update({
+                      where: { id: comp.productId },
+                      data: { isVisible: false },
+                    });
+                  }
+                }
+              }
+            }
+
+            if (item.comboId) {
+              try {
+                await tx.combo.update({
+                  where: { id: item.comboId },
+                  data: { totalSold: { increment: item.quantity } },
+                });
+              } catch (err) {}
+            }
+          } else if (item.productId) {
             let productItem: any;
-            if (comp.productItemId) {
-              productItem = await tx.productItem.findUnique({ where: { id: comp.productItemId } });
-            } else if (comp.productId) {
-              productItem = await tx.productItem.findFirst({ where: { productId: comp.productId } });
+            if (item.productItemId) {
+              productItem = await tx.productItem.findUnique({
+                where: { id: item.productItemId },
+              });
+            }
+            if (!productItem) {
+              productItem = await this.findProductItem(
+                tx,
+                item.productId,
+                null,
+                item.variation,
+                item.quantity,
+              );
+            }
+            if (!productItem) {
+              productItem = await tx.productItem.findFirst({
+                where: { productId: item.productId },
+              });
             }
 
             if (productItem) {
-              if (productItem.stock < requiredQuantity) {
+              if (productItem.stock < item.quantity) {
                 throw new Error(
-                  `Estoque insuficiente para recuperação do componente "${comp.productName || 'Componente'}" do combo "${item.productName}". Disponível: ${productItem.stock}, Solicitado: ${requiredQuantity}`,
+                  `Estoque insuficiente para recuperação do produto ID ${item.productId}. Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`,
                 );
               }
 
@@ -1547,7 +1871,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 where: { id: productItem.id },
                 data: {
                   stock: {
-                    decrement: requiredQuantity,
+                    decrement: item.quantity,
                   },
                 },
               });
@@ -1555,17 +1879,22 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               await tx.stockMovement.create({
                 data: {
                   type: 'SUBTRACT',
-                  quantity: requiredQuantity,
+                  quantity: item.quantity,
                   previousStock: productItem.stock,
-                  newStock: productItem.stock - requiredQuantity,
-                  observation: `Recuperação do pedido #${orderRecord.orderNumber} (Combo: ${item.productName})`,
-                  productId: comp.productId,
+                  newStock: productItem.stock - item.quantity,
+                  observation: `Recuperação do pedido #${orderRecord.orderNumber}`,
+                  productId: item.productId,
                   productItemId: productItem.id,
                 },
               });
 
-              const allCompItems = await tx.productItem.findMany({ where: { productId: comp.productId } });
-              const currentTotalStock = allCompItems.reduce((acc, curr) => acc + curr.stock, 0);
+              const updatedAllItems = await tx.productItem.findMany({
+                where: { productId: item.productId },
+              });
+              const currentTotalStock = updatedAllItems.reduce(
+                (acc, curr) => acc + curr.stock,
+                0,
+              );
               if (currentTotalStock <= 0) {
                 let autoHide = true;
                 if (orderRecord.storeId) {
@@ -1577,113 +1906,40 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                     autoHide = false;
                   }
                 }
-                if (autoHide && comp.productId) {
+                if (autoHide) {
                   await tx.product.update({
-                    where: { id: comp.productId },
+                    where: { id: item.productId },
                     data: { isVisible: false },
                   });
                 }
-              }
-            }
-          }
-
-          if (item.comboId) {
-            try {
-              await tx.combo.update({
-                where: { id: item.comboId },
-                data: { totalSold: { increment: item.quantity } },
-              });
-            } catch (err) {}
-          }
-        } else if (item.productId) {
-          let productItem: any;
-          if (item.productItemId) {
-            productItem = await tx.productItem.findUnique({ where: { id: item.productItemId } });
-          }
-          if (!productItem) {
-            productItem = await this.findProductItem(
-              tx,
-              item.productId,
-              null,
-              item.variation,
-              item.quantity,
-            );
-          }
-          if (!productItem) {
-            productItem = await tx.productItem.findFirst({ where: { productId: item.productId } });
-          }
-
-          if (productItem) {
-            if (productItem.stock < item.quantity) {
-               throw new Error(`Estoque insuficiente para recuperação do produto ID ${item.productId}. Disponível: ${productItem.stock}, Solicitado: ${item.quantity}`);
-            }
-
-            await tx.productItem.update({
-              where: { id: productItem.id },
-              data: {
-                stock: {
-                  decrement: item.quantity,
-                },
-              },
-            });
-
-            await tx.stockMovement.create({
-              data: {
-                type: 'SUBTRACT',
-                quantity: item.quantity,
-                previousStock: productItem.stock,
-                newStock: productItem.stock - item.quantity,
-                observation: `Recuperação do pedido #${orderRecord.orderNumber}`,
-                productId: item.productId,
-                productItemId: productItem.id,
-              },
-            });
-
-            const updatedAllItems = await tx.productItem.findMany({ where: { productId: item.productId } });
-            const currentTotalStock = updatedAllItems.reduce((acc, curr) => acc + curr.stock, 0);
-            if (currentTotalStock <= 0) {
-              let autoHide = true;
-              if (orderRecord.storeId) {
-                const settings = await tx.storeSettings.findFirst({
-                  where: { storeId: orderRecord.storeId },
-                  select: { autoHideOutOfStock: true },
-                });
-                if (settings && settings.autoHideOutOfStock === false) {
-                  autoHide = false;
-                }
-              }
-              if (autoHide) {
+              } else {
+                // Optionally set visible to true if we just recovered it and it had stock
                 await tx.product.update({
                   where: { id: item.productId },
-                  data: { isVisible: false },
+                  data: { isVisible: true },
                 });
               }
-            } else {
-              // Optionally set visible to true if we just recovered it and it had stock
-              await tx.product.update({
-                where: { id: item.productId },
-                data: { isVisible: true },
-              });
             }
           }
         }
-      }
 
-      const updatedOrder = await tx.order.update({
-        where: { id },
-        data: {
-          status: newStatus,
-        },
-        include: {
-          items: true,
-        },
-      });
+        const updatedOrder = await tx.order.update({
+          where: { id },
+          data: {
+            status: newStatus,
+          },
+          include: {
+            items: true,
+          },
+        });
 
-      return updatedOrder;
-    }, {
-      maxWait: 15000,
-      timeout: 30000,
-    });
+        return updatedOrder;
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000,
+      },
+    );
 
     return this.mapToDomain(record);
   }

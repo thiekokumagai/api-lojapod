@@ -47,6 +47,8 @@ model Store {
   subscription              StoreSubscription?
   users                     User[]
   variations                Variation[]
+  businessType              BusinessType               @default(POD)
+  compositionGroups         CompositionGroup[]
 
   @@map("stores")
 }
@@ -259,8 +261,11 @@ model Product {
   minStock                  Int                        @default(5)
   stockAlertState           String                     @default("OK")
   isFeatured                Boolean                    @default(false)
+  isCustomizable            Boolean                    @default(false)
   totalSold                 Int                        @default(0)
   comboItems                ComboItem[]
+  compositions              ProductComposition[]
+  linkedCompositionOptions  CompositionOption[]        @relation("LinkedProductStock")
   orderBumpSuggestions      OrderBump[]                @relation("OrderBumpSuggestedProduct")
   orderBumpTriggers         OrderBump[]                @relation("OrderBumpTriggerProduct")
   orderItems                OrderItem[]
@@ -541,11 +546,13 @@ model OrderItem {
   quantity      Int
   variation     String?
   comboId       String?
-  comboSnapshot Json?
-  isCombo       Boolean      @default(false)
-  isOrderBump   Boolean      @default(false)
-  orderBumpId   String?
-  combo         Combo?       @relation(fields: [comboId], references: [id])
+  comboSnapshot         Json?
+  isCombo               Boolean      @default(false)
+  isOrderBump           Boolean      @default(false)
+  orderBumpId           String?
+  isCustomized          Boolean      @default(false)
+  customizationSnapshot Json?
+  combo                 Combo?       @relation(fields: [comboId], references: [id])
   orderBump     OrderBump?   @relation(fields: [orderBumpId], references: [id])
   order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product       Product?     @relation(fields: [productId], references: [id])
@@ -896,6 +903,73 @@ model OrderBump {
 
   @@index([storeId, isActive])
   @@map("order_bumps")
+}
+
+model CompositionGroup {
+  id                  String               @id @default(uuid())
+  storeId             String
+  name                String
+  description         String?
+  minQuantity         Int                  @default(0)
+  maxQuantity         Int                  @default(1)
+  freeQuantity        Int                  @default(0)
+  sortOrder           Int                  @default(0)
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  store               Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  options             CompositionOption[]
+  productCompositions ProductComposition[]
+
+  @@index([storeId, isActive])
+  @@map("composition_groups")
+}
+
+model CompositionOption {
+  id                  String            @id @default(uuid())
+  groupId             String
+  name                String
+  description         String?
+  imageUrl            String?
+  price               Decimal           @default(0) @db.Decimal(10, 2)
+  costPrice           Decimal?          @default(0) @db.Decimal(10, 2)
+  maxQuantityPerItem  Int               @default(1)
+  sortOrder           Int               @default(0)
+  isActive            Boolean           @default(true)
+  linkedProductId     String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  group               CompositionGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  linkedProduct       Product?          @relation("LinkedProductStock", fields: [linkedProductId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, isActive])
+  @@map("composition_options")
+}
+
+model ProductComposition {
+  id                  String            @id @default(uuid())
+  productId           String
+  groupId             String
+  sortOrder           Int               @default(0)
+  customMinQuantity   Int?
+  customMaxQuantity   Int?
+  customFreeQuantity  Int?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  product             Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group               CompositionGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, groupId])
+  @@map("product_compositions")
+}
+
+enum BusinessType {
+  POD
+  FOOD
+  ACAI
 }
 
 enum OrderBumpDisplayLocation {

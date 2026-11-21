@@ -16,6 +16,10 @@ import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import type { StoreSettings } from '../../../settings/domain/entities/store-settings.entity';
 import { pixTerminalPaymentType } from '../utils/pix-terminal';
+import {
+  resetNonProductCustomization,
+  resolveCustomizedAllowedPrices,
+} from '../utils/order-customization';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { LoyaltyService } from '../../../loyalty/domain/loyalty.service';
 import { PublicFreightService } from '../services/public-freight.service';
@@ -89,6 +93,8 @@ export class CreateOrderUseCase {
       // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
+          // Montagem só existe em produto: combo ou item sem produto nunca leva snapshot (seria gravado cru e impresso)
+          resetNonProductCustomization(item);
           if (options.publicOrder) {
             if (!item.isCombo && !item.comboId && !item.productId) {
               throw new BadRequestException('Item do pedido inválido.');
@@ -356,10 +362,28 @@ export class CreateOrderUseCase {
               );
             }
 
+            // Montagem: o snapshot que a cozinha imprime nunca vem cru do cliente.
+            // Sem isCustomized ele é descartado; com isCustomized é refeito a partir do banco.
+            let customizedPrices: number[] | null = null;
+            if (item.isCustomized) {
+              const customResult = await resolveCustomizedAllowedPrices(
+                prod,
+                item,
+                this.prisma,
+                storeId,
+              );
+              customizedPrices = customResult.allowedPrices;
+              item.customizationSnapshot = customResult.sanitizedSnapshot;
+            } else {
+              item.customizationSnapshot = undefined;
+            }
+
             // Pedido da loja: o preço do item tem que ser um preço que o catálogo pratica (regular, promocional ou da oferta "Peça também")
             if (options.publicOrder) {
               let allowedPrices = productAllowedPrices(prod);
-              if (item.isOrderBump && item.orderBumpId) {
+              if (customizedPrices) {
+                allowedPrices = customizedPrices;
+              } else if (item.isOrderBump && item.orderBumpId) {
                 const bump = await this.prisma.orderBump.findUnique({
                   where: { id: item.orderBumpId },
                 });
