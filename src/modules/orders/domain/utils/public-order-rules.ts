@@ -93,6 +93,7 @@ export interface OrderBumpRuleFields {
   triggerProductId?: string | null;
   triggerProductIds?: string[] | null;
   triggerCategoryId?: string | null;
+  triggerCategoryIds?: string[] | null;
 }
 
 /**
@@ -159,11 +160,18 @@ export function orderBumpTriggerMet(
         )
       );
     }
-    case 'CATEGORY':
+    case 'CATEGORY': {
+      const triggerCatIds =
+        Array.isArray(bump.triggerCategoryIds) && bump.triggerCategoryIds.length > 0
+          ? bump.triggerCategoryIds
+          : bump.triggerCategoryId
+            ? [bump.triggerCategoryId]
+            : [];
       return (
-        !!bump.triggerCategoryId &&
-        others.some((p) => p.categoryId === bump.triggerCategoryId)
+        triggerCatIds.length > 0 &&
+        triggerCatIds.some((catId) => others.some((p) => p.categoryId === catId))
       );
+    }
     default:
       return false;
   }

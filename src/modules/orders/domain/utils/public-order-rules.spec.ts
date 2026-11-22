@@ -567,3 +567,46 @@ describe('sanitizePublicOrderResponse — não vaza custo/margem em rotas públi
     expect(rawOrder.items[1].comboSnapshot.items[0].productCostPrice).toBe(6);
   });
 });
+
+describe('orderBumpTriggerMet — múltiplos triggerCategoryIds (regra OU)', () => {
+  const multiCatBump = {
+    storeId: 's1',
+    isActive: true,
+    suggestedProductId: 'coca',
+    triggerType: 'CATEGORY',
+    triggerCategoryId: 'bolos',
+    triggerCategoryIds: ['bolos', 'salgados', 'combos'],
+  };
+
+  it('aceita se o pedido contiver produto de qualquer uma das categorias de gatilho', () => {
+    expect(
+      orderBumpTriggerMet(multiCatBump, [
+        { productId: 'p1', categoryId: 'salgados' },
+        { productId: 'coca', categoryId: 'bebidas', isOrderBump: true },
+      ]),
+    ).toBe(true);
+  });
+
+  it('recusa se nenhum produto pertencer às categorias de gatilho', () => {
+    expect(
+      orderBumpTriggerMet(multiCatBump, [
+        { productId: 'p1', categoryId: 'outros' },
+        { productId: 'coca', categoryId: 'bebidas', isOrderBump: true },
+      ]),
+    ).toBe(false);
+  });
+
+  it('mantém fallback para triggerCategoryId legado quando triggerCategoryIds estiver vazio', () => {
+    const legacy = {
+      ...multiCatBump,
+      triggerCategoryId: 'doces',
+      triggerCategoryIds: [],
+    };
+    expect(
+      orderBumpTriggerMet(legacy, [
+        { productId: 'p1', categoryId: 'doces' },
+        { productId: 'coca', categoryId: 'bebidas', isOrderBump: true },
+      ]),
+    ).toBe(true);
+  });
+});

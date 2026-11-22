@@ -890,6 +890,7 @@ model OrderBump {
   triggerProductId   String?
   triggerProductIds  String[]    @default([])
   triggerCategoryId  String?
+  triggerCategoryIds String[]    @default([])
   suggestedProductId String
   customPrice        Decimal?    @db.Decimal(10, 2)
   discountPercent    Decimal?    @db.Decimal(5, 2)

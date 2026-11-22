@@ -60,13 +60,63 @@ export class OrderBumpsService {
     }
   }
 
+  private resolveTriggerCategoryIds(input: {
+    triggerCategoryIds?: string[] | null;
+    triggerCategoryId?: string | null;
+  }): string[] {
+    const raw =
+      Array.isArray(input.triggerCategoryIds) && input.triggerCategoryIds.length > 0
+        ? input.triggerCategoryIds
+        : input.triggerCategoryId
+          ? [input.triggerCategoryId]
+          : [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const id of raw) {
+      if (typeof id !== 'string') continue;
+      const trimmed = id.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      result.push(trimmed);
+    }
+    return result;
+  }
+
+  private async validateTriggerCategories(triggerIds: string[], storeId: string): Promise<void> {
+    if (triggerIds.length === 0) {
+      throw new BadRequestException('Selecione pelo menos uma categoria de gatilho');
+    }
+    const found = await this.prisma.category.findMany({
+      where: { id: { in: triggerIds }, storeId, deletedAt: null },
+      select: { id: true },
+    });
+    if (found.length !== triggerIds.length) {
+      throw new NotFoundException('Categoria de gatilho não encontrada na loja');
+    }
+  }
+
   private async enrichRulesWithTriggerProducts<
     T extends {
       triggerProductId?: string | null;
       triggerProductIds?: string[] | null;
       triggerProduct?: any;
+      triggerCategoryId?: string | null;
+      triggerCategoryIds?: string[] | null;
+      triggerCategory?: any;
     },
-  >(rules: T[], storeId: string): Promise<Array<T & { triggerProductIds: string[]; triggerProducts: any[] }>> {
+  >(
+    rules: T[],
+    storeId: string,
+  ): Promise<
+    Array<
+      T & {
+        triggerProductIds: string[];
+        triggerProducts: any[];
+        triggerCategoryIds: string[];
+        triggerCategories: any[];
+      }
+    >
+  > {
     const allIds = Array.from(
       new Set(rules.flatMap((rule) => this.resolveTriggerProductIds(rule))),
     );
@@ -91,6 +141,21 @@ export class OrderBumpsService {
       }
     }
 
+    const allCategoryIds = Array.from(
+      new Set(rules.flatMap((rule) => this.resolveTriggerCategoryIds(rule))),
+    );
+    const categoryMap = new Map<string, any>();
+
+    if (allCategoryIds.length > 0 && this.prisma?.category?.findMany) {
+      const categories = await this.prisma.category.findMany({
+        where: { id: { in: allCategoryIds }, storeId, deletedAt: null },
+        select: { id: true, title: true },
+      });
+      for (const cat of categories) {
+        categoryMap.set(cat.id, cat);
+      }
+    }
+
     return rules.map((rule) => {
       const ids = this.resolveTriggerProductIds(rule);
       const triggerProducts = ids
@@ -103,10 +168,23 @@ export class OrderBumpsService {
           return null;
         })
         .filter(Boolean);
+      const catIds = this.resolveTriggerCategoryIds(rule);
+      const triggerCategories = catIds
+        .map((id) => {
+          const found = categoryMap.get(id);
+          if (found) return found;
+          if (rule.triggerCategory && rule.triggerCategory.id === id) {
+            return rule.triggerCategory;
+          }
+          return null;
+        })
+        .filter(Boolean);
       return {
         ...rule,
         triggerProductIds: ids,
         triggerProducts,
+        triggerCategoryIds: catIds,
+        triggerCategories,
       };
     });
   }
@@ -178,14 +256,10 @@ export class OrderBumpsService {
       await this.validateTriggerProducts(triggerProductIds, storeId);
     }
 
-    // Se for gatilho por categoria, valida se existe
-    if (dto.triggerType === 'CATEGORY' && dto.triggerCategoryId) {
-      const cat = await this.prisma.category.findFirst({
-        where: { id: dto.triggerCategoryId, storeId, deletedAt: null },
-      });
-      if (!cat) {
-        throw new NotFoundException('Categoria de gatilho não encontrada na loja');
-      }
+    const triggerCategoryIds =
+      dto.triggerType === 'CATEGORY' ? this.resolveTriggerCategoryIds(dto) : [];
+    if (dto.triggerType === 'CATEGORY') {
+      await this.validateTriggerCategories(triggerCategoryIds, storeId);
     }
 
     // Se priority não foi informado, coloca a nova regra com prioridade acima das existentes para aparecer em 1º
@@ -208,7 +282,8 @@ export class OrderBumpsService {
         triggerType: dto.triggerType,
         triggerProductId: dto.triggerType === 'PRODUCT' ? (triggerProductIds[0] ?? null) : null,
         triggerProductIds: dto.triggerType === 'PRODUCT' ? triggerProductIds : [],
-        triggerCategoryId: dto.triggerType === 'CATEGORY' ? dto.triggerCategoryId : null,
+        triggerCategoryId: dto.triggerType === 'CATEGORY' ? (triggerCategoryIds[0] ?? null) : null,
+        triggerCategoryIds: dto.triggerType === 'CATEGORY' ? triggerCategoryIds : [],
         suggestedProductId: dto.suggestedProductId,
         customPrice: dto.customPrice !== undefined ? dto.customPrice : null,
         discountPercent: dto.discountPercent !== undefined ? dto.discountPercent : null,
@@ -262,12 +337,28 @@ export class OrderBumpsService {
     const effectiveTriggerType = dto.triggerType ?? existing.triggerType;
     const hasTriggerProductInput =
       dto.triggerProductIds !== undefined || dto.triggerProductId !== undefined;
+    const hasTriggerCategoryInput =
+      dto.triggerCategoryIds !== undefined || dto.triggerCategoryId !== undefined;
 
     if (dto.triggerType !== undefined) {
       data.triggerType = dto.triggerType;
-      data.triggerCategoryId = dto.triggerType === 'CATEGORY' ? dto.triggerCategoryId : null;
-    } else if (dto.triggerCategoryId !== undefined) {
-      data.triggerCategoryId = dto.triggerCategoryId;
+    }
+
+    if (effectiveTriggerType === 'CATEGORY') {
+      if (hasTriggerCategoryInput) {
+        const triggerCatIds = this.resolveTriggerCategoryIds(dto);
+        await this.validateTriggerCategories(triggerCatIds, storeId);
+        data.triggerCategoryIds = triggerCatIds;
+        data.triggerCategoryId = triggerCatIds[0] ?? null;
+      } else if (dto.triggerType === 'CATEGORY') {
+        const existingCatIds = this.resolveTriggerCategoryIds(existing);
+        await this.validateTriggerCategories(existingCatIds, storeId);
+        data.triggerCategoryIds = existingCatIds;
+        data.triggerCategoryId = existingCatIds[0] ?? null;
+      }
+    } else if (dto.triggerType !== undefined || hasTriggerCategoryInput) {
+      data.triggerCategoryIds = [];
+      data.triggerCategoryId = null;
     }
 
     if (effectiveTriggerType === 'PRODUCT') {
@@ -286,7 +377,16 @@ export class OrderBumpsService {
       data.triggerProductIds = [];
       data.triggerProductId = null;
     }
-    if (dto.suggestedProductId !== undefined) data.suggestedProductId = dto.suggestedProductId;
+    if (dto.suggestedProductId !== undefined) {
+      const suggested = await this.prisma.product.findFirst({
+        where: { id: dto.suggestedProductId, storeId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!suggested) {
+        throw new NotFoundException('Produto sugerido não encontrado na loja');
+      }
+      data.suggestedProductId = dto.suggestedProductId;
+    }
     if (dto.customPrice !== undefined) data.customPrice = dto.customPrice;
     if (dto.discountPercent !== undefined) data.discountPercent = dto.discountPercent;
     if (dto.displayLocation !== undefined) data.displayLocation = dto.displayLocation;
@@ -479,8 +579,9 @@ export class OrderBumpsService {
       } else if (rule.triggerType === 'PRODUCT') {
         const effectiveTriggerIds = this.resolveTriggerProductIds(rule);
         isTriggerMatched = effectiveTriggerIds.some((id) => inCartProductIds.includes(id));
-      } else if (rule.triggerType === 'CATEGORY' && rule.triggerCategoryId) {
-        isTriggerMatched = inCartCategoryIds.includes(rule.triggerCategoryId);
+      } else if (rule.triggerType === 'CATEGORY') {
+        const effectiveCatIds = this.resolveTriggerCategoryIds(rule);
+        isTriggerMatched = effectiveCatIds.some((id) => inCartCategoryIds.includes(id));
       }
 
       if (!isTriggerMatched) continue;
@@ -509,7 +610,8 @@ export class OrderBumpsService {
         triggerType: rule.triggerType || 'ALL',
         triggerProductId: this.resolveTriggerProductIds(rule)[0] ?? null,
         triggerProductIds: this.resolveTriggerProductIds(rule),
-        triggerCategoryId: rule.triggerCategoryId || null,
+        triggerCategoryId: this.resolveTriggerCategoryIds(rule)[0] ?? null,
+        triggerCategoryIds: this.resolveTriggerCategoryIds(rule),
         product: {
           id: product.id,
           title: product.title,

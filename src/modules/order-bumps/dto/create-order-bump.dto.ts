@@ -46,6 +46,16 @@ export class CreateOrderBumpDto {
   @IsOptional()
   triggerCategoryId?: string;
 
+  @ApiProperty({
+    description: 'IDs das categorias que disparam a sugestão (regra OU, quando triggerType for CATEGORY)',
+    required: false,
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  triggerCategoryIds?: string[];
+
   @ApiProperty({ description: 'ID do produto sugerido para adicionar ao carrinho' })
   @IsString()
   @IsNotEmpty()

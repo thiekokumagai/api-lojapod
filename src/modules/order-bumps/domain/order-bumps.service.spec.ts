@@ -185,4 +185,154 @@ describe('OrderBumpsService — múltiplos produtos de gatilho (regra OU)', () =
     expect(res2[0].bumpId).toBe('b-legacy');
     expect(res2[0].triggerProductIds).toEqual(['p-legado']);
   });
+
+  describe('múltiplas categorias de gatilho (triggerCategoryIds — regra OU)', () => {
+    function createService() {
+      const prisma: any = {
+        product: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'sug-1', storeId: 'store-1' }),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        category: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        orderBump: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+          create: jest.fn(),
+          update: jest.fn(),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+      const tenant = { getStoreId: jest.fn().mockReturnValue('store-1') };
+      return {
+        service: new OrderBumpsService(prisma, tenant as never),
+        prisma,
+      };
+    }
+    it('cria regra com vários triggerCategoryIds deduplicados e mantém triggerCategoryId = primeiro', async () => {
+      const { service, prisma } = createService();
+      prisma.category.findMany = jest.fn().mockResolvedValue([
+        { id: 'c1', title: 'Bolos' },
+        { id: 'c2', title: 'Salgados' },
+        { id: 'c3', title: 'Combos' },
+      ]);
+      prisma.orderBump.create.mockImplementation(async ({ data }: any) => ({
+        id: 'bump-cat-multi',
+        ...data,
+      }));
+
+      const created = await service.create({
+        triggerType: 'CATEGORY',
+        triggerCategoryIds: ['c1', 'c2', 'c1', 'c3'],
+        suggestedProductId: 'sug-1',
+      });
+
+      expect(prisma.orderBump.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            triggerCategoryId: 'c1',
+            triggerCategoryIds: ['c1', 'c2', 'c3'],
+          }),
+        }),
+      );
+      expect(created.triggerCategoryIds).toEqual(['c1', 'c2', 'c3']);
+    });
+
+    it('rejeita categoria de gatilho de outra loja ou inexistente', async () => {
+      const { service, prisma } = createService();
+      prisma.category.findMany = jest.fn().mockResolvedValue([{ id: 'c1' }]);
+
+      await expect(
+        service.create({
+          triggerType: 'CATEGORY',
+          triggerCategoryIds: ['c1', 'c-outra-loja'],
+          suggestedProductId: 'sug-1',
+        }),
+      ).rejects.toThrow('Categoria de gatilho não encontrada na loja');
+    });
+
+    it('revalida storeId no update para triggerCategoryIds e suggestedProductId', async () => {
+      const { service, prisma } = createService();
+      prisma.orderBump.findFirst.mockResolvedValue({
+        id: 'bump-1',
+        storeId: 'store-1',
+        triggerType: 'CATEGORY',
+        triggerCategoryId: 'c1',
+        triggerCategoryIds: ['c1'],
+        suggestedProductId: 'sug-1',
+      });
+      prisma.category.findMany = jest.fn().mockResolvedValue([]);
+
+      await expect(
+        service.update('bump-1', { triggerCategoryIds: ['c-outra-loja'] }),
+      ).rejects.toThrow('Categoria de gatilho não encontrada na loja');
+
+      prisma.product.findFirst.mockResolvedValue(null);
+      await expect(
+        service.update('bump-1', { suggestedProductId: 'prod-outra-loja' }),
+      ).rejects.toThrow('Produto sugerido não encontrado na loja');
+    });
+
+    it('dispara sugestão se o carrinho tiver item de QUALQUER uma das triggerCategoryIds (ou legado)', async () => {
+      const { service, prisma } = createService();
+      prisma.product.findMany.mockResolvedValue([{ id: 'p-bolo', categoryId: 'c2' }]);
+      prisma.orderBump.findMany.mockResolvedValue([
+        {
+          id: 'b-multi-cat',
+          title: 'Peça também',
+          triggerType: 'CATEGORY',
+          triggerProductId: null,
+          triggerProductIds: [],
+          triggerCategoryId: 'c1',
+          triggerCategoryIds: ['c1', 'c2', 'c3'],
+          suggestedProductId: 'sug-1',
+          displayLocation: 'CART',
+          suggestedProduct: {
+            id: 'sug-1',
+            title: 'Coca 2L',
+            price: 12,
+            promotionalPrice: null,
+            isVisible: true,
+            deletedAt: null,
+            items: [{ stock: 5, options: [] }],
+            images: [],
+            variations: [],
+          },
+        },
+        {
+          id: 'b-legado-cat',
+          title: 'Peça também',
+          triggerType: 'CATEGORY',
+          triggerProductId: null,
+          triggerProductIds: [],
+          triggerCategoryId: 'c-legado',
+          triggerCategoryIds: [],
+          suggestedProductId: 'sug-2',
+          displayLocation: 'CART',
+          suggestedProduct: {
+            id: 'sug-2',
+            title: 'Guaraná',
+            price: 10,
+            promotionalPrice: null,
+            isVisible: true,
+            deletedAt: null,
+            items: [{ stock: 5, options: [] }],
+            images: [],
+            variations: [],
+          },
+        },
+      ]);
+
+      const res1 = await service.getSuggestionsForStore({ productIds: ['p-bolo'], location: 'CART' });
+      expect(res1.map((r) => r.bumpId)).toEqual(['b-multi-cat']);
+      expect(res1[0].triggerCategoryIds).toEqual(['c1', 'c2', 'c3']);
+
+      prisma.product.findMany.mockResolvedValue([{ id: 'p-leg', categoryId: 'c-legado' }]);
+      const res2 = await service.getSuggestionsForStore({ productIds: ['p-leg'], location: 'CART' });
+      expect(res2.map((r) => r.bumpId)).toEqual(['b-legado-cat']);
+      expect(res2[0].triggerCategoryIds).toEqual(['c-legado']);
+    });
+  });
 });
