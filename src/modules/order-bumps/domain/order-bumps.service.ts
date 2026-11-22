@@ -25,13 +25,100 @@ export class OrderBumpsService {
     return storeId;
   }
 
+  private resolveTriggerProductIds(input: {
+    triggerProductIds?: string[] | null;
+    triggerProductId?: string | null;
+  }): string[] {
+    const raw =
+      Array.isArray(input.triggerProductIds) && input.triggerProductIds.length > 0
+        ? input.triggerProductIds
+        : input.triggerProductId
+          ? [input.triggerProductId]
+          : [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const id of raw) {
+      if (typeof id !== 'string') continue;
+      const trimmed = id.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      result.push(trimmed);
+    }
+    return result;
+  }
+
+  private async validateTriggerProducts(triggerIds: string[], storeId: string): Promise<void> {
+    if (triggerIds.length === 0) {
+      throw new BadRequestException('Selecione pelo menos um produto de gatilho');
+    }
+    const found = await this.prisma.product.findMany({
+      where: { id: { in: triggerIds }, storeId, deletedAt: null },
+      select: { id: true },
+    });
+    if (found.length !== triggerIds.length) {
+      throw new NotFoundException('Produto de gatilho não encontrado na loja');
+    }
+  }
+
+  private async enrichRulesWithTriggerProducts<
+    T extends {
+      triggerProductId?: string | null;
+      triggerProductIds?: string[] | null;
+      triggerProduct?: any;
+    },
+  >(rules: T[], storeId: string): Promise<Array<T & { triggerProductIds: string[]; triggerProducts: any[] }>> {
+    const allIds = Array.from(
+      new Set(rules.flatMap((rule) => this.resolveTriggerProductIds(rule))),
+    );
+    const productMap = new Map<string, any>();
+
+    if (allIds.length > 0 && this.prisma?.product?.findMany) {
+      const products = await this.prisma.product.findMany({
+        where: { id: { in: allIds }, storeId, deletedAt: null },
+        select: {
+          id: true,
+          title: true,
+          price: true,
+          images: {
+            take: 1,
+            orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+            select: { url: true },
+          },
+        },
+      });
+      for (const prod of products) {
+        productMap.set(prod.id, prod);
+      }
+    }
+
+    return rules.map((rule) => {
+      const ids = this.resolveTriggerProductIds(rule);
+      const triggerProducts = ids
+        .map((id) => {
+          const found = productMap.get(id);
+          if (found) return found;
+          if (rule.triggerProduct && rule.triggerProduct.id === id) {
+            return rule.triggerProduct;
+          }
+          return null;
+        })
+        .filter(Boolean);
+      return {
+        ...rule,
+        triggerProductIds: ids,
+        triggerProducts,
+      };
+    });
+  }
+
+
   /**
    * Listar todas as regras de Order Bump para o painel admin
    */
   async listAllForAdmin() {
     const storeId = this.getStoreId();
 
-    return (this.prisma as any).orderBump.findMany({
+    const rules = await (this.prisma as any).orderBump.findMany({
       where: { storeId },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       include: {
@@ -67,6 +154,7 @@ export class OrderBumpsService {
         },
       },
     });
+    return this.enrichRulesWithTriggerProducts(rules, storeId);
   }
 
   /**
@@ -83,14 +171,11 @@ export class OrderBumpsService {
       throw new NotFoundException('Produto sugerido não encontrado na loja');
     }
 
-    // Se for gatilho por produto, valida se existe
-    if (dto.triggerType === 'PRODUCT' && dto.triggerProductId) {
-      const trigger = await this.prisma.product.findFirst({
-        where: { id: dto.triggerProductId, storeId, deletedAt: null },
-      });
-      if (!trigger) {
-        throw new NotFoundException('Produto de gatilho não encontrado na loja');
-      }
+    // Se for gatilho por produto, valida se todos os IDs existem na loja
+    const triggerProductIds =
+      dto.triggerType === 'PRODUCT' ? this.resolveTriggerProductIds(dto) : [];
+    if (dto.triggerType === 'PRODUCT') {
+      await this.validateTriggerProducts(triggerProductIds, storeId);
     }
 
     // Se for gatilho por categoria, valida se existe
@@ -114,14 +199,15 @@ export class OrderBumpsService {
       nextPriority = (topExisting?.priority ?? 0) + 1;
     }
 
-    return (this.prisma as any).orderBump.create({
+    const created = await (this.prisma as any).orderBump.create({
       data: {
         storeId,
         title: dto.title || 'Peça também',
         isActive: dto.isActive !== undefined ? dto.isActive : true,
         priority: nextPriority,
         triggerType: dto.triggerType,
-        triggerProductId: dto.triggerType === 'PRODUCT' ? dto.triggerProductId : null,
+        triggerProductId: dto.triggerType === 'PRODUCT' ? (triggerProductIds[0] ?? null) : null,
+        triggerProductIds: dto.triggerType === 'PRODUCT' ? triggerProductIds : [],
         triggerCategoryId: dto.triggerType === 'CATEGORY' ? dto.triggerCategoryId : null,
         suggestedProductId: dto.suggestedProductId,
         customPrice: dto.customPrice !== undefined ? dto.customPrice : null,
@@ -152,6 +238,8 @@ export class OrderBumpsService {
         },
       },
     });
+    const [enriched] = await this.enrichRulesWithTriggerProducts([created], storeId);
+    return enriched;
   }
 
   /**
@@ -171,20 +259,39 @@ export class OrderBumpsService {
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.priority !== undefined) data.priority = dto.priority;
+    const effectiveTriggerType = dto.triggerType ?? existing.triggerType;
+    const hasTriggerProductInput =
+      dto.triggerProductIds !== undefined || dto.triggerProductId !== undefined;
+
     if (dto.triggerType !== undefined) {
       data.triggerType = dto.triggerType;
-      data.triggerProductId = dto.triggerType === 'PRODUCT' ? dto.triggerProductId : null;
       data.triggerCategoryId = dto.triggerType === 'CATEGORY' ? dto.triggerCategoryId : null;
-    } else {
-      if (dto.triggerProductId !== undefined) data.triggerProductId = dto.triggerProductId;
-      if (dto.triggerCategoryId !== undefined) data.triggerCategoryId = dto.triggerCategoryId;
+    } else if (dto.triggerCategoryId !== undefined) {
+      data.triggerCategoryId = dto.triggerCategoryId;
+    }
+
+    if (effectiveTriggerType === 'PRODUCT') {
+      if (hasTriggerProductInput) {
+        const triggerIds = this.resolveTriggerProductIds(dto);
+        await this.validateTriggerProducts(triggerIds, storeId);
+        data.triggerProductIds = triggerIds;
+        data.triggerProductId = triggerIds[0] ?? null;
+      } else if (dto.triggerType === 'PRODUCT') {
+        const existingIds = this.resolveTriggerProductIds(existing);
+        await this.validateTriggerProducts(existingIds, storeId);
+        data.triggerProductIds = existingIds;
+        data.triggerProductId = existingIds[0] ?? null;
+      }
+    } else if (dto.triggerType !== undefined || hasTriggerProductInput) {
+      data.triggerProductIds = [];
+      data.triggerProductId = null;
     }
     if (dto.suggestedProductId !== undefined) data.suggestedProductId = dto.suggestedProductId;
     if (dto.customPrice !== undefined) data.customPrice = dto.customPrice;
     if (dto.discountPercent !== undefined) data.discountPercent = dto.discountPercent;
     if (dto.displayLocation !== undefined) data.displayLocation = dto.displayLocation;
 
-    return (this.prisma as any).orderBump.update({
+    const updated = await (this.prisma as any).orderBump.update({
       where: { id },
       data,
       include: {
@@ -210,6 +317,8 @@ export class OrderBumpsService {
         },
       },
     });
+    const [enriched] = await this.enrichRulesWithTriggerProducts([updated], storeId);
+    return enriched;
   }
 
   /**
@@ -367,8 +476,9 @@ export class OrderBumpsService {
       let isTriggerMatched = false;
       if (rule.triggerType === 'ALL') {
         isTriggerMatched = true;
-      } else if (rule.triggerType === 'PRODUCT' && rule.triggerProductId) {
-        isTriggerMatched = inCartProductIds.includes(rule.triggerProductId);
+      } else if (rule.triggerType === 'PRODUCT') {
+        const effectiveTriggerIds = this.resolveTriggerProductIds(rule);
+        isTriggerMatched = effectiveTriggerIds.some((id) => inCartProductIds.includes(id));
       } else if (rule.triggerType === 'CATEGORY' && rule.triggerCategoryId) {
         isTriggerMatched = inCartCategoryIds.includes(rule.triggerCategoryId);
       }
@@ -397,7 +507,8 @@ export class OrderBumpsService {
         bumpId: rule.id,
         sectionTitle: rule.title || 'Peça também',
         triggerType: rule.triggerType || 'ALL',
-        triggerProductId: rule.triggerProductId || null,
+        triggerProductId: this.resolveTriggerProductIds(rule)[0] ?? null,
+        triggerProductIds: this.resolveTriggerProductIds(rule),
         triggerCategoryId: rule.triggerCategoryId || null,
         product: {
           id: product.id,

@@ -1,13 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsBoolean,
+import {IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Min,
-  ValidateNested,
-} from 'class-validator';
+  ValidateNested, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateCompositionOptionInlineDto {
@@ -31,6 +29,8 @@ export class CreateCompositionOptionInlineDto {
   price?: number;
 
   @ApiPropertyOptional({ description: 'Custo da opção para controle de CMV', default: 0 })
+  @IsNumber()
+  @Min(0)
   @IsOptional()
   costPrice?: number;
 

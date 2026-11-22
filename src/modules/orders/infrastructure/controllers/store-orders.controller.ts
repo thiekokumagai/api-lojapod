@@ -18,7 +18,7 @@ import { CreateOrderUseCase } from '../../domain/use-cases/create-order.use-case
 import { GetOrderDetailUseCase } from '../../domain/use-cases/get-order-detail.use-case';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { getPaymentNotAllowedReason } from '../../domain/utils/payment-availability';
-import { sanitizePublicOrderInput } from '../../domain/utils/public-order-rules';
+import { sanitizePublicOrderInput, sanitizePublicOrderResponse } from '../../domain/utils/public-order-rules';
 import { RateLimit, RateLimitGuard } from '../../../../common/guards/rate-limit.guard';
 
 @ApiTags('Store Orders')
@@ -58,9 +58,10 @@ export class StoreOrdersController {
     }
 
     // Pedido da loja pública: o cliente não decide status, pagamento nem desconto; o servidor confere preços e total
-    return this.createOrderUseCase.execute(sanitizePublicOrderInput(body) as any, {
+    const order = await this.createOrderUseCase.execute(sanitizePublicOrderInput(body) as any, {
       publicOrder: true,
     });
+    return sanitizePublicOrderResponse(order);
   }
 
   @Get('check-blocked')
@@ -78,6 +79,7 @@ export class StoreOrdersController {
   @Header('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet')
   @ApiOperation({ summary: 'Consultar status e dados do pedido pelo cliente' })
   async getById(@Param('id') id: string) {
-    return this.getOrderDetailUseCase.execute(id);
+    const order = await this.getOrderDetailUseCase.execute(id);
+    return sanitizePublicOrderResponse(order);
   }
 }

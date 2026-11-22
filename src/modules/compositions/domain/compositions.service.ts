@@ -65,9 +65,19 @@ export class CompositionsService {
     return group;
   }
 
+  private validateMinMax(minQuantity: number, maxQuantity: number, groupName?: string) {
+    if (minQuantity > maxQuantity) {
+      const prefix = groupName ? `No grupo "${groupName}", a` : 'A';
+      throw new BadRequestException(
+        `${prefix} quantidade mínima (${minQuantity}) não pode ser maior que a quantidade máxima (${maxQuantity}).`,
+      );
+    }
+  }
+
   async createGroup(dto: CreateCompositionGroupDto) {
     const storeId = this.resolveStoreId();
     const { options, ...groupData } = dto;
+    this.validateMinMax(dto.minQuantity ?? 0, dto.maxQuantity ?? 1, dto.name);
 
     return this.prisma.compositionGroup.create({
       data: {
@@ -99,8 +109,11 @@ export class CompositionsService {
   }
 
   async updateGroup(id: string, dto: UpdateCompositionGroupDto) {
-    await this.findGroupById(id);
+    const existing = await this.findGroupById(id);
     const { options: _options, ...data } = dto;
+    const nextMin = dto.minQuantity !== undefined ? dto.minQuantity : existing.minQuantity;
+    const nextMax = dto.maxQuantity !== undefined ? dto.maxQuantity : existing.maxQuantity;
+    this.validateMinMax(nextMin, nextMax, dto.name ?? existing.name);
 
     return this.prisma.compositionGroup.update({
       where: { id },
@@ -217,12 +230,26 @@ export class CompositionsService {
     if (groupIds.length > 0) {
       const ownGroups = await this.prisma.compositionGroup.findMany({
         where: { id: { in: groupIds }, storeId },
-        select: { id: true },
+        select: { id: true, name: true, minQuantity: true, maxQuantity: true },
       });
       if (ownGroups.length !== groupIds.length) {
         throw new BadRequestException(
           'Um ou mais grupos de composição não pertencem a esta loja.',
         );
+      }
+      const groupById = new Map(ownGroups.map((g) => [g.id, g]));
+      for (const item of uniqueGroups) {
+        const g = groupById.get(item.groupId);
+        if (!g) continue;
+        const effectiveMin =
+          item.customMinQuantity !== null && item.customMinQuantity !== undefined
+            ? item.customMinQuantity
+            : g.minQuantity;
+        const effectiveMax =
+          item.customMaxQuantity !== null && item.customMaxQuantity !== undefined
+            ? item.customMaxQuantity
+            : g.maxQuantity;
+        this.validateMinMax(effectiveMin, effectiveMax, g.name);
       }
     }
 

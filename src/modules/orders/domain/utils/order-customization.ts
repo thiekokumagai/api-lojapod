@@ -79,6 +79,7 @@ export async function resolveCustomizedAllowedPrices(
         basePrice,
         stages: [],
         totalAdditions: 0,
+        totalCost: 0,
         finalUnitPrice: basePrice,
       },
     };
@@ -128,6 +129,7 @@ export async function resolveCustomizedAllowedPrices(
 
   // 4. Por grupo: limite do grupo, cota grátis uma vez e cobrança unidade a unidade
   let additionsSum = 0;
+  let costSum = 0;
   const sanitizedStages: { sortOrder: number; stage: any }[] = [];
   for (const [groupId, selected] of byGroup) {
     const pc = pcMap.get(groupId)!;
@@ -147,16 +149,21 @@ export async function resolveCustomizedAllowedPrices(
     let usedFree = 0;
     const stageOptions = selected.map(({ dbOption, qty }) => {
       const unitPrice = Number(dbOption.price) || 0;
+      const unitCost = Math.max(0, Number(dbOption.costPrice) || 0);
       const freeHere = Math.min(qty, Math.max(0, freeSlots - usedFree));
       usedFree += freeHere;
       const totalPrice = round2(unitPrice * (qty - freeHere));
+      const optionTotalCost = round2(unitCost * qty);
       additionsSum += totalPrice;
+      costSum += optionTotalCost;
       return {
         optionId: dbOption.id,
         name: dbOption.name,
         quantity: qty,
         unitPrice,
         totalPrice,
+        unitCost,
+        totalCost: optionTotalCost,
       };
     });
 
@@ -167,6 +174,7 @@ export async function resolveCustomizedAllowedPrices(
   }
 
   additionsSum = Math.max(0, round2(additionsSum));
+  const totalCost = Math.max(0, round2(costSum));
   const finalUnitPrice = round2(basePrice + additionsSum);
 
   return {
@@ -177,6 +185,7 @@ export async function resolveCustomizedAllowedPrices(
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((s) => s.stage),
       totalAdditions: additionsSum,
+      totalCost,
       finalUnitPrice,
     },
   };

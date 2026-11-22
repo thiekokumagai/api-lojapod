@@ -124,6 +124,7 @@ export class GetProductsReportUseCase {
               isCombo: true,
               comboId: true,
               comboSnapshot: true,
+              customizationSnapshot: true,
               product: { select: { costPrice: true } },
             },
           },
@@ -181,6 +182,7 @@ export class GetProductsReportUseCase {
           isCombo: it.isCombo,
           comboId: it.comboId,
           comboSnapshot: it.comboSnapshot,
+          customizationSnapshot: it.customizationSnapshot,
           product: it.product,
         })),
       });

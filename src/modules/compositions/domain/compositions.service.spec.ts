@@ -163,3 +163,92 @@ describe('CompositionsService.getProductCompositionsForStore', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('CompositionsService.getProductCompositionsForStore — segurança de custo', () => {
+  it('não expõe costPrice nas opções retornadas para a loja pública', async () => {
+    const prisma = {
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'p1',
+          storeId: 'store-1',
+          title: 'X-Bacon',
+          price: 25,
+          promotionalPrice: null,
+          isCustomizable: true,
+          isVisible: true,
+        }),
+      },
+      productComposition: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'pc1',
+            sortOrder: 0,
+            customMinQuantity: null,
+            customMaxQuantity: null,
+            customFreeQuantity: null,
+            group: {
+              id: 'g1',
+              name: 'Adicionais',
+              description: null,
+              minQuantity: 0,
+              maxQuantity: 3,
+              freeQuantity: 0,
+              options: [
+                {
+                  id: 'o1',
+                  name: 'Bacon',
+                  description: 'Crocante',
+                  imageUrl: null,
+                  price: 5,
+                  costPrice: 1.8,
+                  maxQuantityPerItem: 2,
+                  sortOrder: 0,
+                },
+              ],
+            },
+          },
+        ]),
+      },
+    };
+    const tenant = { getStoreId: jest.fn().mockReturnValue('store-1') };
+    const service = new CompositionsService(prisma as never, tenant as never);
+
+    const res = await service.getProductCompositionsForStore('p1');
+    expect(res.stages[0].options[0]).not.toHaveProperty('costPrice');
+    expect(res.stages[0].options[0].price).toBe(5);
+  });
+});
+
+describe('CompositionsService — validação minQuantity <= maxQuantity', () => {
+  it('bloqueia createGroup quando minQuantity > maxQuantity', async () => {
+    const prisma = { compositionGroup: { create: jest.fn() } };
+    const tenant = { getStoreId: jest.fn().mockReturnValue('store-1') };
+    const service = new CompositionsService(prisma as never, tenant as never);
+
+    await expect(
+      service.createGroup({ name: 'Ingredientes', minQuantity: 3, maxQuantity: 1 }),
+    ).rejects.toThrow('não pode ser maior que a quantidade máxima');
+    expect(prisma.compositionGroup.create).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia syncProductCompositions quando override gera min > max', async () => {
+    const prisma = {
+      product: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', storeId: 'store-1' }) },
+      compositionGroup: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'g1', name: 'Ingredientes', minQuantity: 0, maxQuantity: 2 },
+        ]),
+      },
+      $transaction: jest.fn(),
+    };
+    const tenant = { getStoreId: jest.fn().mockReturnValue('store-1') };
+    const service = new CompositionsService(prisma as never, tenant as never);
+
+    await expect(
+      service.syncProductCompositions('p1', {
+        groups: [{ groupId: 'g1', customMinQuantity: 3, customMaxQuantity: 1 }],
+      }),
+    ).rejects.toThrow('não pode ser maior que a quantidade máxima');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});

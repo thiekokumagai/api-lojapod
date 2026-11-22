@@ -17,6 +17,7 @@ export interface SaleItemInput {
   isCombo?: boolean;
   comboId?: string | null;
   comboSnapshot?: unknown;
+  customizationSnapshot?: unknown;
   /** Custo ATUAL do produto (Product.costPrice), usado só nas vendas avulsas. */
   product?: { costPrice?: unknown } | null;
 }

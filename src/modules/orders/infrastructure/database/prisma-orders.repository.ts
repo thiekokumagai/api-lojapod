@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { resolveCustomizationExtraCost } from '../../../dashboard/domain/utils/sales-profit.util';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import {
@@ -150,7 +151,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             quantity: item.quantity,
             variation: item.variation || null,
             imageUrl,
-            costPrice,
+            costPrice:
+              item.isCombo || item.comboId || item.comboSnapshot
+                ? costPrice
+                : Math.round((costPrice + resolveCustomizationExtraCost(item.customizationSnapshot)) * 100) / 100,
             categoryName:
               item.product?.category?.title ||
               item.combo?.category?.title ||

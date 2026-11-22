@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /** Onde a oferta aparece para o cliente. */
@@ -30,6 +30,16 @@ export class CreateOrderBumpDto {
   @IsString()
   @IsOptional()
   triggerProductId?: string;
+
+  @ApiProperty({
+    description: 'IDs dos produtos que disparam a sugestão (regra OU, quando triggerType for PRODUCT)',
+    required: false,
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  triggerProductIds?: string[];
 
   @ApiProperty({ description: 'ID da categoria que dispara a sugestão (se triggerType for CATEGORY)', required: false })
   @IsString()

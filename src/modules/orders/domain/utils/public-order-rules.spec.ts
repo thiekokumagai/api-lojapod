@@ -8,6 +8,7 @@ import {
   pixDiscountPercent,
   productAllowedPrices,
   sanitizePublicOrderInput,
+  sanitizePublicOrderResponse,
   unitPriceMatches,
 } from './public-order-rules';
 
@@ -421,5 +422,148 @@ describe('assertPublicOrderTotals (C: total recalculado pelo servidor)', () => {
         clientTotal: 113.3,
       }).totalOrder,
     ).toBe(113.3);
+  });
+});
+
+describe('orderBumpTriggerMet — múltiplos triggerProductIds (regra OU)', () => {
+  const multiBump = {
+    storeId: 's1',
+    isActive: true,
+    suggestedProductId: 'coca',
+    triggerType: 'PRODUCT',
+    triggerProductId: 'p1',
+    triggerProductIds: ['p1', 'p2', 'p3'],
+  };
+
+  it('aceita quando qualquer um dos produtos gatilho está no pedido', () => {
+    expect(
+      orderBumpTriggerMet(multiBump, [
+        { productId: 'p2', isOrderBump: false },
+        { productId: 'coca', isOrderBump: true },
+      ]),
+    ).toBe(true);
+  });
+
+  it('recusa quando nenhum dos produtos gatilho está no pedido', () => {
+    expect(
+      orderBumpTriggerMet(multiBump, [
+        { productId: 'p99', isOrderBump: false },
+        { productId: 'coca', isOrderBump: true },
+      ]),
+    ).toBe(false);
+  });
+
+  it('mantém fallback para regra legada com apenas triggerProductId', () => {
+    expect(
+      orderBumpTriggerMet(
+        {
+          storeId: 's1',
+          isActive: true,
+          suggestedProductId: 'coca',
+          triggerType: 'PRODUCT',
+          triggerProductId: 'p1',
+          triggerProductIds: [],
+        },
+        [
+          { productId: 'p1', isOrderBump: false },
+          { productId: 'coca', isOrderBump: true },
+        ],
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('sanitizePublicOrderResponse — não vaza custo/margem em rotas públicas', () => {
+  it('remove costPrice, product.costPrice, customizationSnapshot.totalCost, options[].unitCost/totalCost e comboSnapshot.items[].productCostPrice preservando dados de venda', () => {
+    const rawOrder = {
+      id: 'ord-1',
+      totalOrder: 65,
+      items: [
+        {
+          id: 'it-1',
+          productName: 'X-Bacon',
+          price: 35,
+          quantity: 1,
+          costPrice: 15.7,
+          product: { id: 'p1', title: 'X-Bacon', price: 25, costPrice: 11 },
+          isCustomized: true,
+          customizationSnapshot: {
+            basePrice: 25,
+            totalAdditions: 10,
+            totalCost: 4.7,
+            finalUnitPrice: 35,
+            stages: [
+              {
+                groupId: 'g1',
+                groupName: 'Adicionais',
+                options: [
+                  {
+                    optionId: 'opt-bacon',
+                    name: 'Bacon Extra',
+                    quantity: 2,
+                    unitPrice: 5,
+                    totalPrice: 10,
+                    unitCost: 1.75,
+                    totalCost: 3.5,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          id: 'it-2',
+          productName: 'Combo Casal',
+          price: 30,
+          quantity: 1,
+          costPrice: 12,
+          isCombo: true,
+          comboSnapshot: {
+            comboName: 'Combo Casal',
+            items: [
+              {
+                productId: 'p2',
+                productName: 'Refri',
+                quantity: 2,
+                productCostPrice: 6,
+                costPrice: 6,
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const sanitized = sanitizePublicOrderResponse(rawOrder);
+
+    // Item customizado: custos removidos, dados de venda intactos
+    const customItem = sanitized.items[0] as any;
+    expect(customItem).not.toHaveProperty('costPrice');
+    expect(customItem.product).not.toHaveProperty('costPrice');
+    expect(customItem.price).toBe(35);
+    expect(customItem.customizationSnapshot).not.toHaveProperty('totalCost');
+    expect(customItem.customizationSnapshot.totalAdditions).toBe(10);
+    expect(customItem.customizationSnapshot.finalUnitPrice).toBe(35);
+    expect(customItem.customizationSnapshot.stages[0].options[0]).toEqual({
+      optionId: 'opt-bacon',
+      name: 'Bacon Extra',
+      quantity: 2,
+      unitPrice: 5,
+      totalPrice: 10,
+    });
+
+    // Item combo: custos removidos, nomes/quantidades intactos
+    const comboItem = sanitized.items[1] as any;
+    expect(comboItem).not.toHaveProperty('costPrice');
+    expect(comboItem.comboSnapshot.items[0]).toEqual({
+      productId: 'p2',
+      productName: 'Refri',
+      quantity: 2,
+    });
+
+    // Não muta o objeto original
+    expect(rawOrder.items[0].costPrice).toBe(15.7);
+    expect(rawOrder.items[0].customizationSnapshot.totalCost).toBe(4.7);
+    expect(rawOrder.items[1].comboSnapshot.items[0].productCostPrice).toBe(6);
   });
 });

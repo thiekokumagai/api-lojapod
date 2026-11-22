@@ -106,6 +106,7 @@ export class GetSalesReportUseCase {
               isCombo: true,
               comboId: true,
               comboSnapshot: true,
+              customizationSnapshot: true,
               product: { select: { costPrice: true } },
             },
           },

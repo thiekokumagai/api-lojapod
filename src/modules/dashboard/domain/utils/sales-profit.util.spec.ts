@@ -1,8 +1,6 @@
-import {
-  calculateOrderItemsProfit,
+import { calculateOrderItemsProfit,
   parseRankingSortBy,
-  resolveItemUnitCost,
-} from './sales-profit.util';
+  resolveItemUnitCost, resolveCustomizationExtraCost } from './sales-profit.util';
 
 describe('sales-profit.util', () => {
   describe('calculateOrderItemsProfit', () => {
@@ -107,5 +105,45 @@ describe('sales-profit.util', () => {
       expect(parseRankingSortBy('foo')).toBe('quantity');
       expect(parseRankingSortBy(undefined)).toBe('quantity');
     });
+  });
+});
+
+describe('resolveItemUnitCost e resolveCustomizationExtraCost — custo de ingredientes/montagem (customizationSnapshot)', () => {
+  it('soma custo do produto base + totalCost do customizationSnapshot', () => {
+    expect(
+      resolveItemUnitCost({
+        product: { costPrice: 11 },
+        customizationSnapshot: { totalCost: 3.7, stages: [] },
+      }),
+    ).toBe(14.7);
+  });
+
+  it('retorna totalCost das opções mesmo quando produto base tem costPrice 0 (ex: Monte seu Açaí)', () => {
+    expect(
+      resolveItemUnitCost({
+        product: { costPrice: 0 },
+        customizationSnapshot: { totalCost: 6.5, stages: [] },
+      }),
+    ).toBe(6.5);
+  });
+
+  it('mantém retrocompatibilidade com pedidos antigos sem totalCost (retorna 0, sem NaN)', () => {
+    expect(resolveCustomizationExtraCost({ stages: [{ options: [{ optionId: 'o1', quantity: 2 }] }] })).toBe(0);
+    expect(
+      resolveItemUnitCost({
+        product: { costPrice: 12 },
+        customizationSnapshot: { stages: [{ options: [{ optionId: 'o1', quantity: 2 }] }] },
+      }),
+    ).toBe(12);
+  });
+
+  it('mantém cálculo de combo inalterado', () => {
+    expect(
+      resolveItemUnitCost({
+        isCombo: true,
+        comboSnapshot: { items: [{ productCostPrice: 5, quantity: 2 }] },
+        customizationSnapshot: { totalCost: 99 },
+      }),
+    ).toBe(10);
   });
 });

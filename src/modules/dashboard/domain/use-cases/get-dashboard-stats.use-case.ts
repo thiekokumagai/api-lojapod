@@ -423,6 +423,7 @@ export class GetDashboardStatsUseCase {
               isCombo: true,
               comboId: true,
               comboSnapshot: true,
+              customizationSnapshot: true,
               product: { select: { costPrice: true } },
             },
           },

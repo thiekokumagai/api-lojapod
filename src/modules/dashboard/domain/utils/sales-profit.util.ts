@@ -83,6 +83,7 @@ interface CostSourceItem {
   isCombo?: boolean;
   comboId?: string | null;
   comboSnapshot?: unknown;
+  customizationSnapshot?: unknown;
   product?: { costPrice?: unknown } | null;
 }
 
@@ -111,6 +112,50 @@ export function resolveItemUnitCost(item: CostSourceItem): number | null {
     return total > 0 ? total : null;
   }
 
-  const cost = Number(item.product?.costPrice || 0);
-  return cost > 0 ? cost : null;
+  const baseCost = Math.max(0, Number(item.product?.costPrice || 0));
+  const extraCost = resolveCustomizationExtraCost(item.customizationSnapshot);
+  const totalCost = round2(baseCost + extraCost);
+  return totalCost > 0 ? totalCost : null;
+}
+
+/**
+ * Extrai o custo adicional das opções de montagem gravado no customizationSnapshot.
+ * Retrocompatível: pedidos antigos sem totalCost/unitCost retornam 0 (nunca NaN).
+ */
+export function resolveCustomizationExtraCost(snapshot: unknown): number {
+  if (!snapshot || typeof snapshot !== 'object') return 0;
+  const snap = snapshot as {
+    totalCost?: unknown;
+    stages?: Array<{
+      options?: Array<{
+        totalCost?: unknown;
+        unitCost?: unknown;
+        quantity?: unknown;
+      }>;
+    }>;
+  };
+
+  if (snap.totalCost !== undefined && snap.totalCost !== null) {
+    const parsed = Number(snap.totalCost);
+    return Number.isFinite(parsed) && parsed > 0 ? round2(parsed) : 0;
+  }
+
+  if (!Array.isArray(snap.stages)) return 0;
+  let sum = 0;
+  for (const stage of snap.stages) {
+    if (!Array.isArray(stage?.options)) continue;
+    for (const opt of stage.options) {
+      if (opt?.totalCost !== undefined && opt?.totalCost !== null) {
+        const c = Number(opt.totalCost);
+        if (Number.isFinite(c) && c > 0) sum += c;
+      } else if (opt?.unitCost !== undefined && opt?.unitCost !== null) {
+        const u = Number(opt.unitCost);
+        const q = Number(opt.quantity || 1);
+        if (Number.isFinite(u) && u > 0 && Number.isFinite(q) && q > 0) {
+          sum += u * q;
+        }
+      }
+    }
+  }
+  return sum > 0 ? round2(sum) : 0;
 }

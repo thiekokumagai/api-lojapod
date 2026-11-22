@@ -886,6 +886,7 @@ model OrderBump {
   priority           Int         @default(0)
   triggerType        String      @default("ALL")
   triggerProductId   String?
+  triggerProductIds  String[]    @default([])
   triggerCategoryId  String?
   suggestedProductId String
   customPrice        Decimal?    @db.Decimal(10, 2)

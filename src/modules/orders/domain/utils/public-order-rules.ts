@@ -91,6 +91,7 @@ export interface OrderBumpRuleFields {
   suggestedProductId?: string | null;
   triggerType?: string | null;
   triggerProductId?: string | null;
+  triggerProductIds?: string[] | null;
   triggerCategoryId?: string | null;
 }
 
@@ -141,13 +142,23 @@ export function orderBumpTriggerMet(
   switch (bump.triggerType ?? 'ALL') {
     case 'ALL':
       return true;
-    case 'PRODUCT':
+    case 'PRODUCT': {
+      const triggerIds =
+        Array.isArray(bump.triggerProductIds) && bump.triggerProductIds.length > 0
+          ? bump.triggerProductIds
+          : bump.triggerProductId
+            ? [bump.triggerProductId]
+            : [];
       return (
-        !!bump.triggerProductId &&
-        (others.some((p) => p.productId === bump.triggerProductId) ||
-          (bump.triggerProductId === bump.suggestedProductId &&
-            sameProductLines.length >= 2))
+        triggerIds.length > 0 &&
+        triggerIds.some(
+          (triggerId) =>
+            others.some((p) => p.productId === triggerId) ||
+            (triggerId === bump.suggestedProductId &&
+              sameProductLines.length >= 2),
+        )
       );
+    }
     case 'CATEGORY':
       return (
         !!bump.triggerCategoryId &&
@@ -301,4 +312,68 @@ export function assertPublicOrderTotals(input: PublicOrderTotalsInput): {
   }
 
   return { itemsTotal: itemsSum, totalOrder: expected };
+}
+
+/**
+ * Remove campos internos de custo/margem antes de devolver um pedido nas rotas públicas da loja
+ * (POST /store/orders e GET /store/orders/:id), sem mutar o objeto original nem afetar o Admin/banco.
+ */
+export function sanitizePublicOrderResponse<T>(order: T): T {
+  if (!order || typeof order !== 'object') return order;
+
+  const cloned: Record<string, any> = { ...(order as Record<string, any>) };
+
+  if (Array.isArray(cloned.items)) {
+    cloned.items = cloned.items.map((rawItem: any) => {
+      if (!rawItem || typeof rawItem !== 'object') return rawItem;
+      const item: Record<string, any> = { ...rawItem };
+      delete item.costPrice;
+
+      if (item.product && typeof item.product === 'object') {
+        const product: Record<string, any> = { ...item.product };
+        delete product.costPrice;
+        item.product = product;
+      }
+
+      if (item.customizationSnapshot && typeof item.customizationSnapshot === 'object') {
+        const snap: Record<string, any> = { ...item.customizationSnapshot };
+        delete snap.totalCost;
+        if (Array.isArray(snap.stages)) {
+          snap.stages = snap.stages.map((rawStage: any) => {
+            if (!rawStage || typeof rawStage !== 'object') return rawStage;
+            const stage: Record<string, any> = { ...rawStage };
+            if (Array.isArray(stage.options)) {
+              stage.options = stage.options.map((rawOpt: any) => {
+                if (!rawOpt || typeof rawOpt !== 'object') return rawOpt;
+                const opt: Record<string, any> = { ...rawOpt };
+                delete opt.unitCost;
+                delete opt.totalCost;
+                return opt;
+              });
+            }
+            return stage;
+          });
+        }
+        item.customizationSnapshot = snap;
+      }
+
+      if (item.comboSnapshot && typeof item.comboSnapshot === 'object') {
+        const comboSnap: Record<string, any> = { ...item.comboSnapshot };
+        if (Array.isArray(comboSnap.items)) {
+          comboSnap.items = comboSnap.items.map((rawComp: any) => {
+            if (!rawComp || typeof rawComp !== 'object') return rawComp;
+            const comp: Record<string, any> = { ...rawComp };
+            delete comp.productCostPrice;
+            delete comp.costPrice;
+            return comp;
+          });
+        }
+        item.comboSnapshot = comboSnap;
+      }
+
+      return item;
+    });
+  }
+
+  return cloned as T;
 }
