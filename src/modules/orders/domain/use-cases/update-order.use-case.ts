@@ -99,6 +99,12 @@ export class UpdateOrderUseCase {
       // Saneamento da montagem dos itens (mesma regra do CreateOrderUseCase)
       if (Array.isArray(orderToUpdate.items)) {
         for (const item of orderToUpdate.items) {
+          if (typeof (item as any).observation === 'string') {
+            const trimmedObs = (item as any).observation.trim();
+            (item as any).observation = trimmedObs ? trimmedObs.slice(0, 300) : null;
+          } else if ((item as any).observation !== undefined) {
+            (item as any).observation = null;
+          }
           if (resetNonProductCustomization(item) || !item.isCustomized || !item.productId) {
             item.isCustomized = false;
             item.customizationSnapshot = undefined;

@@ -22,6 +22,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     isVisible?: boolean;
     isFeatured?: boolean;
     isCustomizable?: boolean;
+    servesCount?: number | null;
   }): Promise<Product> {
     return this.prisma.product.create({
       data: {
@@ -35,6 +36,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         isVisible: data.isVisible,
         isFeatured: data.isFeatured,
         isCustomizable: data.isCustomizable !== undefined ? data.isCustomizable : false,
+        servesCount: data.servesCount !== undefined ? data.servesCount : null,
         ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
       },
     });
@@ -53,6 +55,7 @@ export class PrismaProductsRepository implements IProductsRepository {
       isVisible?: boolean;
       isFeatured?: boolean;
       isCustomizable?: boolean;
+    servesCount?: number | null;
     },
   ): Promise<Product> {
     return this.prisma.product.update({
@@ -68,6 +71,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         isVisible: data.isVisible !== undefined ? data.isVisible : undefined,
         isFeatured: data.isFeatured !== undefined ? data.isFeatured : undefined,
         isCustomizable: data.isCustomizable !== undefined ? data.isCustomizable : undefined,
+        servesCount: data.servesCount !== undefined ? data.servesCount : undefined,
       },
     });
   }

@@ -107,4 +107,17 @@ describe('CreateOrderDto — validação da requisição com item montado', () =
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('aceita observation opcional por item até 300 caracteres', async () => {
+    const dto = await validate(
+      body([customizedItem({ observation: 'Sem cebola, molho à parte' })]),
+    );
+    expect(dto.items[0].observation).toBe('Sem cebola, molho à parte');
+  });
+
+  it('recusa observation por item acima de 300 caracteres', async () => {
+    await expect(
+      validate(body([customizedItem({ observation: 'a'.repeat(301) })])),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

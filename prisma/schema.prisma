@@ -262,6 +262,7 @@ model Product {
   stockAlertState           String                     @default("OK")
   isFeatured                Boolean                    @default(false)
   isCustomizable            Boolean                    @default(false)
+  servesCount               Int?
   totalSold                 Int                        @default(0)
   comboItems                ComboItem[]
   compositions              ProductComposition[]
@@ -547,6 +548,7 @@ model OrderItem {
   price         Decimal      @db.Decimal(10, 2)
   quantity      Int
   variation     String?
+  observation   String?
   comboId       String?
   comboSnapshot         Json?
   isCombo               Boolean      @default(false)

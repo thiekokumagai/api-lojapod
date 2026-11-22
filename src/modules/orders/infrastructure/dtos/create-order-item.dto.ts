@@ -121,10 +121,19 @@ export class CreateOrderItemDto {
   @Min(1)
   quantity: number;
 
-  @ApiPropertyOptional({ example: '35mg', description: 'Variação do produto' })
+    @ApiPropertyOptional({ example: '35mg', description: 'Variação do produto' })
   @IsString()
   @IsOptional()
   variation?: string;
+
+  @ApiPropertyOptional({
+    example: 'Sem cebola',
+    description: 'Observação opcional do cliente para este item',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  observation?: string;
 
   @ApiPropertyOptional({ description: 'ID do combo se este item for um combo' })
   @IsUUID()

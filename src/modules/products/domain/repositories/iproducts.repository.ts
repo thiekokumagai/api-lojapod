@@ -20,6 +20,7 @@ export abstract class IProductsRepository {
     isVisible?: boolean;
     isFeatured?: boolean;
     isCustomizable?: boolean;
+    servesCount?: number | null;
   }): Promise<Product>;
 
   abstract update(
@@ -35,6 +36,7 @@ export abstract class IProductsRepository {
       isVisible?: boolean;
       isFeatured?: boolean;
       isCustomizable?: boolean;
+    servesCount?: number | null;
     },
   ): Promise<Product>;
 

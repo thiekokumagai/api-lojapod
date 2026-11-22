@@ -93,6 +93,12 @@ export class CreateOrderUseCase {
       // Validar combos e recalcular preços dos itens com base no banco de dados para segurança
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
+          if (typeof (item as any).observation === 'string') {
+            const trimmedObs = (item as any).observation.trim();
+            (item as any).observation = trimmedObs ? trimmedObs.slice(0, 300) : null;
+          } else if ((item as any).observation !== undefined) {
+            (item as any).observation = null;
+          }
           // Montagem só existe em produto: combo ou item sem produto nunca leva snapshot (seria gravado cru e impresso)
           resetNonProductCustomization(item);
           if (options.publicOrder) {

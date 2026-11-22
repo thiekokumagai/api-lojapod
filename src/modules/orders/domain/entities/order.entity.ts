@@ -26,6 +26,7 @@ export interface OrderItem {
   price: number;
   quantity: number;
   variation: string | null;
+  observation?: string | null;
   imageUrl?: string;
   costPrice?: number;
   categoryName?: string | null;

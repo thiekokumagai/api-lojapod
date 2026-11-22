@@ -17,6 +17,7 @@ export class CreateProductUseCase {
     isVisible?: boolean;
     isFeatured?: boolean;
     isCustomizable?: boolean;
+    servesCount?: number | null;
   }) {
     const categoryExists = await this.productsRepository.checkCategoryExists(
       dto.categoryId,
@@ -37,6 +38,7 @@ export class CreateProductUseCase {
       isVisible: dto.isVisible,
       isFeatured: dto.isFeatured,
       isCustomizable: dto.isCustomizable,
+      servesCount: dto.servesCount,
     });
 
     return this.productsRepository.findById(product.id);

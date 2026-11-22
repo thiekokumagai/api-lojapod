@@ -7,6 +7,8 @@ import {
   Min,
   IsOptional,
   IsBoolean,
+  IsInt,
+  Max,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -62,8 +64,19 @@ export class CreateProductDto {
   @IsOptional()
   isFeatured?: boolean;
 
-  @ApiPropertyOptional({ example: false })
+    @ApiPropertyOptional({ example: false })
   @IsBoolean()
   @IsOptional()
   isCustomizable?: boolean;
+
+  @ApiPropertyOptional({
+    example: 2,
+    nullable: true,
+    description: 'Quantidade de pessoas que o produto serve (1 a 99)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  servesCount?: number | null;
 }

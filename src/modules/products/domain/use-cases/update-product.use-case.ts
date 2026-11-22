@@ -30,6 +30,7 @@ export class UpdateProductUseCase {
       isVisible?: boolean;
       isFeatured?: boolean;
       isCustomizable?: boolean;
+      servesCount?: number | null;
     },
   ) {
     const existing = await this.productsRepository.findById(id);
@@ -57,6 +58,7 @@ export class UpdateProductUseCase {
       isVisible: dto.isVisible,
       isFeatured: dto.isFeatured,
       isCustomizable: dto.isCustomizable,
+      servesCount: dto.servesCount,
     });
 
     // Se o produto foi desativado (isVisible: false), desativa combos que dependam dele
