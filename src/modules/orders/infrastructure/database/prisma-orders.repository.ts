@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { resolveCustomizationExtraCost } from '../../../dashboard/domain/utils/sales-profit.util';
+import { syncAffectedCombosAfterSale } from '../../../combos/domain/combo-out-of-stock';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import {
@@ -670,6 +671,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
     const record = await this.prisma.$transaction(
       async (tx) => {
         const createdStockMovementIds: string[] = [];
+        const touchedProductIds = new Set<string>();
+        const soldComboIds = new Set<string>();
         if (order.items && order.items.length > 0) {
           for (const item of order.items) {
             if (item.isCombo || item.comboId) {
@@ -751,6 +754,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 const allCompItems = await tx.productItem.findMany({
                   where: { productId: component.productId },
                 });
+                if (component.productId) {
+                  touchedProductIds.add(component.productId);
+                }
                 const totalCompStock = allCompItems.reduce(
                   (acc, curr) => acc + curr.stock,
                   0,
@@ -782,6 +788,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                   totalSold: { increment: item.quantity },
                 },
               });
+              soldComboIds.add(comboRecord.id);
             } else {
               // Lógica padrão para produtos convencionais
               if (!item.productId) {
@@ -860,8 +867,16 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               }
 
               item.productItemId = productItem.id;
+              touchedProductIds.add(item.productId);
             }
           }
+
+          await syncAffectedCombosAfterSale(
+            tx,
+            order.storeId,
+            touchedProductIds,
+            soldComboIds,
+          );
         }
 
         let customerIdToLink = order.customerId;
@@ -1236,6 +1251,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
         });
 
         // 3. Decrementar estoque dos novos itens
+        const touchedProductIds = new Set<string>();
+        const soldComboIds = new Set<string>();
         if (order.items && order.items.length > 0) {
           for (const item of order.items) {
             if (item.isCombo || item.comboId) {
@@ -1307,6 +1324,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 const allCompItems = await tx.productItem.findMany({
                   where: { productId: component.productId },
                 });
+                if (component.productId) {
+                  touchedProductIds.add(component.productId);
+                }
                 const totalCompStock = allCompItems.reduce(
                   (acc, curr) => acc + curr.stock,
                   0,
@@ -1336,6 +1356,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 where: { id: comboRecord.id },
                 data: { totalSold: { increment: item.quantity } },
               });
+              soldComboIds.add(comboRecord.id);
             } else {
               if (!item.productId)
                 throw new Error(`Item must be linked to a productId`);
@@ -1402,8 +1423,16 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               }
 
               item.productItemId = productItem.id;
+              touchedProductIds.add(item.productId);
             }
           }
+
+          await syncAffectedCombosAfterSale(
+            tx,
+            existingOrder.storeId || order.storeId,
+            touchedProductIds,
+            soldComboIds,
+          );
         }
 
         // 4. Atualizar o pedido e criar os novos itens
@@ -1764,6 +1793,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           throw new Error('Order is not cancelled, cannot recover');
         }
 
+        const touchedProductIds = new Set<string>();
+        const soldComboIds = new Set<string>();
+
         for (const item of orderRecord.items) {
           if (item.isCombo || item.comboId || item.comboSnapshot) {
             const snapshot = item.comboSnapshot as any;
@@ -1813,6 +1845,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 const allCompItems = await tx.productItem.findMany({
                   where: { productId: comp.productId },
                 });
+                if (comp.productId) {
+                  touchedProductIds.add(comp.productId);
+                }
                 const currentTotalStock = allCompItems.reduce(
                   (acc, curr) => acc + curr.stock,
                   0,
@@ -1844,6 +1879,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                   where: { id: item.comboId },
                   data: { totalSold: { increment: item.quantity } },
                 });
+                soldComboIds.add(item.comboId);
               } catch (err) {}
             }
           } else if (item.productId) {
@@ -1899,6 +1935,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
               const updatedAllItems = await tx.productItem.findMany({
                 where: { productId: item.productId },
               });
+              touchedProductIds.add(item.productId);
               const currentTotalStock = updatedAllItems.reduce(
                 (acc, curr) => acc + curr.stock,
                 0,
@@ -1930,6 +1967,13 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             }
           }
         }
+
+        await syncAffectedCombosAfterSale(
+          tx,
+          orderRecord.storeId,
+          touchedProductIds,
+          soldComboIds,
+        );
 
         const updatedOrder = await tx.order.update({
           where: { id },
