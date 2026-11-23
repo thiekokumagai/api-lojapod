@@ -49,6 +49,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       cardFee: Number(record.cardFee || 0),
       paymentType: record.paymentType,
       paymentMethod: record.paymentMethod,
+      onlineGateway: record.onlineGateway ?? null,
+      gatewayCheckoutUrl: record.gatewayCheckoutUrl ?? null,
       deliveryModality: record.deliveryModality || 'DELIVERY',
       pixKey: record.pixKey,
       street: record.street,
@@ -493,6 +495,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
       totalReceived: order.totalReceived,
       paymentType: order.paymentType,
       paymentMethod: order.paymentMethod,
+      onlineGateway:
+        order.onlineGateway !== undefined ? order.onlineGateway : undefined,
       deliveryModality: order.deliveryModality || 'DELIVERY',
       pixKey: order.pixKey,
       street: order.street,
@@ -1020,6 +1024,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           totalReceived: order.totalReceived,
           paymentType: order.paymentType,
           paymentMethod: order.paymentMethod,
+          onlineGateway:
+            order.onlineGateway !== undefined ? order.onlineGateway : undefined,
           deliveryModality: order.deliveryModality || 'DELIVERY',
           pixKey: order.pixKey,
           street: order.street,
@@ -1486,6 +1492,8 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           totalReceived: order.totalReceived,
           paymentType: order.paymentType,
           paymentMethod: order.paymentMethod,
+          onlineGateway:
+            order.onlineGateway !== undefined ? order.onlineGateway : undefined,
           deliveryModality: order.deliveryModality || 'DELIVERY',
           pixKey: order.pixKey,
           street: order.street,

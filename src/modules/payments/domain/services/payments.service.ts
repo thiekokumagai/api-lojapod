@@ -95,8 +95,24 @@ export class PaymentsService {
       },
     });
 
-    if (!order) {
+    if (!order || (storeId && order.storeId && order.storeId !== storeId)) {
       throw new NotFoundException('Pedido não encontrado.');
+    }
+
+    if (order.paymentStatus === 'PAID') {
+      throw new BadRequestException('Este pedido já foi pago.');
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new BadRequestException(
+        'Este pedido foi cancelado e não pode ser pago.',
+      );
+    }
+
+    if (String(order.paymentType ?? '').trim().toLowerCase() !== 'online') {
+      throw new BadRequestException(
+        'Este pedido não foi configurado para pagamento online.',
+      );
     }
 
     const effectiveStoreId = storeId || order.storeId;
@@ -125,6 +141,17 @@ export class PaymentsService {
       throw new BadRequestException(
         'Nenhum gateway de pagamento online com cartão está configurado nesta loja.',
       );
+    }
+
+    if (
+      order.gatewayCheckoutUrl &&
+      /^https:\/\//i.test(order.gatewayCheckoutUrl) &&
+      (!order.onlineGateway || order.onlineGateway === selectedProvider)
+    ) {
+      return {
+        checkoutUrl: order.gatewayCheckoutUrl,
+        transactionId: order.gatewayTransactionId || undefined,
+      };
     }
 
     const gateway = this.gatewayFactory.getGateway(selectedProvider);

@@ -74,6 +74,8 @@ export class Order {
   paymentType: string;
   paymentMethod: string;
   pixKey: string | null;
+  onlineGateway?: string | null;
+  gatewayCheckoutUrl?: string | null;
   deliveryModality?: string;
 
   street: string;

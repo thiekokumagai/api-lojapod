@@ -584,6 +584,42 @@ export class CreateOrderUseCase {
         data.freight = verified.freight;
       }
 
+      const resolvedPaymentType =
+        pixTerminalPaymentType(data, storeSettings) ?? data.paymentType;
+      const normalizedPm = String(data.paymentMethod ?? '').trim().toLowerCase();
+      let initialOnlineGateway: string | null | undefined = data.onlineGateway;
+      if (
+        !initialOnlineGateway &&
+        String(resolvedPaymentType ?? '').trim().toLowerCase() === 'online'
+      ) {
+        const gateways = (storeSettings?.paymentGateways as any) || {};
+        if (normalizedPm.includes('pix')) {
+          if (gateways.mercadopago?.enabled && gateways.mercadopago?.acceptPix) {
+            initialOnlineGateway = 'MERCADOPAGO';
+          }
+        } else if (
+          normalizedPm.includes('credit') ||
+          normalizedPm.includes('cart')
+        ) {
+          if (
+            gateways.mercadopago?.enabled &&
+            gateways.mercadopago?.acceptCreditCard
+          ) {
+            initialOnlineGateway = 'MERCADOPAGO';
+          } else if (
+            gateways.infinitepay?.enabled &&
+            gateways.infinitepay?.acceptCreditCard
+          ) {
+            initialOnlineGateway = 'INFINITEPAY';
+          } else if (
+            gateways.asaas?.enabled &&
+            gateways.asaas?.acceptCreditCard
+          ) {
+            initialOnlineGateway = 'ASAAS';
+          }
+        }
+      }
+
       const order = new Order({
         ...data,
         storeId: storeId || data.storeId,
@@ -594,7 +630,8 @@ export class CreateOrderUseCase {
         paymentDate: data.paymentStatus === 'PAID' ? new Date() : undefined,
         // Pix na maquininha: Pix não pago nunca fica `online` (seria tratado como já pago)
         paymentType:
-          pixTerminalPaymentType(data, storeSettings) ?? data.paymentType,
+          resolvedPaymentType,
+        onlineGateway: initialOnlineGateway,
       });
 
       // Recalcular o totalOrder para garantir a precisão no backend
