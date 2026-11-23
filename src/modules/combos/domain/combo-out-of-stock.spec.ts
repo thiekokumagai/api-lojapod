@@ -38,11 +38,15 @@ function createTxMock(
   findMany: jest.Mock;
   updateMany: jest.Mock;
 } {
-  const findFirst = jest.fn().mockResolvedValue(
-    autoHideOutOfStock === null ? null : { autoHideOutOfStock },
-  );
+  const findFirst = jest
+    .fn()
+    .mockResolvedValue(
+      autoHideOutOfStock === null ? null : { autoHideOutOfStock },
+    );
   const findMany = jest.fn().mockResolvedValue(candidateCombos);
-  const updateMany = jest.fn().mockResolvedValue({ count: candidateCombos.length });
+  const updateMany = jest
+    .fn()
+    .mockResolvedValue({ count: candidateCombos.length });
 
   return {
     tx: {
@@ -74,17 +78,17 @@ describe('combo-out-of-stock (autoHideOutOfStock para combos após venda)', () =
     });
     const { tx, findMany, updateMany } = createTxMock(true, [combo]);
 
-    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', ['prod-1']);
+    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', [
+      'prod-1',
+    ]);
 
     expect(deactivated).toEqual(['combo-1']);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          storeId: 'store-1',
-          isActive: true,
-        }),
-      }),
-    );
+    expect(findMany).toHaveBeenCalledTimes(1);
+    const findManyCalls = findMany.mock.calls as Array<
+      [{ where: { storeId: string; isActive: boolean } }]
+    >;
+    expect(findManyCalls[0][0].where.storeId).toBe('store-1');
+    expect(findManyCalls[0][0].where.isActive).toBe(true);
     expect(updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['combo-1'] }, storeId: 'store-1' },
       data: { isActive: false },
@@ -110,7 +114,9 @@ describe('combo-out-of-stock (autoHideOutOfStock para combos após venda)', () =
     });
     const { tx, updateMany } = createTxMock(true, [combo]);
 
-    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', ['prod-1']);
+    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', [
+      'prod-1',
+    ]);
 
     expect(deactivated).toEqual(['combo-duplo']);
     expect(updateMany).toHaveBeenCalledWith({
@@ -162,7 +168,9 @@ describe('combo-out-of-stock (autoHideOutOfStock para combos após venda)', () =
     });
     const { tx, updateMany } = createTxMock(true, [combo]);
 
-    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', ['prod-1']);
+    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', [
+      'prod-1',
+    ]);
 
     expect(deactivated).toEqual([]);
     expect(updateMany).not.toHaveBeenCalled();
@@ -239,7 +247,9 @@ describe('combo-out-of-stock (autoHideOutOfStock para combos após venda)', () =
     });
     const { tx, updateMany } = createTxMock(null, [combo]);
 
-    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', ['prod-1']);
+    const deactivated = await syncAffectedCombosAfterSale(tx, 'store-1', [
+      'prod-1',
+    ]);
 
     expect(deactivated).toEqual(['combo-1']);
     expect(updateMany).toHaveBeenCalledTimes(1);

@@ -79,7 +79,9 @@ export function isComboOutOfStock(combo: ComboAvailabilitySnapshot): boolean {
     const productItems = prod.items ?? [];
 
     if (item.productItemId) {
-      const targetItem = productItems.find((pi) => pi.id === item.productItemId);
+      const targetItem = productItems.find(
+        (pi) => pi.id === item.productItemId,
+      );
       if (!targetItem || (targetItem.stock ?? 0) < requiredQty) {
         return true;
       }
@@ -114,8 +116,12 @@ export async function syncAffectedCombosAfterSale(
     return [];
   }
 
-  const productIds = Array.from(new Set(Array.from(touchedProductIds).filter(Boolean)));
-  const comboIds = Array.from(new Set(Array.from(soldComboIds).filter(Boolean)));
+  const productIds = Array.from(
+    new Set(Array.from(touchedProductIds).filter(Boolean)),
+  );
+  const comboIds = Array.from(
+    new Set(Array.from(soldComboIds).filter(Boolean)),
+  );
 
   if (productIds.length === 0 && comboIds.length === 0) {
     return [];
