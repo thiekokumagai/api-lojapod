@@ -625,7 +625,9 @@ export class OrderBumpsService {
           totalStock: totalAvailableStock,
           hasVariations: (product.variations?.length || 0) > 0 || product.items.length > 1 || product.items.some((it: any) => it.options?.length > 0),
           // Produto com montagem: a loja abre a tela do produto em vez de adicionar direto pelo "+"
-          isCustomizable: Boolean(product.isCustomizable),
+          isCustomizable: Boolean(
+            (product as { isCustomizable?: boolean }).isCustomizable,
+          ),
           variations: product.variations || [],
           items: product.items,
         },
