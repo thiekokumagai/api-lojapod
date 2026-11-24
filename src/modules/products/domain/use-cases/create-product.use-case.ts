@@ -1,9 +1,14 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { IProductsRepository } from '../repositories/iproducts.repository';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
+import { assertSoldByWeightRules } from '../utils/sold-by-weight';
 
 @Injectable()
 export class CreateProductUseCase {
-  constructor(private readonly productsRepository: IProductsRepository) {}
+  constructor(
+    private readonly productsRepository: IProductsRepository,
+    @Optional() private readonly tenantContextService?: TenantContextService,
+  ) {}
 
   async execute(dto: {
     title: string;
@@ -18,7 +23,18 @@ export class CreateProductUseCase {
     isFeatured?: boolean;
     isCustomizable?: boolean;
     servesCount?: number | null;
+    isSoldByWeight?: boolean;
+    tareWeightGrams?: number | null;
   }) {
+    if (dto.isSoldByWeight) {
+      const storeId = this.tenantContextService?.getStoreId();
+      assertSoldByWeightRules({
+        isSoldByWeight: true,
+        isCustomizable: !!dto.isCustomizable,
+        businessType: storeId ? await this.productsRepository.findStoreBusinessType(storeId) : null,
+      });
+    }
+
     const categoryExists = await this.productsRepository.checkCategoryExists(
       dto.categoryId,
     );
@@ -39,6 +55,8 @@ export class CreateProductUseCase {
       isFeatured: dto.isFeatured,
       isCustomizable: dto.isCustomizable,
       servesCount: dto.servesCount,
+      isSoldByWeight: dto.isSoldByWeight,
+      tareWeightGrams: dto.tareWeightGrams,
     });
 
     return this.productsRepository.findById(product.id);

@@ -11,6 +11,8 @@ import {
   IsArray,
   ArrayMaxSize,
   MaxLength,
+  Max,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -191,4 +193,29 @@ export class CreateOrderItemDto {
   @ValidateNested()
   @Type(() => CustomizationSnapshotDto)
   customizationSnapshot?: CustomizationSnapshotDto;
+
+  @ApiPropertyOptional({
+    example: 0.65,
+    description:
+      'Peso líquido em kg (só produto vendido por peso; até 3 casas). O servidor recalcula o preço = peso × preço por kg do cadastro.',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
+  @Max(100)
+  weightKg?: number;
+
+  @ApiPropertyOptional({
+    example: 69.9,
+    description: 'Preço por kg usado na tela (regular ou promocional). Só é aceito se for o do cadastro.',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  unitPricePerKg?: number;
+
+  @ApiPropertyOptional({ enum: ['SCALE', 'MANUAL'], description: 'Peso lido da balança ou digitado' })
+  @IsOptional()
+  @IsIn(['SCALE', 'MANUAL'])
+  weightSource?: 'SCALE' | 'MANUAL';
 }

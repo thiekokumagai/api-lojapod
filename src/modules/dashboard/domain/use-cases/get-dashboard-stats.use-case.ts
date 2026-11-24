@@ -424,6 +424,7 @@ export class GetDashboardStatsUseCase {
               comboId: true,
               comboSnapshot: true,
               customizationSnapshot: true,
+              weightKg: true,
               product: { select: { costPrice: true } },
             },
           },

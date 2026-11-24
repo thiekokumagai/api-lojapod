@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { resolveCustomizationExtraCost } from '../../../dashboard/domain/utils/sales-profit.util';
 import { syncAffectedCombosAfterSale } from '../../../combos/domain/combo-out-of-stock';
+import { isWeighedItem } from '../../domain/utils/weighted-item';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { TenantContextService } from '../../../tenant/tenant-context.service';
 import {
@@ -113,6 +114,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
           let costPrice = item.product?.costPrice
             ? Number(item.product.costPrice)
             : 0;
+          // Por peso: costPrice do produto é por kg; o item (quantity 1) custa custo/kg × peso
+          if (isWeighedItem(item)) {
+            costPrice = Math.round(costPrice * Number(item.weightKg) * 100) / 100;
+          }
           if (
             costPrice === 0 &&
             (item.isCombo || item.comboId || item.comboSnapshot)
@@ -168,6 +173,10 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             observation: item.observation || null,
             isCustomized: item.isCustomized || false,
             customizationSnapshot: item.customizationSnapshot || null,
+            weightKg: item.weightKg !== null && item.weightKg !== undefined ? Number(item.weightKg) : null,
+            unitPricePerKg:
+              item.unitPricePerKg !== null && item.unitPricePerKg !== undefined ? Number(item.unitPricePerKg) : null,
+            weightSource: item.weightSource ?? null,
             isOrderBump: item.isOrderBump || false,
             orderBumpId: item.orderBumpId || null,
           };
@@ -572,6 +581,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 comboSnapshot: item.comboSnapshot || undefined,
                 isCustomized: item.isCustomized || false,
                 customizationSnapshot: item.customizationSnapshot || undefined,
+                ...weightColumns(item),
               })) ?? [],
           },
         } as any,
@@ -800,6 +810,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                   `Item productName ${item.productName} must be linked to a productId`,
                 );
               }
+
+              // Vendido por peso: o estoque não é em unidades; não trava nem baixa
+              if (isWeighedItem(item)) continue;
 
               const productItem = await this.findProductItem(
                 tx,
@@ -1083,6 +1096,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                   isCustomized: item.isCustomized || false,
                   customizationSnapshot:
                     item.customizationSnapshot || undefined,
+                  ...weightColumns(item),
                   isOrderBump: (item as any).isOrderBump || false,
                   orderBumpId: (item as any).orderBumpId || null,
                 })) ?? [],
@@ -1218,7 +1232,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 });
               } catch (err) {}
             }
-          } else if (oldItem.productId) {
+          } else if (oldItem.productId && !isWeighedItem(oldItem)) {
             const productItem = await this.findProductItem(
               tx,
               oldItem.productId,
@@ -1366,6 +1380,9 @@ export class PrismaOrdersRepository implements IOrdersRepository {
             } else {
               if (!item.productId)
                 throw new Error(`Item must be linked to a productId`);
+
+              // Vendido por peso: o estoque não é em unidades; não trava nem baixa
+              if (isWeighedItem(item)) continue;
 
               const productItem = await this.findProductItem(
                 tx,
@@ -1552,6 +1569,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                   isCustomized: item.isCustomized || false,
                   customizationSnapshot:
                     item.customizationSnapshot || undefined,
+                  ...weightColumns(item),
                 })) ?? [],
             },
           },
@@ -1709,7 +1727,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 // Ignora se o combo já tiver sido excluído
               }
             }
-          } else if (item.productId) {
+          } else if (item.productId && !isWeighedItem(item)) {
             let productItem: any;
             if (item.productItemId) {
               productItem = await tx.productItem.findUnique({
@@ -1890,7 +1908,7 @@ export class PrismaOrdersRepository implements IOrdersRepository {
                 soldComboIds.add(item.comboId);
               } catch (err) {}
             }
-          } else if (item.productId) {
+          } else if (item.productId && !isWeighedItem(item)) {
             let productItem: any;
             if (item.productItemId) {
               productItem = await tx.productItem.findUnique({
@@ -2003,4 +2021,18 @@ export class PrismaOrdersRepository implements IOrdersRepository {
 
     return this.mapToDomain(record);
   }
+}
+
+/** Colunas de peso do item (null quando o item não é vendido por peso). */
+function weightColumns(item: {
+  weightKg?: number | null;
+  unitPricePerKg?: number | null;
+  weightSource?: 'SCALE' | 'MANUAL' | null;
+}) {
+  if (!isWeighedItem(item)) return { weightKg: null, unitPricePerKg: null, weightSource: null };
+  return {
+    weightKg: item.weightKg,
+    unitPricePerKg: item.unitPricePerKg ?? null,
+    weightSource: item.weightSource ?? 'MANUAL',
+  };
 }

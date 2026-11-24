@@ -57,6 +57,21 @@ describe('sales-profit.util', () => {
       expect(resolveItemUnitCost({ product: { costPrice: '12.5' } })).toBe(12.5);
     });
 
+    it('venda por peso: custo/kg × peso (R$ 30/kg × 0,650 kg = R$ 19,50)', () => {
+      expect(resolveItemUnitCost({ weightKg: '0.650', product: { costPrice: '30' } })).toBe(19.5);
+      // Lucro do prato de R$ 45,44: 45,44 − 19,50 = 25,94
+      const [profit] = calculateOrderItemsProfit({
+        discounts: 0,
+        cardFee: 0,
+        items: [{ price: 45.44, quantity: 1, unitCost: 19.5 }],
+      });
+      expect(profit.profit).toBeCloseTo(25.94, 2);
+    });
+
+    it('venda por peso sem custo cadastrado continua sem custo (null)', () => {
+      expect(resolveItemUnitCost({ weightKg: 0.65, product: { costPrice: null } })).toBeNull();
+    });
+
     it('retorna null para produto sem custo ou removido', () => {
       expect(resolveItemUnitCost({ product: { costPrice: null } })).toBeNull();
       expect(resolveItemUnitCost({ product: null })).toBeNull();

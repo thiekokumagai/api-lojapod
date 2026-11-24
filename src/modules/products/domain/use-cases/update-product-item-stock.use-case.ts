@@ -27,9 +27,9 @@ export class UpdateProductItemStockUseCase {
       dto.observation,
     );
 
-    if (updatedItem?.productId) {
-      const prod = await this.productsRepository.findById(updatedItem.productId);
-      if (prod && prod.isVisible === false) {
+    const prod = updatedItem?.productId ? await this.productsRepository.findById(updatedItem.productId) : null;
+    if (prod) {
+      if (prod.isVisible === false) {
         try {
           await this.combosService.checkAndDeactivateAffectedCombos(prod.id);
         } catch (err) {
@@ -38,7 +38,7 @@ export class UpdateProductItemStockUseCase {
       }
     }
 
-    this.eventsGateway.server.emit('products.refresh');
+    this.eventsGateway.notifyCatalogRefresh(prod?.storeId);
 
     return updatedItem;
   }

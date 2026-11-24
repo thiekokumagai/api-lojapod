@@ -18,6 +18,8 @@ export interface SaleItemInput {
   comboId?: string | null;
   comboSnapshot?: unknown;
   customizationSnapshot?: unknown;
+  /** Venda por peso: custo do item = custo/kg × peso (ver resolveItemUnitCost). */
+  weightKg?: unknown;
   /** Custo ATUAL do produto (Product.costPrice), usado só nas vendas avulsas. */
   product?: { costPrice?: unknown } | null;
 }

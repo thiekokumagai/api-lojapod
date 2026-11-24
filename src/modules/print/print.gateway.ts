@@ -1,108 +1,113 @@
-import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage } from '@nestjs/websockets';
+import {
+  ConnectedSocket,
+  MessageBody,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { printRoom } from '../events/socket-rooms';
+import { findStoreByAgentToken, readAgentToken } from './print-token';
 
 @WebSocketGateway({ cors: true })
 export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+  private readonly logger = new Logger('PrintGateway');
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Só o agente com printToken válido entra na sala da loja. Este gateway divide o namespace com o
+   * EventsGateway, então conexão sem token (painel, vitrine) é ignorada aqui, sem desconectar.
+   * O antigo acesso só com `store_id` foi removido: quem soubesse o ID da loja recebia os pedidos dela.
+   */
   async handleConnection(client: Socket) {
-    const token = (client.handshake.auth?.token || client.handshake.query?.token || client.handshake.query?.print_token) as string;
-    let storeId = client.handshake.query.store_id as string;
-    let storeName = '';
-
-    if (token) {
-      const cleanToken = token.trim();
-      const store = await this.prisma.store.findFirst({
-        where: {
-          OR: [
-            { printToken: { equals: cleanToken, mode: 'insensitive' } },
-            { printToken: { equals: cleanToken.toUpperCase(), mode: 'insensitive' } },
-          ],
-        },
-      });
-
-      if (store) {
-        storeId = store.id;
-        storeName = store.title;
-      } else {
-        console.warn(`⚠️ Connection rejected: Invalid print token "${token}" (Socket: ${client.id})`);
-        client.emit('auth_error', { message: 'Token de impressão inválido' });
+    const token = readAgentToken(client.handshake);
+    if (!token) {
+      if (client.handshake.query?.store_id) {
+        this.logger.warn(`Conexão com store_id sem token recusada (Socket: ${client.id})`);
+        client.emit('auth_error', { message: 'Token de impressão obrigatório' });
         client.disconnect();
-        return;
       }
-    } else if (storeId) {
-      const store = await this.prisma.store.findUnique({
-        where: { id: storeId },
-      });
-      if (store) {
-        storeName = store.title;
-      }
+      return;
     }
 
-    if (storeId) {
-      const sala = `loja_${storeId}`;
-      client.join(sala);
-      console.log(`🖨️ Print Agent conectado! Loja: ${storeName || storeId} (Sala: ${sala}, Socket: ${client.id})`);
-      
-      // Auto-recuperação: Buscar pedidos da loja que não foram impressos
-      try {
-        const pedidosPendentes = await this.prisma.order.findMany({
-          where: { storeId, isPrinted: false },
-          include: {
-            items: {
-              include: {
-                combo: true,
-                product: {
-                  include: {
-                    category: true,
-                    images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
-                  },
+    const store = await findStoreByAgentToken(this.prisma, token);
+
+    if (!store) {
+      this.logger.warn(`Token de impressão inválido (Socket: ${client.id})`);
+      client.emit('auth_error', { message: 'Token de impressão inválido' });
+      client.disconnect();
+      return;
+    }
+
+    const storeId = store.id;
+    const storeName = store.title;
+    client.data.printStoreId = storeId;
+
+    const sala = printRoom(storeId);
+    await client.join(sala);
+    console.log(`🖨️ Print Agent conectado! Loja: ${storeName || storeId} (Sala: ${sala}, Socket: ${client.id})`);
+    
+    // Auto-recuperação: Buscar pedidos da loja que não foram impressos
+    try {
+      const pedidosPendentes = await this.prisma.order.findMany({
+        where: { storeId, isPrinted: false },
+        include: {
+          items: {
+            include: {
+              combo: true,
+              product: {
+                include: {
+                  category: true,
+                  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
                 },
               },
             },
           },
-        });
-        
-        if (pedidosPendentes.length > 0) {
-          console.log(`📦 Encontrados ${pedidosPendentes.length} pedidos pendentes para a loja ${storeName || storeId}. Disparando...`);
-          for (const pedido of pedidosPendentes) {
-            this.emitNovoPedido(storeId, pedido);
-          }
-        }
-      } catch (error: any) {
-        console.error('Erro ao buscar pedidos pendentes:', error.message);
-      }
+        },
+      });
       
-    } else {
-      console.warn(`⚠️ Print Agent conectou sem token ou store_id (Socket: ${client.id})`);
+      if (pedidosPendentes.length > 0) {
+        console.log(`📦 Encontrados ${pedidosPendentes.length} pedidos pendentes para a loja ${storeName || storeId}. Disparando...`);
+        for (const pedido of pedidosPendentes) {
+          this.emitNovoPedido(storeId, pedido);
+        }
+      }
+    } catch (error: any) {
+      console.error('Erro ao buscar pedidos pendentes:', error.message);
     }
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`🔌 Print Agent desconectado (Socket: ${client.id})`);
+    if (client.data?.printStoreId) this.logger.log(`Print Agent desconectado (Socket: ${client.id})`);
   }
 
   // Envia o pedido para a sala da loja específica
   emitNovoPedido(storeId: string | number, pedido: any) {
-    const sala = `loja_${storeId}`;
+    const sala = printRoom(String(storeId));
     console.log(`📤 Enviando pedido #${pedido.id} para a sala: ${sala}`);
     this.server.to(sala).emit('novo_pedido_imprimir', pedido);
   }
 
   @SubscribeMessage('marcar_como_impresso')
-  async handleMarcarComoImpresso(client: Socket, pedidoId: string) {
+  async handleMarcarComoImpresso(@ConnectedSocket() client: Socket, @MessageBody() pedidoId: string) {
+    // Só o agente autenticado, e só pedido da própria loja.
+    const storeId = client.data?.printStoreId as string | undefined;
+    if (!storeId || typeof pedidoId !== 'string' || !pedidoId) return;
     try {
-      await this.prisma.order.update({
-        where: { id: pedidoId },
+      const { count } = await this.prisma.order.updateMany({
+        where: { id: pedidoId, storeId },
         data: { isPrinted: true },
       });
-      console.log(`✅ Status isPrinted=true atualizado para o pedido #${pedidoId}`);
+      if (count === 0) this.logger.warn(`marcar_como_impresso ignorado: pedido ${pedidoId} não é da loja ${storeId}`);
     } catch (error: any) {
-      console.error(`❌ Erro ao atualizar isPrinted do pedido #${pedidoId}`, error.message);
+      this.logger.error(`Erro ao atualizar isPrinted do pedido #${pedidoId}: ${error.message}`);
     }
   }
 }

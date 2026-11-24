@@ -7,7 +7,7 @@ import { NotFoundException, BadRequestException, ConflictException } from '@nest
 
 describe('Regras de Segurança de Pedidos (Lojapod API)', () => {
   const events = () => ({
-    server: { emit: jest.fn() },
+    server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(),
     notifyOrderUpdated: jest.fn(),
   }) as any;
 

@@ -20,6 +20,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { PrintModule } from './modules/print/print.module';
 import { EventsModule } from './modules/events/events.module';
+import { ScaleModule } from './modules/scale/scale.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { StoresModule } from './modules/stores/stores.module';
@@ -67,6 +68,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     CustomersModule,
     PrintModule,
     EventsModule,
+    ScaleModule,
     AnalyticsModule,
     BillingModule,
     ImportsModule,

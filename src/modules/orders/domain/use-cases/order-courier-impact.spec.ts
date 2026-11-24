@@ -15,7 +15,7 @@ const orderWithRoute = (status: string, orders: string[], amount = '50') => ({
 });
 
 const events = () =>
-  ({ server: { emit: jest.fn() }, notifyOrderUpdated: jest.fn() }) as any;
+  ({ server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(), notifyOrderUpdated: jest.fn() }) as any;
 
 function buildCancel(prismaOrder: any) {
   const cancelled: any = { id: 'o1', status: 'CANCELLED', items: [] };

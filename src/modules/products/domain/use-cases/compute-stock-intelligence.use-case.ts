@@ -95,6 +95,8 @@ export class ComputeStockIntelligenceUseCase {
     const products = await this.prisma.product.findMany({
       where: {
         deletedAt: null,
+        // Vendido por peso não tem estoque em unidades (cobertura e "esgotado" não se aplicam)
+        isSoldByWeight: false,
         ...(storeId ? { storeId } : {}),
       },
       include: { items: true },

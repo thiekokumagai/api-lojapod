@@ -477,7 +477,7 @@ export class UberDirectService {
         // Notifica painel de pedidos / kanban em tempo real
         try {
           this.eventsGateway.notifyOrderUpdated(updatedOrder);
-          this.eventsGateway.server.emit('products.refresh');
+          this.eventsGateway.notifyCatalogRefresh(updatedOrder.storeId);
         } catch (emitErr) {
           this.logger.warn(`[UberDirect] Falha ao emitir socket de atualização do pedido: ${emitErr.message}`);
         }

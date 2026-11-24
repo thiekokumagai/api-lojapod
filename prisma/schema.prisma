@@ -264,6 +264,10 @@ model Product {
   isCustomizable            Boolean                    @default(false)
   servesCount               Int?
   totalSold                 Int                        @default(0)
+  /// Vendido por peso (self-service, açaí por kg): price e costPrice passam a ser por kg
+  isSoldByWeight            Boolean                    @default(false)
+  /// Tara padrão do recipiente, em gramas (o PDV desconta antes de enviar o peso líquido)
+  tareWeightGrams           Int?
   comboItems                ComboItem[]
   compositions              ProductComposition[]
   linkedCompositionOptions  CompositionOption[]        @relation("LinkedProductStock")
@@ -556,6 +560,10 @@ model OrderItem {
   orderBumpId           String?
   isCustomized          Boolean      @default(false)
   customizationSnapshot Json?
+  /// Peso líquido (kg) quando o produto é vendido por peso; price = round2(weightKg × unitPricePerKg) e quantity = 1
+  weightKg              Decimal?     @db.Decimal(10, 3)
+  unitPricePerKg        Decimal?     @db.Decimal(10, 2)
+  weightSource          WeightSource?
   combo                 Combo?       @relation(fields: [comboId], references: [id])
   orderBump     OrderBump?   @relation(fields: [orderBumpId], references: [id])
   order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -982,6 +990,12 @@ enum OrderBumpDisplayLocation {
   CART
   PRODUCT
   BOTH
+}
+
+/// Origem do peso de um item vendido por peso (auditoria)
+enum WeightSource {
+  SCALE
+  MANUAL
 }
 
 enum Role {

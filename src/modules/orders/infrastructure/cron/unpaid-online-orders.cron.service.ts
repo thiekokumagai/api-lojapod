@@ -59,7 +59,7 @@ export class UnpaidOnlineOrdersCronService {
           const cancelled = await this.ordersRepository.cancelAndRestoreStock(order.id);
           try {
             this.eventsGateway.notifyOrderUpdated(cancelled);
-            this.eventsGateway.server?.emit('products.refresh');
+            this.eventsGateway.notifyCatalogRefresh(cancelled.storeId);
           } catch (wsErr) {
             this.logger.error('Erro ao avisar painel do cancelamento automático:', wsErr);
           }

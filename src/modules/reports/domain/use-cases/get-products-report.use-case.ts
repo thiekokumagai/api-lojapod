@@ -125,6 +125,7 @@ export class GetProductsReportUseCase {
               comboId: true,
               comboSnapshot: true,
               customizationSnapshot: true,
+              weightKg: true,
               product: { select: { costPrice: true } },
             },
           },

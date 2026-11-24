@@ -29,7 +29,8 @@ export class RegisterCourierFeeUseCase {
           courierTransactionId: transaction.id
         }
       });
-      this.eventsGateway.notifyOrderUpdated({ id: 'route_updated' });
+      const courier = await this.prisma.courier.findUnique({ where: { id: data.courierId }, select: { storeId: true } });
+      this.eventsGateway.notifyOrderUpdated({ id: 'route_updated', storeId: courier?.storeId });
     }
 
     return transaction;

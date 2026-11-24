@@ -37,6 +37,10 @@ export interface OrderItem {
   orderBumpId?: string | null;
   isCustomized?: boolean;
   customizationSnapshot?: any;
+  /** Venda por peso: peso líquido (kg), preço por kg usado e origem do peso. Nulos nos demais itens. */
+  weightKg?: number | null;
+  unitPricePerKg?: number | null;
+  weightSource?: 'SCALE' | 'MANUAL' | null;
   comboSelections?: Array<{
     productId: string;
     productItemId?: string;

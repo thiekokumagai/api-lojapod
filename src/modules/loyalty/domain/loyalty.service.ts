@@ -353,12 +353,12 @@ export class LoyaltyService {
     });
 
     try {
-      this.eventsGateway.server.emit('loyalty.card_updated', {
+      this.eventsGateway.emitToStore(order.storeId, 'loyalty.card_updated', {
         storeId: order.storeId,
         cardId: card.id,
         customerPhone: cleanPhone,
       });
-      this.eventsGateway.server.emit('loyalty.refresh', {
+      this.eventsGateway.emitToStore(order.storeId, 'loyalty.refresh', {
         storeId: order.storeId,
       });
     } catch (wsErr) {
@@ -477,7 +477,7 @@ export class LoyaltyService {
 
     // 🔔 NOTIFICAÇÃO EM TEMPO REAL VIA WEBSOCKET PARA O ADMIN
     try {
-      this.eventsGateway.server.emit('loyalty.reward_redeemed', {
+      this.eventsGateway.emitToStore(storeId, 'loyalty.reward_redeemed', {
         id: redemption.id,
         storeId,
         customerName: card.customerName || 'Cliente',
@@ -507,6 +507,12 @@ export class LoyaltyService {
    * 1. Se o pedido usou um resgate (brinde, desconto de pontos ou cashback), cancela o resgate e devolve o saldo/selos ao cliente.
    * 2. Se o pedido pontuou selos/pontos/cashback, deduz a pontuação gerada por este pedido.
    */
+  /** Loja do pedido, para mandar o evento só ao painel dela. */
+  private async findOrderStoreId(orderId: string): Promise<string | null> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, select: { storeId: true } });
+    return order?.storeId ?? null;
+  }
+
   async revertOrderLoyalty(orderId: string) {
     try {
       this.logger.log(`[Loyalty] Revertendo fidelidade do pedido cancelado: ${orderId}`);
@@ -652,7 +658,7 @@ export class LoyaltyService {
           });
         }
 
-        this.eventsGateway.server.emit('loyalty.card_updated', {
+        this.eventsGateway.emitToStore(redemption.storeId, 'loyalty.card_updated', {
           storeId: redemption.storeId,
           cardId: card.id,
           customerPhone: card.customerPhone,
@@ -706,15 +712,15 @@ export class LoyaltyService {
           where: { id: earnTx.id },
         });
 
-        this.eventsGateway.server.emit('loyalty.card_updated', {
+        this.eventsGateway.emitToStore(earnTx.storeId, 'loyalty.card_updated', {
           storeId: earnTx.storeId,
           cardId: card.id,
           customerPhone: card.customerPhone,
         });
       }
 
-      // Emite refresh geral
-      this.eventsGateway.server.emit('loyalty.refresh', { orderId });
+      // Avisa só o painel da loja do pedido
+      this.eventsGateway.emitToStore(await this.findOrderStoreId(orderId), 'loyalty.refresh', { orderId });
     } catch (err) {
       this.logger.error(`[Loyalty] Erro ao reverter fidelidade do pedido ${orderId}:`, err);
     }
@@ -736,8 +742,8 @@ export class LoyaltyService {
     });
 
     try {
-      this.eventsGateway.server.emit('loyalty.refresh', { storeId, redemptionId: id });
-      this.eventsGateway.server.emit('loyalty.reward_delivered', { storeId, redemptionId: id });
+      this.eventsGateway.emitToStore(storeId, 'loyalty.refresh', { storeId, redemptionId: id });
+      this.eventsGateway.emitToStore(storeId, 'loyalty.reward_delivered', { storeId, redemptionId: id });
     } catch (wsErr) {
       this.logger.error('[Loyalty] Erro ao emitir evento de brinde entregue via socket', wsErr);
     }
@@ -762,8 +768,9 @@ export class LoyaltyService {
       });
 
       if (res.count > 0) {
-        this.eventsGateway.server.emit('loyalty.refresh', { orderId });
-        this.eventsGateway.server.emit('loyalty.reward_delivered', { orderId });
+        const storeId = await this.findOrderStoreId(orderId);
+        this.eventsGateway.emitToStore(storeId, 'loyalty.refresh', { orderId });
+        this.eventsGateway.emitToStore(storeId, 'loyalty.reward_delivered', { orderId });
       }
     } catch (err) {
       this.logger.error(`[Loyalty] Erro ao marcar brinde como entregue para pedido ${orderId}:`, err);
@@ -860,12 +867,12 @@ export class LoyaltyService {
     });
 
     try {
-      this.eventsGateway.server.emit('loyalty.card_updated', {
+      this.eventsGateway.emitToStore(storeId, 'loyalty.card_updated', {
         storeId,
         cardId: card.id,
         customerPhone: cleanPhone,
       });
-      this.eventsGateway.server.emit('loyalty.refresh', { storeId });
+      this.eventsGateway.emitToStore(storeId, 'loyalty.refresh', { storeId });
     } catch (wsErr) {
       this.logger.error('[Loyalty] Erro ao emitir evento de ajuste de selos via socket', wsErr);
     }

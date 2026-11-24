@@ -55,7 +55,7 @@ export class DeleteCourierTransactionUseCase {
     await this.prisma.courierTransaction.delete({
       where: { id: transactionId }
     });
-    this.eventsGateway.notifyOrderUpdated({ id: 'route_deleted' });
+    this.eventsGateway.notifyOrderUpdated({ id: 'route_deleted', storeId: transaction.storeId });
 
     return { success: true };
   }

@@ -23,6 +23,8 @@ export class PrismaProductsRepository implements IProductsRepository {
     isFeatured?: boolean;
     isCustomizable?: boolean;
     servesCount?: number | null;
+    isSoldByWeight?: boolean;
+    tareWeightGrams?: number | null;
   }): Promise<Product> {
     return this.prisma.product.create({
       data: {
@@ -37,6 +39,8 @@ export class PrismaProductsRepository implements IProductsRepository {
         isFeatured: data.isFeatured,
         isCustomizable: data.isCustomizable !== undefined ? data.isCustomizable : false,
         servesCount: data.servesCount !== undefined ? data.servesCount : null,
+        isSoldByWeight: data.isSoldByWeight ?? false,
+        tareWeightGrams: data.tareWeightGrams ?? null,
         ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
       },
     });
@@ -56,6 +60,8 @@ export class PrismaProductsRepository implements IProductsRepository {
       isFeatured?: boolean;
       isCustomizable?: boolean;
     servesCount?: number | null;
+    isSoldByWeight?: boolean;
+    tareWeightGrams?: number | null;
     },
   ): Promise<Product> {
     return this.prisma.product.update({
@@ -72,8 +78,18 @@ export class PrismaProductsRepository implements IProductsRepository {
         isFeatured: data.isFeatured !== undefined ? data.isFeatured : undefined,
         isCustomizable: data.isCustomizable !== undefined ? data.isCustomizable : undefined,
         servesCount: data.servesCount !== undefined ? data.servesCount : undefined,
+        isSoldByWeight: data.isSoldByWeight,
+        tareWeightGrams: data.tareWeightGrams,
       },
     });
+  }
+
+  async findStoreBusinessType(storeId: string): Promise<string | null> {
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      select: { businessType: true },
+    });
+    return store?.businessType ?? null;
   }
 
   async findAll(params: {
@@ -83,6 +99,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     categoryId?: string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    excludeSoldByWeight?: boolean;
   }): Promise<ProductWithDetails[]> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
     const matchingIds = searchWords?.length
@@ -96,6 +113,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         deletedAt: null,
         ...(params.isVisible !== undefined ? { isVisible: params.isVisible } : {}),
         ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
+        ...(params.excludeSoldByWeight ? { isSoldByWeight: false } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
               id: { in: matchingIds?.map(({ id }) => id) ?? [] },
@@ -142,6 +160,7 @@ export class PrismaProductsRepository implements IProductsRepository {
     categoryId?: string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    excludeSoldByWeight?: boolean;
   }): Promise<number> {
     const searchWords = params.search?.trim().split(/\s+/).filter(Boolean);
     const matchingIds = searchWords?.length
@@ -153,6 +172,7 @@ export class PrismaProductsRepository implements IProductsRepository {
         deletedAt: null,
         ...(params.isVisible !== undefined ? { isVisible: params.isVisible } : {}),
         ...(params.isFeatured !== undefined ? { isFeatured: params.isFeatured } : {}),
+        ...(params.excludeSoldByWeight ? { isSoldByWeight: false } : {}),
         ...(searchWords && searchWords.length > 0
           ? {
               id: { in: matchingIds?.map(({ id }) => id) ?? [] },

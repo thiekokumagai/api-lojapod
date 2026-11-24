@@ -84,6 +84,8 @@ interface CostSourceItem {
   comboId?: string | null;
   comboSnapshot?: unknown;
   customizationSnapshot?: unknown;
+  /** Venda por peso: o costPrice do produto é por kg e o item (quantity 1) custa custo/kg × peso. */
+  weightKg?: unknown;
   product?: { costPrice?: unknown } | null;
 }
 
@@ -112,7 +114,10 @@ export function resolveItemUnitCost(item: CostSourceItem): number | null {
     return total > 0 ? total : null;
   }
 
-  const baseCost = Math.max(0, Number(item.product?.costPrice || 0));
+  const costPerUnit = Math.max(0, Number(item.product?.costPrice || 0));
+  const weightKg = Number(item.weightKg);
+  const baseCost =
+    item.weightKg !== null && item.weightKg !== undefined && weightKg > 0 ? costPerUnit * weightKg : costPerUnit;
   const extraCost = resolveCustomizationExtraCost(item.customizationSnapshot);
   const totalCost = round2(baseCost + extraCost);
   return totalCost > 0 ? totalCost : null;

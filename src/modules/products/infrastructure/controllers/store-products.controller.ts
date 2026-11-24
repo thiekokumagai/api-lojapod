@@ -22,6 +22,7 @@ export class StoreProductsController {
     const { products, total } = await this.listProductsUseCase.execute({
       ...query,
       isVisible: true,
+      excludeSoldByWeight: true,
     });
 
     // Mapeia vendas totais para alimentar a ordenação de Mais Vendidos
@@ -58,7 +59,8 @@ export class StoreProductsController {
   @ApiOperation({ summary: 'Buscar produto completo para a loja' })
   async findOne(@Param('id') id: string) {
     const product = await this.findProductByIdUseCase.execute(id);
-    if (!product) return null;
+    // Vendido por peso só no balcão (PDV): a vitrine não mostra
+    if (!product || (product as { isSoldByWeight?: boolean }).isSoldByWeight) return null;
     return {
       ...product,
       imageUrl: product.images?.[0]?.url ?? null,

@@ -107,7 +107,7 @@ export class UpdateOrderStatusUseCase {
           console.error('[UpdateOrderStatus] Erro ao reverter fidelidade do pedido cancelado:', loyaltyErr);
         }
 
-        this.eventsGateway.server.emit('products.refresh');
+        this.eventsGateway.notifyCatalogRefresh(canceledOrder.storeId);
         this.eventsGateway.notifyOrderUpdated(canceledOrder);
         
         // If paymentStatus is also passed (unlikely but possible), apply it after cancellation
@@ -121,7 +121,7 @@ export class UpdateOrderStatusUseCase {
       // Se estamos recuperando um pedido cancelado para outro status
       if (order.status === 'CANCELLED' && payload.status && payload.status !== 'CANCELLED') {
         const recoveredOrder = await this.ordersRepository.recoverAndDecrementStock(id, payload.status);
-        this.eventsGateway.server.emit('products.refresh');
+        this.eventsGateway.notifyCatalogRefresh(recoveredOrder.storeId);
         this.eventsGateway.notifyOrderUpdated(recoveredOrder);
         
         // Atribui o novo pedido para a variável order para continuar o fluxo (ex: atualizar paymentStatus)
@@ -380,7 +380,7 @@ export class UpdateOrderStatusUseCase {
 
       const savedOrder = await this.ordersRepository.save(order);
       this.eventsGateway.notifyOrderUpdated(savedOrder);
-      this.eventsGateway.server.emit('products.refresh'); // Update stock info if any
+      this.eventsGateway.notifyCatalogRefresh(savedOrder.storeId); // estoque pode ter mudado
 
       // Atribuição de selos de fidelidade quando o pedido for concluído ou pago
       if (savedOrder.status === OrderStatus.COMPLETED || savedOrder.paymentStatus === PaymentStatus.PAID) {

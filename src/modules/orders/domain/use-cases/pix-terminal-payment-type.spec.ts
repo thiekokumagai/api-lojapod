@@ -19,7 +19,7 @@ const settingsWith = (pixOnTerminal: boolean | undefined) => ({
 const events = () => ({
   notifyNewOrder: jest.fn(),
   notifyOrderUpdated: jest.fn(),
-  server: { emit: jest.fn() },
+  server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(),
 });
 
 const baseOrder = (extra: Fields): Fields => ({

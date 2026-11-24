@@ -27,7 +27,7 @@ describe('UpdateOrderUseCase — saneamento de personalização (update-full)', 
     const printGateway = { emitNovoPedido: jest.fn() };
     const eventsGateway = {
       notifyNewOrder: jest.fn(),
-      server: { emit: jest.fn() },
+      server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(),
     };
     const tenantContextService = { getStoreId: jest.fn().mockReturnValue('store-1') };
     const settingsRepository = { get: jest.fn().mockResolvedValue(null) };
@@ -264,7 +264,7 @@ describe('UpdateOrderUseCase — isolamento por loja (tenant / IDOR)', () => {
     const printGateway = { emitNovoPedido: jest.fn() };
     const eventsGateway = {
       notifyNewOrder: jest.fn(),
-      server: { emit: jest.fn() },
+      server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(),
     };
     const tenantContextService = { getStoreId: jest.fn().mockReturnValue('store-A') };
     const settingsRepository = { get: jest.fn().mockResolvedValue(null) };

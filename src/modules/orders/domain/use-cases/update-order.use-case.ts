@@ -15,6 +15,7 @@ import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import { pixTerminalPaymentType } from '../utils/pix-terminal';
 import { PrismaService } from '../../../../../prisma/prisma.service';
+import { applyWeightedItem, takeWeightInput } from '../utils/weighted-item';
 import {
   resetNonProductCustomization,
   resolveCustomizedAllowedPrices,
@@ -96,6 +97,16 @@ export class UpdateOrderUseCase {
         couponId: couponId,
       });
 
+      const storeSettings = await this.settingsRepository
+        .get()
+        .catch(() => null);
+
+      // Venda por peso (mesma regra do CreateOrderUseCase). Só quando a tela reenviou os itens:
+      // sem `items` no corpo os itens gravados não mudam e o peso deles segue como está.
+      if (Array.isArray(data.items) && Array.isArray(orderToUpdate.items)) {
+        await this.applyWeightRules(orderToUpdate, storeId, storeSettings?.promoPaymentMethods);
+      }
+
       // Saneamento da montagem dos itens (mesma regra do CreateOrderUseCase)
       if (Array.isArray(orderToUpdate.items)) {
         for (const item of orderToUpdate.items) {
@@ -137,9 +148,6 @@ export class UpdateOrderUseCase {
       }
 
       // Pix na maquininha: Pix não pago nunca fica `online` (seria tratado como já pago)
-      const storeSettings = await this.settingsRepository
-        .get()
-        .catch(() => null);
       orderToUpdate.paymentType =
         pixTerminalPaymentType(orderToUpdate, storeSettings) ??
         orderToUpdate.paymentType;
@@ -183,7 +191,7 @@ export class UpdateOrderUseCase {
 
       try {
         this.eventsGateway.notifyNewOrder(savedOrder);
-        this.eventsGateway.server.emit('products.refresh');
+        this.eventsGateway.notifyCatalogRefresh(savedOrder.storeId || existingOrder.storeId);
       } catch (err) {
         console.error('Erro ao emitir eventos websocket', err);
       }
@@ -194,6 +202,30 @@ export class UpdateOrderUseCase {
         throw error;
       }
       throw new BadRequestException(error.message);
+    }
+  }
+
+  /** Confere cada item por peso com o cadastro e limpa o peso dos itens que não são por peso. */
+  private async applyWeightRules(
+    order: Order,
+    storeId: string | undefined,
+    promoPaymentMethods: unknown,
+  ): Promise<void> {
+    const paymentMethod = String(order.paymentMethod ?? '').toLowerCase();
+    const promoMethods = Array.isArray(promoPaymentMethods) ? promoPaymentMethods : ['pix'];
+    const promoAllowed =
+      !paymentMethod || promoMethods.map((m) => String(m).toLowerCase()).includes(paymentMethod);
+
+    for (const item of order.items ?? []) {
+      const weightInput = takeWeightInput(item);
+      if (!item.productId || item.isCombo || item.comboId || !this.prisma) continue;
+      const prod = await this.prisma.product.findFirst({
+        where: { id: item.productId, ...(storeId ? { storeId } : {}) },
+        select: { title: true, price: true, promotionalPrice: true, isSoldByWeight: true },
+      });
+      if (prod?.isSoldByWeight) {
+        applyWeightedItem(prod, item, weightInput, { promoAllowed });
+      }
     }
   }
 }

@@ -35,7 +35,7 @@ describe('DeleteCourierTransactionUseCase', () => {
     const { uc, prisma, events } = build(fee(), []);
     await expect(uc.execute('tx1', 's1')).resolves.toEqual({ success: true });
     expect(prisma.courierTransaction.delete).toHaveBeenCalledWith({ where: { id: 'tx1' } });
-    expect(events.notifyOrderUpdated).toHaveBeenCalledWith({ id: 'route_deleted' });
+    expect(events.notifyOrderUpdated).toHaveBeenCalledWith({ id: 'route_deleted', storeId: 's1' });
   });
 
   it('bloqueio entre lojas: lançamento de outra loja é tratado como inexistente', async () => {

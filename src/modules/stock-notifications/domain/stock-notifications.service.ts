@@ -105,6 +105,7 @@ export class StockNotificationsService {
       if (this.eventsGateway) {
         this.eventsGateway.notifyStockNotificationRequest({
           id: notification.id,
+          storeId: notification.storeId,
           productTitle: displayTitle,
           customerName: notification.customerName,
           customerPhone: notification.customerPhone,
@@ -346,7 +347,7 @@ export class StockNotificationsService {
 
     try {
       if (this.eventsGateway) {
-        this.eventsGateway.notifyStockNotificationDeleted(id);
+        this.eventsGateway.notifyStockNotificationDeleted(storeId, id);
       }
     } catch (err) {
       console.error('Erro ao emitir evento websocket de stock notification deleted', err);

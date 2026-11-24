@@ -36,7 +36,7 @@ export class AdjustCourierFeeUseCase {
       where: { id: transaction.id },
       data: { amount: roundMoney(amount) },
     });
-    this.eventsGateway.notifyOrderUpdated({ id: 'route_updated' });
+    this.eventsGateway.notifyOrderUpdated({ id: 'route_updated', storeId: data.storeId });
     return updated;
   }
 }

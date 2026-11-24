@@ -20,7 +20,7 @@ describe('AdjustCourierFeeUseCase', () => {
     const r = await uc.execute({ transactionId: 'tx1', amount: 33.333, storeId: 's1' });
     expect(prisma.courierTransaction.update).toHaveBeenCalledWith({ where: { id: 'tx1' }, data: { amount: 33.33 } });
     expect(Number(r.amount)).toBe(33.33);
-    expect(events.notifyOrderUpdated).toHaveBeenCalledWith({ id: 'route_updated' });
+    expect(events.notifyOrderUpdated).toHaveBeenCalledWith({ id: 'route_updated', storeId: 's1' });
   });
 
   it('permite zerar a taxa (rota 100% cancelada)', async () => {

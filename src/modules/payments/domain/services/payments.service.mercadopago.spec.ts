@@ -32,6 +32,7 @@ function build(updateManyCount: number) {
   const eventsGateway = {
     server: { emit: jest.fn() },
     notifyOrderStatus: jest.fn(),
+    notifyOrderUpdated: jest.fn(),
   };
   const loyalty = {
     processOrderCompleted: jest.fn().mockResolvedValue(undefined),
@@ -72,7 +73,7 @@ describe('PaymentsService e o Mercado Pago', () => {
       { paymentStatus: 'PAID' },
       'teste',
     );
-    expect(first.eventsGateway.server.emit).toHaveBeenCalledTimes(1);
+    expect(first.eventsGateway.notifyOrderUpdated).toHaveBeenCalledTimes(1);
     expect(first.loyalty.processOrderCompleted).toHaveBeenCalledTimes(1);
 
     // outro processo já tinha marcado como pago: count 0
@@ -86,7 +87,7 @@ describe('PaymentsService e o Mercado Pago', () => {
       where: { id: 'o1', paymentStatus: 'PENDING' },
       data: { paymentStatus: 'PAID' },
     });
-    expect(second.eventsGateway.server.emit).not.toHaveBeenCalled();
+    expect(second.eventsGateway.notifyOrderUpdated).not.toHaveBeenCalled();
     expect(second.loyalty.processOrderCompleted).not.toHaveBeenCalled();
   });
 

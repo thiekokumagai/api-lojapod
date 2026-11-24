@@ -41,7 +41,7 @@ function setup(found: Record<string, unknown> | null = order()) {
   };
   const checkPayment = jest.fn().mockResolvedValue({ paid: false });
   const factory = { getGateway: jest.fn().mockReturnValue({ checkPayment }) };
-  const events = { server: { emit: jest.fn() }, notifyOrderStatus: jest.fn() };
+  const events = { server: { emit: jest.fn() }, notifyOrderStatus: jest.fn(), notifyOrderUpdated: jest.fn() };
   const service = new PaymentsService(
     prisma as unknown as PrismaService,
     factory as unknown as PaymentGatewayFactory,

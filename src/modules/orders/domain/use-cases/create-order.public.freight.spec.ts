@@ -74,7 +74,7 @@ function build(
     {
       notifyNewOrder: jest.fn(),
       notifyOrderUpdated: jest.fn(),
-      server: { emit: jest.fn() },
+      server: { emit: jest.fn() }, emitToStore: jest.fn(), notifyCatalogRefresh: jest.fn(),
     } as never,
     { getStoreId: jest.fn().mockReturnValue('store-1') } as never,
     {

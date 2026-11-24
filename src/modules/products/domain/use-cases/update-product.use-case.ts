@@ -2,8 +2,11 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { IProductsRepository } from '../repositories/iproducts.repository';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
+import { assertSoldByWeightRules } from '../utils/sold-by-weight';
 
 import { EventsGateway } from '../../../events/events.gateway';
 
@@ -15,6 +18,7 @@ export class UpdateProductUseCase {
     private readonly productsRepository: IProductsRepository,
     private readonly eventsGateway: EventsGateway,
     private readonly combosService: CombosService,
+    @Optional() private readonly tenantContextService?: TenantContextService,
   ) {}
 
   async execute(
@@ -31,11 +35,23 @@ export class UpdateProductUseCase {
       isFeatured?: boolean;
       isCustomizable?: boolean;
       servesCount?: number | null;
+      isSoldByWeight?: boolean;
+      tareWeightGrams?: number | null;
     },
   ) {
     const existing = await this.productsRepository.findById(id);
     if (!existing) {
       throw new NotFoundException('Produto não encontrado');
+    }
+
+    const finalSoldByWeight = dto.isSoldByWeight ?? existing.isSoldByWeight ?? false;
+    if (finalSoldByWeight) {
+      const storeId = existing.storeId ?? this.tenantContextService?.getStoreId();
+      assertSoldByWeightRules({
+        isSoldByWeight: true,
+        isCustomizable: dto.isCustomizable ?? existing.isCustomizable ?? false,
+        businessType: storeId ? await this.productsRepository.findStoreBusinessType(storeId) : null,
+      });
     }
 
     if (dto.categoryId && dto.categoryId !== existing.categoryId) {
@@ -59,6 +75,8 @@ export class UpdateProductUseCase {
       isFeatured: dto.isFeatured,
       isCustomizable: dto.isCustomizable,
       servesCount: dto.servesCount,
+      isSoldByWeight: dto.isSoldByWeight,
+      tareWeightGrams: dto.tareWeightGrams,
     });
 
     // Se o produto foi desativado (isVisible: false), desativa combos que dependam dele
@@ -74,7 +92,7 @@ export class UpdateProductUseCase {
     const updatedProduct = await this.productsRepository.findById(id);
     
     // Se a visibilidade foi alterada ou algo importante que afete o catálogo
-    this.eventsGateway.server.emit('products.refresh');
+    this.eventsGateway.notifyCatalogRefresh(updatedProduct?.storeId);
 
     return updatedProduct;
   }

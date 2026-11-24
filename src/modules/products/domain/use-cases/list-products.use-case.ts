@@ -12,6 +12,8 @@ export class ListProductsUseCase {
     categoryId?: string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    /** Vitrine: esconde produto vendido por peso (só o PDV vende por peso). */
+    excludeSoldByWeight?: boolean;
   }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
@@ -25,12 +27,14 @@ export class ListProductsUseCase {
         categoryId: query.categoryId,
         isVisible: query.isVisible,
         isFeatured: query.isFeatured,
+        excludeSoldByWeight: query.excludeSoldByWeight,
       }),
       this.productsRepository.count({
         search: query.search,
         categoryId: query.categoryId,
         isVisible: query.isVisible,
         isFeatured: query.isFeatured,
+        excludeSoldByWeight: query.excludeSoldByWeight,
       }),
     ]);
 

@@ -467,8 +467,8 @@ export class PaymentsService {
 
     // Painel: o pedido já apareceu (e foi impresso) na criação; aqui só atualiza o status de pagamento
     try {
-      this.eventsGateway.server?.emit('orders.updated', order);
-      this.eventsGateway.notifyOrderStatus(order);
+      // order.updated (o painel escuta este nome; o antigo 'orders.updated' não tinha ouvinte) já leva o order.status
+      this.eventsGateway.notifyOrderUpdated(order);
     } catch (wsErr) {
       this.logger.error(
         'Erro ao emitir eventos websocket após pagamento online:',

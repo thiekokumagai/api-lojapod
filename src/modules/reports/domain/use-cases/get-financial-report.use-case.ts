@@ -78,6 +78,7 @@ export class GetFinancialReportUseCase {
                 comboId: true,
                 comboSnapshot: true,
               customizationSnapshot: true,
+              weightKg: true,
                 product: { select: { costPrice: true } },
               },
             },

@@ -79,4 +79,23 @@ export class CreateProductDto {
   @Min(1)
   @Max(99)
   servesCount?: number | null;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Vendido por peso (só lojas FOOD/ACAI). Com ele ligado, price e costPrice são por kg.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isSoldByWeight?: boolean;
+
+  @ApiPropertyOptional({
+    example: 50,
+    nullable: true,
+    description: 'Tara padrão do recipiente em gramas (0 a 5000)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  tareWeightGrams?: number | null;
 }

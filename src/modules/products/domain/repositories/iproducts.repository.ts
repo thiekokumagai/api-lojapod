@@ -21,6 +21,8 @@ export abstract class IProductsRepository {
     isFeatured?: boolean;
     isCustomizable?: boolean;
     servesCount?: number | null;
+    isSoldByWeight?: boolean;
+    tareWeightGrams?: number | null;
   }): Promise<Product>;
 
   abstract update(
@@ -37,6 +39,8 @@ export abstract class IProductsRepository {
       isFeatured?: boolean;
       isCustomizable?: boolean;
     servesCount?: number | null;
+    isSoldByWeight?: boolean;
+    tareWeightGrams?: number | null;
     },
   ): Promise<Product>;
 
@@ -47,6 +51,7 @@ export abstract class IProductsRepository {
     categoryId?: string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    excludeSoldByWeight?: boolean;
   }): Promise<ProductWithDetails[]>;
 
   abstract count(params: {
@@ -54,11 +59,15 @@ export abstract class IProductsRepository {
     categoryId?: string;
     isVisible?: boolean;
     isFeatured?: boolean;
+    excludeSoldByWeight?: boolean;
   }): Promise<number>;
 
   abstract findById(id: string): Promise<ProductWithDetails | null>;
 
   abstract checkCategoryExists(categoryId: string): Promise<boolean>;
+
+  /** Tipo de negócio da loja (POD, FOOD, ACAI); null se a loja não existe. */
+  abstract findStoreBusinessType(storeId: string): Promise<string | null>;
 
   abstract addImages(productId: string, urls: string[]): Promise<void>;
 

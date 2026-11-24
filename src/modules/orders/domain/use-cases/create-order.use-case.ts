@@ -16,6 +16,7 @@ import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { ISettingsRepository } from '../../../settings/domain/repositories/isettings.repository';
 import type { StoreSettings } from '../../../settings/domain/entities/store-settings.entity';
 import { pixTerminalPaymentType } from '../utils/pix-terminal';
+import { applyWeightedItem, takeWeightInput } from '../utils/weighted-item';
 import {
   resetNonProductCustomization,
   resolveCustomizedAllowedPrices,
@@ -101,6 +102,8 @@ export class CreateOrderUseCase {
           }
           // Montagem só existe em produto: combo ou item sem produto nunca leva snapshot (seria gravado cru e impresso)
           resetNonProductCustomization(item);
+          // Peso só fica no item se o produto for vendido por peso (validado abaixo)
+          const weightInput = takeWeightInput(item);
           if (options.publicOrder) {
             if (!item.isCombo && !item.comboId && !item.productId) {
               throw new BadRequestException('Item do pedido inválido.');
@@ -349,12 +352,30 @@ export class CreateOrderUseCase {
               );
             }
 
+            // Vendido por peso: só no PDV (balança ou peso digitado); o preço sai de peso × preço/kg do cadastro
+            const soldByWeight = prod.isSoldByWeight === true;
+            if (soldByWeight) {
+              if (options.publicOrder) {
+                throw new BadRequestException(
+                  `"${prod.title}" é vendido por peso e só pode ser pedido no balcão.`,
+                );
+              }
+              applyWeightedItem(prod, item, weightInput, {
+                promoAllowed:
+                  !orderPaymentMethod ||
+                  promoPaymentMethods
+                    .map((m) => String(m).toLowerCase())
+                    .includes(orderPaymentMethod),
+              });
+            }
+
             // Preço promocional só vale nas formas de pagamento permitidas pela loja
             const promoPrice = prod.promotionalPrice
               ? Number(prod.promotionalPrice)
               : 0;
             const regularPrice = prod.price ? Number(prod.price) : 0;
             if (
+              !soldByWeight &&
               orderPaymentMethod &&
               promoPrice > 0 &&
               regularPrice > promoPrice &&
@@ -462,7 +483,7 @@ export class CreateOrderUseCase {
 
             if (resolvedPi) {
               item.productItemId = resolvedPi.id;
-              if (resolvedPi.stock < (item.quantity || 1)) {
+              if (!soldByWeight && resolvedPi.stock < (item.quantity || 1)) {
                 throw new BadRequestException(
                   `Estoque insuficiente para "${prod.title}${item.variation ? ' - ' + item.variation : ''}". Disponível: ${resolvedPi.stock}, Solicitado: ${item.quantity}`,
                 );
@@ -814,7 +835,7 @@ export class CreateOrderUseCase {
 
             // Notifica via socket
             try {
-              this.eventsGateway.server.emit('loyalty.reward_redeemed', {
+              this.eventsGateway.emitToStore(savedOrder.storeId || storeId, 'loyalty.reward_redeemed', {
                 storeId: savedOrder.storeId || storeId,
                 customerName:
                   card.customerName || savedOrder.customerName || 'Cliente',
@@ -824,12 +845,12 @@ export class CreateOrderUseCase {
                 orderId: savedOrder.id,
                 createdAt: new Date(),
               });
-              this.eventsGateway.server.emit('loyalty.card_updated', {
+              this.eventsGateway.emitToStore(savedOrder.storeId || storeId, 'loyalty.card_updated', {
                 storeId: savedOrder.storeId || storeId,
                 cardId: card.id,
                 customerPhone: cleanPhone,
               });
-              this.eventsGateway.server.emit('loyalty.refresh', {
+              this.eventsGateway.emitToStore(savedOrder.storeId || storeId, 'loyalty.refresh', {
                 storeId: savedOrder.storeId || storeId,
               });
             } catch (wsErr) {
@@ -919,7 +940,8 @@ export class CreateOrderUseCase {
             include: { items: true },
           });
 
-          if (!product) continue;
+          // Vendido por peso não tem estoque em unidades: não gera alerta de "esgotou"
+          if (!product || product.isSoldByWeight) continue;
 
           const totalStock = product.items.reduce(
             (acc, item) => acc + item.stock,
@@ -1025,7 +1047,7 @@ export class CreateOrderUseCase {
       try {
         this.eventsGateway.notifyNewOrder(savedOrder);
         // Também disparamos um evento genérico para atualizar o catálogo no front cliente
-        this.eventsGateway.server.emit('products.refresh');
+        this.eventsGateway.notifyCatalogRefresh(savedOrder.storeId || storeId);
       } catch (err) {
         console.error('Erro ao emitir eventos websocket', err);
       }

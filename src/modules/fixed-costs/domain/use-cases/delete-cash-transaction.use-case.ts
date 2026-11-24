@@ -44,7 +44,7 @@ export class DeleteCashTransactionUseCase {
       const courierTx = courierTxs.find(tx => Number(tx.amount) === Number(transaction.amount));
       if (courierTx) {
         await this.prisma.courierTransaction.delete({ where: { id: courierTx.id } });
-        this.eventsGateway.notifyOrderUpdated({ id: 'route_deleted' });
+        this.eventsGateway.notifyOrderUpdated({ id: 'route_deleted', storeId: courierTx.storeId });
       }
     }
 
