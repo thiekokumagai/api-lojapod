@@ -286,3 +286,22 @@ describe('OrderBumpsService: onde mostrar a oferta', () => {
     });
   });
 });
+
+describe('OrderBumpsService: sugestão informa se o produto tem montagem', () => {
+  it('manda isCustomizable para a loja abrir o produto em vez de adicionar direto', async () => {
+    const { service } = build([
+      rule('burger', 'CART', {
+        suggestedProduct: suggested('burger', { isCustomizable: true }),
+      }),
+      rule('coke', 'CART'),
+    ]);
+    const result = (await service.getSuggestionsForStore({
+      productIds: ['x'],
+      location: 'CART',
+    })) as Array<{ bumpId: string; product: { isCustomizable: boolean } }>;
+    const byId = Object.fromEntries(
+      result.map((s) => [s.bumpId, s.product.isCustomizable]),
+    );
+    expect(byId).toEqual({ 'bump-burger': true, 'bump-coke': false });
+  });
+});
