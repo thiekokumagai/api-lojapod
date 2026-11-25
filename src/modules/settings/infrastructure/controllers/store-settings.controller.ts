@@ -1,14 +1,33 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GetSettingsUseCase } from '../../domain/use-cases/get-settings.use-case';
+import { PrismaService } from '../../../../../prisma/prisma.service';
+import { TenantContextService } from '../../../tenant/tenant-context.service';
 import { Public } from '../../../auth/infrastructure/decorators/public.decorator';
 import { getTimezoneFromCepOrState } from '../../../../common/utils/date.utils';
 import { toPublicMercadoPago } from '../../../payments/domain/utils/mercadopago-config';
 
+/**
+ * Caminho do ícone de 512 a partir do de 192 salvo em faviconUrl. Troca só o nome do arquivo
+ * (pwa-icon-192 → pwa-icon-512), para não mexer num "192" que apareça no id da pasta.
+ */
+export function toIcon512Path(path: string): string {
+  const slash = path.lastIndexOf('/');
+  const dir = path.slice(0, slash + 1);
+  const file = path.slice(slash + 1);
+  if (/192/.test(file)) return dir + file.replace(/192/, '512');
+  return path;
+}
+
 @ApiTags('Store Settings')
 @Controller('store/settings')
 export class StoreSettingsController {
-  constructor(private readonly getSettingsUseCase: GetSettingsUseCase) {}
+  constructor(
+    private readonly getSettingsUseCase: GetSettingsUseCase,
+    private readonly prisma: PrismaService,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Obter configurações públicas da loja (vitrine)' })
@@ -108,51 +127,59 @@ export class StoreSettingsController {
     };
   }
 
+  /**
+   * Manifest do app instalável do admin, com nome e ícone da loja.
+   *
+   * - `?storeId=`: o admin roda num domínio só para todas as lojas (admin.lojapod.com /
+   *   admin.podipedir.com.br), então o tenant não sai do host. O navegador busca o manifest
+   *   sem token, por isso a loja logada vem na query. Só expõe nome e ícone (dados já públicos).
+   * - start_url/scope usam o domínio que pediu (Origin): o navegador só instala se forem do
+   *   mesmo domínio da página. ADMIN_FRONTEND_URL fica como reserva.
+   */
   @Get('manifest.json')
   @Public()
   @ApiOperation({ summary: 'Obter manifest.json dinâmico para PWA' })
-  async getManifest() {
+  async getManifest(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query('storeId') storeIdParam?: string,
+  ) {
+    const fallback = { storeName: 'Podi Pedir', faviconUrl: null };
     let settings: any = null;
     try {
-      settings = await this.getSettingsUseCase.execute();
+      settings = await this.loadSettingsForManifest(storeIdParam);
     } catch (e) {
-      settings = { storeName: 'Podi Pedir', faviconUrl: null };
+      settings = null;
     }
+    settings = settings || fallback;
 
     const minioUrl = process.env.MINIO_PUBLIC_URL || '';
     const bucket = process.env.MINIO_BUCKET || 'lojapod';
-    const adminFrontendUrl = (process.env.ADMIN_FRONTEND_URL || '').replace(
-      /\/$/,
-      '',
-    );
+    const originHeader = req.headers?.origin;
+    const adminOrigin = (
+      (typeof originHeader === 'string' && /^https?:\/\//i.test(originHeader)
+        ? originHeader
+        : '') ||
+      process.env.ADMIN_FRONTEND_URL ||
+      ''
+    ).replace(/\/$/, '');
+    // A resposta muda conforme o domínio e a loja: cache não pode misturar.
+    res.setHeader('Vary', 'Origin');
 
-    // Função para montar a URL da imagem (apenas para paths relativos de minio)
-
-    // Função para montar a URL da imagem (apenas para paths relativos de minio)
     const buildImg = (path?: string | null) => {
       if (!path) return '';
       if (path.startsWith('http')) return path;
       return `${minioUrl}/${bucket}/${path.replace(/^\//, '')}`;
     };
 
-    let icon192Src = adminFrontendUrl
-      ? `${adminFrontendUrl}/favicon-192x192.png`
-      : '/favicon-192x192.png';
-    let icon512Src = adminFrontendUrl
-      ? `${adminFrontendUrl}/favicon-512x512.png`
-      : '/favicon-512x512.png';
+    // Ícones padrão do admin (sem ícone da loja).
+    let icon192Src = `${adminOrigin}/favicon-192x192.png`;
+    let icon512Src = `${adminOrigin}/favicon-512x512.png`;
 
     if (settings.faviconUrl) {
-      if (settings.faviconUrl.startsWith('http')) {
-        icon192Src = settings.faviconUrl;
-        icon512Src = settings.faviconUrl;
-      } else {
-        icon192Src = buildImg(settings.faviconUrl);
-        const icon512Path = settings.faviconUrl.includes('192')
-          ? settings.faviconUrl.replace('192', '512')
-          : settings.faviconUrl;
-        icon512Src = buildImg(icon512Path);
-      }
+      // O upload do favicon gera pwa-icon-192-<ts>.png e pwa-icon-512-<ts>.png (PNG quadrado).
+      icon192Src = buildImg(settings.faviconUrl);
+      icon512Src = buildImg(toIcon512Path(settings.faviconUrl));
     }
 
     const cleanStoreName =
@@ -161,27 +188,37 @@ export class StoreSettingsController {
         : 'Podi Pedir';
 
     return {
+      id: '/',
       name: cleanStoreName,
       short_name: cleanStoreName,
       description: 'Painel Administrativo da loja',
+      lang: 'pt-BR',
       theme_color: '#ffffff',
       background_color: '#ffffff',
       display: 'standalone',
-      start_url: `${adminFrontendUrl}/`,
-      scope: `${adminFrontendUrl}/`,
+      start_url: `${adminOrigin}/`,
+      scope: `${adminOrigin}/`,
       icons: [
-        {
-          src: icon192Src,
-          sizes: '192x192',
-          type: 'image/png',
-        },
-        {
-          src: icon512Src,
-          sizes: '512x512',
-          type: 'image/png',
-          purpose: 'any maskable',
-        },
+        { src: icon192Src, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: icon512Src, sizes: '512x512', type: 'image/png', purpose: 'any' },
       ],
     };
+  }
+
+  /** Settings da loja pedida por id (admin) ou, sem id, da loja resolvida pelo host. */
+  private async loadSettingsForManifest(storeIdParam?: string) {
+    const storeId = typeof storeIdParam === 'string' ? storeIdParam.trim() : '';
+    if (!storeId || !/^[A-Za-z0-9_-]{8,64}$/.test(storeId)) {
+      return this.getSettingsUseCase.execute();
+    }
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      select: { id: true, subdomain: true, isActive: true },
+    });
+    if (!store) return null;
+    return this.tenantContextService.run(
+      { storeId: store.id, subdomain: store.subdomain ?? undefined, isActive: store.isActive },
+      () => this.getSettingsUseCase.execute(),
+    );
   }
 }

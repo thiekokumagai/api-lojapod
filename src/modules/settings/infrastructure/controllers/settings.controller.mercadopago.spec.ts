@@ -121,6 +121,8 @@ describe('vitrine pública e disponibilidade', () => {
     };
     const controller = new StoreSettingsController(
       useCase as unknown as GetSettingsUseCase,
+      {} as any,
+      {} as any,
     );
     const result = (await controller.getStoreSettings()) as unknown as {
       paymentGateways: Record<string, unknown>;
