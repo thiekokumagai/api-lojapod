@@ -11,6 +11,11 @@ import {
   calculateOrderItemsProfit,
   resolveItemUnitCost,
 } from '../utils/sales-profit.util';
+import {
+  addVariationSale,
+  toVariationList,
+  type VariationSale,
+} from '../utils/variation-sales.util';
 
 export interface DashboardStatsFilters {
   storeId?: string;
@@ -40,6 +45,8 @@ interface RankingEntry {
   profit: number;
   hasCostedSales: boolean;
   missingCost: boolean;
+  /** Quantidade e faturamento por variação (texto gravado no item do pedido). */
+  variations: Map<string, VariationSale>;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -60,6 +67,8 @@ function toRankingItem(e: RankingEntry) {
     lucro: e.hasCostedSales ? round2(e.profit) : null,
     margem: e.hasCostedSales ? marginOf(e.profit, e.costedNetRevenue) : null,
     semCusto: e.missingCost,
+    // Só vem quando o produto vendeu com variação; soma bate com quantity/totalRevenue.
+    variacoes: toVariationList(e.variations),
   };
 }
 
@@ -301,12 +310,20 @@ export class GetDashboardStatsUseCase {
             profit: 0,
             hasCostedSales: false,
             missingCost: false,
+            variations: new Map(),
           };
           productSalesMap.set(itemId, entry);
         }
 
         entry.quantity += item.quantity;
         entry.totalRevenue += calc.revenue;
+        // Combo não tem variação própria (as escolhas ficam nos itens do combo).
+        addVariationSale(
+          entry.variations,
+          item.isCombo || item.comboId ? null : item.variation,
+          item.quantity,
+          calc.revenue,
+        );
         if (calc.profit === null) {
           entry.missingCost = true;
         } else {
